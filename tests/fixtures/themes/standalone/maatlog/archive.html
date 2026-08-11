@@ -1,0 +1,27 @@
+{%- extends "layout.html" -%}
+
+{%- block extrahead -%}
+  {{ super() }}
+  {%- block maatlog_head -%}{%- endblock maatlog_head -%}
+{%- endblock extrahead -%}
+
+{%- block body -%}
+<section class="maatlog-archive" data-maatlog-component="archive">
+  {%- block maatlog_archive_header -%}
+  <header class="maatlog-archive-header"><h1>{{ title|e }}</h1></header>
+  {%- endblock maatlog_archive_header -%}
+
+  {%- block maatlog_archive_items -%}
+  <div class="maatlog-post-list"></div>
+  {%- endblock maatlog_archive_items -%}
+
+  {%- block maatlog_post_header -%}{%- endblock maatlog_post_header -%}
+  {%- block maatlog_post_meta -%}{%- endblock maatlog_post_meta -%}
+  {%- block maatlog_post_body -%}{%- endblock maatlog_post_body -%}
+  {%- block maatlog_post_navigation -%}{%- endblock maatlog_post_navigation -%}
+  {%- block maatlog_pagination -%}{%- endblock maatlog_pagination -%}
+  {%- block maatlog_sidebar -%}
+  {%- include "maatlog/components/sidebar.html" -%}
+  {%- endblock maatlog_sidebar -%}
+</section>
+{%- endblock body -%}

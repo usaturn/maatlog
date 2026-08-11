@@ -1,0 +1,54 @@
+{# MaatLog archive page — implements Theme API 1.0 blocks and semantic classes. #}
+{%- extends "layout.html" -%}
+
+{%- block extrahead -%}
+  {{ super() }}
+  {%- block maatlog_head -%}
+  {%- for feed in maatlog.feeds -%}
+  <link rel="alternate" type="application/atom+xml" title="{{ feed.title|e }}" href="{{ feed.url|e }}" />
+  {%- endfor -%}
+  {%- endblock maatlog_head -%}
+{%- endblock extrahead -%}
+
+{%- block body -%}
+<section class="maatlog-archive" data-maatlog-component="archive">
+  {%- block maatlog_archive_header -%}
+  <header class="maatlog-archive-header">
+    {%- if maatlog.archive -%}
+    <h1>{{ maatlog.archive.label|e }}</h1>
+    <p class="maatlog-archive-meta">
+      <span class="maatlog-archive-kind">{{ maatlog.archive.kind|e }}</span>
+      <span class="maatlog-archive-count">{{ maatlog.archive.total_posts }} posts</span>
+    </p>
+    {%- else -%}
+    <h1>{{ title|e }}</h1>
+    {%- endif -%}
+  </header>
+  {%- endblock maatlog_archive_header -%}
+
+  {%- block maatlog_archive_items -%}
+  <div class="maatlog-post-list">
+    {%- for card in maatlog.posts -%}
+    {%- with card=card -%}
+    {%- include "maatlog/components/post-card.html" -%}
+    {%- endwith -%}
+    {%- else -%}
+    <p class="maatlog-archive-empty">No posts.</p>
+    {%- endfor -%}
+  </div>
+  {%- endblock maatlog_archive_items -%}
+
+  {%- block maatlog_post_header -%}{%- endblock maatlog_post_header -%}
+  {%- block maatlog_post_meta -%}{%- endblock maatlog_post_meta -%}
+  {%- block maatlog_post_body -%}{%- endblock maatlog_post_body -%}
+  {%- block maatlog_post_navigation -%}{%- endblock maatlog_post_navigation -%}
+
+  {%- block maatlog_pagination -%}
+  {%- include "maatlog/components/pagination.html" -%}
+  {%- endblock maatlog_pagination -%}
+
+  {%- block maatlog_sidebar -%}
+  {%- include "maatlog/components/sidebar.html" -%}
+  {%- endblock maatlog_sidebar -%}
+</section>
+{%- endblock body -%}

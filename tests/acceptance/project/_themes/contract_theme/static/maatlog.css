@@ -1,0 +1,8 @@
+/* Contract theme override for acceptance A10. */
+:root {
+  --maatlog-color-link: #0044aa;
+}
+
+.contract-theme-marker {
+  display: none;
+}

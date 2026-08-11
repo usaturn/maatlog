@@ -1,0 +1,4 @@
+/* Compliant inherits-base third-party fixture — light override. */
+:root {
+  --maatlog-color-link: #006644;
+}

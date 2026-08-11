@@ -1,0 +1,18 @@
+{# Pagination component. Uses ``maatlog.pagination``. #}
+{%- if maatlog.pagination -%}
+<nav class="maatlog-pagination" data-maatlog-component="pagination" aria-label="Pagination">
+  {%- if maatlog.pagination.previous_url -%}
+  <a class="maatlog-pagination-prev" href="{{ maatlog.pagination.previous_url|e }}" rel="prev">Previous</a>
+  {%- endif -%}
+  {%- for page_number, page_url in maatlog.pagination.pages -%}
+  {%- if page_number == maatlog.pagination.current -%}
+  <span class="maatlog-pagination-current" aria-current="page">{{ page_number }}</span>
+  {%- else -%}
+  <a class="maatlog-pagination-page" href="{{ page_url|e }}">{{ page_number }}</a>
+  {%- endif -%}
+  {%- endfor -%}
+  {%- if maatlog.pagination.next_url -%}
+  <a class="maatlog-pagination-next" href="{{ maatlog.pagination.next_url|e }}" rel="next">Next</a>
+  {%- endif -%}
+</nav>
+{%- endif -%}

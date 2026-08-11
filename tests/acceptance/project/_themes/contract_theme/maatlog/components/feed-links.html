@@ -1,0 +1,10 @@
+{# Feed discovery links. Uses ``maatlog.feeds``. #}
+{%- if maatlog.feeds -%}
+<ul class="maatlog-feed-links" data-maatlog-component="feed-links">
+  {%- for feed in maatlog.feeds -%}
+  <li>
+    <a class="maatlog-feed-link" href="{{ feed.url|e }}" type="application/atom+xml">{{ feed.title|e }}</a>
+  </li>
+  {%- endfor -%}
+</ul>
+{%- endif -%}

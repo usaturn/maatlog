@@ -1,0 +1,53 @@
+[project]
+name = "maatlog"
+version = "0.1.0"
+readme = "README.rst"
+requires-python = ">=3.14"
+license = "MIT"
+license-files = ["LICENSE"]
+dependencies = ["Sphinx>=9.1", "myst-parser>=5.1", "pydantic>=2"]
+
+[build-system]
+requires = ["uv_build>=0.12.0,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = ["pytest", "ruff", "pyright"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "tools/public_sync/tests"]
+pythonpath = ["tests"]
+addopts = ["--import-mode=importlib"]
+
+[tool.pyright]
+pythonVersion = "3.14"
+typeCheckingMode = "strict"
+include = ["src", "tests", "tools/public_sync"]
+
+
+[tool.ruff]
+target-version = "py314"
+# ruff 既定の除外リストを保ちつつ追加する（公式は exclude ではなく extend-exclude を推奨）
+# .venv と .ruff_cache は既定に含まれるため個別指定は不要
+extend-exclude = [
+    "*.md",    # ruff 0.16+ は Markdown 内コードブロックを整形するため除外
+]
+line-length = 119
+
+[tool.ruff.lint]
+select = [
+    "F", # Flake8
+    "B", # Black
+    "I", # isort
+    "E", # error
+    "W"  # warning
+]
+ignore = []
+fixable = ["ALL"]
+
+# 自動フォーマット設定
+[tool.ruff.format]
+#quote-style = "double"
+#indent-style = "space"
+#skip-magic-trailing-comma = false
+line-ending = "auto"

@@ -1,0 +1,29 @@
+{# Post card component. Expects ``card`` (PostCardView mapping) in context. #}
+<article class="maatlog-post-card" data-maatlog-component="post-card"{% if card.slug %} data-slug="{{ card.slug|e }}"{% endif %}>
+  <h2 class="maatlog-post-card-title">
+    {%- if card.external_url -%}
+    <a class="maatlog-external-link" href="{{ card.external_url|e }}" rel="noopener noreferrer">{{ card.title|e }}</a>
+    {%- else -%}
+    <a href="{{ card.page_url|e }}">{{ card.title|e }}</a>
+    {%- endif -%}
+  </h2>
+  {%- if card.published_at -%}
+  <p class="maatlog-post-card-date">{{ card.published_at }}</p>
+  {%- endif -%}
+  {%- if card.excerpt -%}
+  <p class="maatlog-post-card-excerpt">{{ card.excerpt|e }}</p>
+  {%- endif -%}
+  {%- if card.tags or card.categories or card.authors -%}
+  <p class="maatlog-post-card-meta">
+    {%- if card.categories -%}
+    <span class="maatlog-post-card-categories">{{ card.categories|join(', ')|e }}</span>
+    {%- endif -%}
+    {%- if card.tags -%}
+    <span class="maatlog-post-card-tags">{{ card.tags|join(', ')|e }}</span>
+    {%- endif -%}
+    {%- if card.authors -%}
+    <span class="maatlog-post-card-authors">{{ card.authors|join(', ')|e }}</span>
+    {%- endif -%}
+  </p>
+  {%- endif -%}
+</article>

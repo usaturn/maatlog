@@ -1,0 +1,145 @@
+/* MaatLog default theme — light layout on top of maatlog-base contract CSS. */
+
+:root {
+  --maatlog-content-width: 42rem;
+  --maatlog-sidebar-width: 16rem;
+  --maatlog-space-xs: 0.25rem;
+  --maatlog-space-sm: 0.5rem;
+  --maatlog-space-md: 1rem;
+  --maatlog-space-lg: 2rem;
+  --maatlog-color-text: #1a1a1a;
+  --maatlog-color-muted: #5c5c5c;
+  --maatlog-color-link: #0b5cab;
+  --maatlog-color-border: #d0d0d0;
+  --maatlog-card-background: #fafafa;
+}
+
+/* Two-column layout when there is room for content + sidebar. */
+.maatlog-post,
+.maatlog-archive {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--maatlog-sidebar-width, 16rem);
+  grid-template-areas:
+    "header header"
+    "meta meta"
+    "body sidebar"
+    "nav sidebar"
+    "pagination sidebar";
+  gap: var(--maatlog-space-md, 1rem) var(--maatlog-space-lg, 2rem);
+  max-width: calc(
+    var(--maatlog-content-width, 42rem) + var(--maatlog-sidebar-width, 16rem) + var(--maatlog-space-lg, 2rem)
+  );
+  margin: 0 auto;
+  padding: var(--maatlog-space-md, 1rem);
+  color: var(--maatlog-color-text, #1a1a1a);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.maatlog-post-header,
+.maatlog-archive-header {
+  grid-area: header;
+  margin-bottom: 0;
+}
+
+.maatlog-post-meta {
+  grid-area: meta;
+  color: var(--maatlog-color-muted, #5c5c5c);
+  font-size: 0.9rem;
+  margin-bottom: 0;
+}
+
+.maatlog-post-body,
+.maatlog-post-list {
+  grid-area: body;
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+.maatlog-post-navigation {
+  grid-area: nav;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--maatlog-space-md, 1rem);
+  border-top: 1px solid var(--maatlog-color-border, #d0d0d0);
+  padding-top: var(--maatlog-space-md, 1rem);
+  margin: 0;
+}
+
+.maatlog-pagination {
+  grid-area: pagination;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--maatlog-space-sm, 0.5rem);
+  margin: 0;
+}
+
+.maatlog-sidebar {
+  grid-area: sidebar;
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+  border-left: 1px solid var(--maatlog-color-border, #d0d0d0);
+  padding-left: var(--maatlog-space-md, 1rem);
+  max-width: none;
+  min-width: 0;
+}
+
+.maatlog-post-card {
+  background: var(--maatlog-card-background, #fafafa);
+  border: 1px solid var(--maatlog-color-border, #d0d0d0);
+  padding: var(--maatlog-space-md, 1rem);
+  margin-bottom: var(--maatlog-space-md, 1rem);
+  overflow-wrap: anywhere;
+}
+
+.maatlog-post-card-image {
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+}
+
+.maatlog-post-body a,
+.maatlog-external-link,
+.maatlog-feed-link,
+.maatlog-post-card a {
+  color: var(--maatlog-color-link, #0b5cab);
+}
+
+a:focus-visible,
+button:focus-visible,
+.maatlog-pagination a:focus-visible,
+.maatlog-sidebar a:focus-visible {
+  outline: 2px solid var(--maatlog-color-link, #0b5cab);
+  outline-offset: 2px;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Narrow viewport: single column, sidebar after main content (no horizontal scroll). */
+@media (max-width: 48rem) {
+  .maatlog-post,
+  .maatlog-archive {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "header"
+      "meta"
+      "body"
+      "nav"
+      "pagination"
+      "sidebar";
+    max-width: var(--maatlog-content-width, 42rem);
+  }
+
+  .maatlog-sidebar {
+    border-left: none;
+    border-top: 1px solid var(--maatlog-color-border, #d0d0d0);
+    padding-left: 0;
+    padding-top: var(--maatlog-space-md, 1rem);
+    margin-top: var(--maatlog-space-md, 1rem);
+  }
+}

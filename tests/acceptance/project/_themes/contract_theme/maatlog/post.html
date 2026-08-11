@@ -1,0 +1,92 @@
+{# MaatLog post page — implements Theme API 1.0 blocks and semantic classes. #}
+{%- extends "layout.html" -%}
+
+{%- block extrahead -%}
+  {{ super() }}
+  {%- block maatlog_head -%}
+  {%- if maatlog.post and maatlog.post.canonical_url -%}
+  <link rel="canonical" href="{{ maatlog.post.canonical_url|e }}" />
+  {%- endif -%}
+  {%- for feed in maatlog.feeds -%}
+  <link rel="alternate" type="application/atom+xml" title="{{ feed.title|e }}" href="{{ feed.url|e }}" />
+  {%- endfor -%}
+  {%- endblock maatlog_head -%}
+{%- endblock extrahead -%}
+
+{%- block body -%}
+<article class="maatlog-post" data-maatlog-component="post">
+  <div class="contract-theme-marker" data-theme="contract-theme"></div>
+  {%- block maatlog_post_header -%}
+  <header class="maatlog-post-header">
+    <h1>{{ maatlog.post.title|e if maatlog.post else title|e }}</h1>
+  </header>
+  {%- endblock maatlog_post_header -%}
+
+  {%- block maatlog_post_meta -%}
+  <div class="maatlog-post-meta">
+    {%- if maatlog.post -%}
+    {%- if maatlog.post.published_at -%}
+    <time datetime="{{ maatlog.post.published_at }}">{{ maatlog.post.published_at }}</time>
+    {%- endif -%}
+    {%- if maatlog.post.authors -%}
+    <span class="maatlog-post-authors">{{ maatlog.post.authors|join(', ')|e }}</span>
+    {%- endif -%}
+    {%- if maatlog.post.categories -%}
+    <span class="maatlog-post-categories">{{ maatlog.post.categories|join(', ')|e }}</span>
+    {%- endif -%}
+    {%- if maatlog.post.tags -%}
+    <span class="maatlog-post-tags">{{ maatlog.post.tags|join(', ')|e }}</span>
+    {%- endif -%}
+    {%- if maatlog.post.external_url -%}
+    <span class="maatlog-post-external-badge">External</span>
+    {%- endif -%}
+    {%- endif -%}
+  </div>
+  {%- endblock maatlog_post_meta -%}
+
+  {%- block maatlog_post_body -%}
+  <div class="maatlog-post-body">
+    {%- if maatlog.post and maatlog.post.external_url -%}
+    {%- if maatlog.post.excerpt -%}
+    <p class="maatlog-post-excerpt">{{ maatlog.post.excerpt|e }}</p>
+    {%- endif -%}
+    <p>
+      <a class="maatlog-external-link" href="{{ maatlog.post.external_url|e }}" rel="noopener noreferrer">
+        Read on external site
+      </a>
+    </p>
+    {%- elif maatlog.post and maatlog.post.body_html -%}
+    {{ maatlog.post.body_html|safe }}
+    {%- else -%}
+    {{ body }}
+    {%- endif -%}
+  </div>
+  {%- endblock maatlog_post_body -%}
+
+  {%- block maatlog_post_navigation -%}
+  <nav class="maatlog-post-navigation" aria-label="Post navigation">
+    {%- if maatlog.navigation.older_post -%}
+    <a class="maatlog-nav-older" href="{{ maatlog.navigation.older_post.page_url|e }}">
+      ← {{ maatlog.navigation.older_post.title|e }}
+    </a>
+    {%- endif -%}
+    {%- if maatlog.navigation.newer_post -%}
+    <a class="maatlog-nav-newer" href="{{ maatlog.navigation.newer_post.page_url|e }}">
+      {{ maatlog.navigation.newer_post.title|e }} →
+    </a>
+    {%- endif -%}
+  </nav>
+  {%- endblock maatlog_post_navigation -%}
+
+  {%- block maatlog_archive_header -%}{%- endblock maatlog_archive_header -%}
+  {%- block maatlog_archive_items -%}{%- endblock maatlog_archive_items -%}
+
+  {%- block maatlog_pagination -%}
+  {%- include "maatlog/components/pagination.html" -%}
+  {%- endblock maatlog_pagination -%}
+
+  {%- block maatlog_sidebar -%}
+  {%- include "maatlog/components/sidebar.html" -%}
+  {%- endblock maatlog_sidebar -%}
+</article>
+{%- endblock body -%}
