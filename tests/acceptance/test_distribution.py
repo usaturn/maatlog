@@ -212,14 +212,29 @@ _PRIVATE_DISTRIBUTION_PARTS = {
     "devenv",
     "docs_draft",
     "reviews",
+    "sync",
+    "tools",
 }
 
 
 def _assert_public_distribution_members(names: set[str]) -> None:
     parts = {part for name in names for part in Path(name).parts}
     assert not parts.intersection(_PRIVATE_DISTRIBUTION_PARTS)
-    assert not any("tools/public_sync" in name for name in names)
     assert any(name.endswith(("/LICENSE", "/licenses/LICENSE")) for name in names)
+
+
+@pytest.mark.parametrize(
+    "private_member",
+    (
+        "maatlog-0.1.0/sync/gitleaks.toml",
+        "maatlog-0.1.0/tools/devenv_migration/tests/test_root_contract.py",
+    ),
+)
+def test_distribution_gate_rejects_parent_only_tooling(private_member: str) -> None:
+    names = {"maatlog-0.1.0/LICENSE", private_member}
+
+    with pytest.raises(AssertionError):
+        _assert_public_distribution_members(names)
 
 
 def test_wheel_has_license_and_no_private_paths(built_wheel: Path) -> None:
