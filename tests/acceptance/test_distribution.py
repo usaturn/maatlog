@@ -6,6 +6,7 @@ import os
 import subprocess
 import sys
 import tarfile
+import tomllib
 import zipfile
 from dataclasses import dataclass
 from importlib.metadata import version as distribution_version
@@ -22,6 +23,15 @@ from maatlog.version import PACKAGE_VERSION
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ACCEPTANCE_SOURCE = REPO_ROOT / "tests" / "acceptance" / "project"
 DIST_DIR = REPO_ROOT / "dist"
+WHEEL_NAME = "maatlog-0.0.0-py3-none-any.whl"
+SDIST_NAME = "maatlog-0.0.0.tar.gz"
+EXPECTED_DESCRIPTION = "A Sphinx extension that turns documentation projects into static blogs."
+EXPECTED_CLASSIFIERS = (
+    "Development Status :: 3 - Alpha",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.14",
+    "Framework :: Sphinx :: Extension",
+)
 
 # Public authoring keys (Spec 01).
 PUBLIC_METADATA_KEYS: tuple[str, ...] = (
@@ -121,25 +131,24 @@ def create_isolated_venv(tmp_path: Path) -> IsolatedEnv:
     return IsolatedEnv(root=root, python=python)
 
 
-def _latest_wheel() -> Path:
-    wheels = sorted(DIST_DIR.glob("maatlog-*.whl"))
-    if not wheels:
-        pytest.fail(f"No wheel in {DIST_DIR}; run `uv build` first")
-    return wheels[-1]
+def _wheel() -> Path:
+    path = DIST_DIR / WHEEL_NAME
+    if not path.is_file():
+        pytest.fail(f"missing {path}; run `uv build --out-dir dist --clear` first")
+    return path
 
 
-def _latest_sdist() -> Path:
-    sdists = sorted(DIST_DIR.glob("maatlog-*.tar.gz"))
-    if not sdists:
-        pytest.fail(f"No sdist in {DIST_DIR}; run `uv build` first")
-    return sdists[-1]
+def _sdist() -> Path:
+    path = DIST_DIR / SDIST_NAME
+    if not path.is_file():
+        pytest.fail(f"missing {path}; run `uv build --out-dir dist --clear` first")
+    return path
 
 
 @pytest.fixture(scope="module")
 def built_wheel() -> Path:
-    """Build a fresh wheel once per test module so package data matches HEAD."""
     completed = subprocess.run(
-        ["uv", "build"],
+        ["uv", "build", "--out-dir", "dist", "--clear"],
         cwd=str(REPO_ROOT),
         check=False,
         capture_output=True,
@@ -147,7 +156,7 @@ def built_wheel() -> Path:
     )
     if completed.returncode != 0:
         pytest.fail(f"uv build failed:\n{completed.stdout}\n{completed.stderr}")
-    return _latest_wheel()
+    return _wheel()
 
 
 @pytest.fixture
@@ -186,6 +195,105 @@ def test_readme_covers_install_and_quickstart(repo_root: Path) -> None:
         assert needle in readme, f"README.rst missing quickstart content: {needle!r}"
 
 
+def test_pyproject_declares_pypi_release_metadata() -> None:
+    data = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    project = data["project"]
+    assert project["name"] == "maatlog"
+    assert project["version"] == "0.0.0"
+    assert project["description"] == EXPECTED_DESCRIPTION
+    assert project["authors"] == [{"name": "usaturn"}]
+    assert project["classifiers"] == list(EXPECTED_CLASSIFIERS)
+    assert project["urls"]["Homepage"] == "https://github.com/usaturn/maatlog"
+    assert project["readme"] == "README.rst"
+    assert project["requires-python"] == ">=3.14"
+    assert project["license"] == "MIT"
+    assert project["license-files"] == ["LICENSE"]
+    assert project["dependencies"] == ["Sphinx>=9.1", "myst-parser>=5.1", "pydantic>=2"]
+    assert data["build-system"]["build-backend"] == "uv_build"
+    assert data["build-system"]["requires"] == ["uv_build>=0.12.0,<0.13.0"]
+
+
+def test_uv_lock_root_package_version_is_0_0_0() -> None:
+    data = tomllib.loads((REPO_ROOT / "uv.lock").read_text(encoding="utf-8"))
+    package = next(item for item in data["package"] if item["name"] == "maatlog")
+    assert package["version"] == "0.0.0"
+    assert package["source"] == {"editable": "."}
+
+
+def test_docs_release_matches_distribution_version() -> None:
+    text = (REPO_ROOT / "docs" / "conf.py").read_text(encoding="utf-8")
+    assert 'release = "0.0.0"' in text
+    assert 'release = "0.1.0"' not in text
+
+
+def test_clean_dist_contains_exactly_one_wheel_and_sdist(built_wheel: Path) -> None:
+    assert built_wheel.name == WHEEL_NAME
+    wheels = sorted(path.name for path in DIST_DIR.glob("*.whl"))
+    sdists = sorted(path.name for path in DIST_DIR.glob("*.tar.gz"))
+    assert wheels == [WHEEL_NAME]
+    assert sdists == [SDIST_NAME]
+
+
+def test_twine_check_strict_passes(built_wheel: Path) -> None:
+    completed = subprocess.run(
+        ["uvx", "twine", "check", "--strict", str(built_wheel), str(_sdist())],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 0, f"{completed.stdout}\n{completed.stderr}"
+
+
+def test_wheel_core_metadata_is_0_0_0(built_wheel: Path) -> None:
+    with zipfile.ZipFile(built_wheel) as archive:
+        metadata_name = next(name for name in archive.namelist() if name.endswith(".dist-info/METADATA"))
+        metadata = archive.read(metadata_name).decode("utf-8")
+    assert "Name: maatlog\n" in metadata
+    assert "Version: 0.0.0\n" in metadata
+    assert f"Summary: {EXPECTED_DESCRIPTION}\n" in metadata
+    assert "Author: usaturn\n" in metadata
+    assert "Project-URL: Homepage, https://github.com/usaturn/maatlog\n" in metadata
+    for classifier in EXPECTED_CLASSIFIERS:
+        assert f"Classifier: {classifier}\n" in metadata
+
+
+def test_sdist_core_metadata_is_0_0_0(built_wheel: Path) -> None:
+    del built_wheel
+    with tarfile.open(_sdist(), "r:gz") as archive:
+        pkg_info = archive.extractfile("maatlog-0.0.0/PKG-INFO")
+        assert pkg_info is not None
+        metadata = pkg_info.read().decode("utf-8")
+    assert "Name: maatlog\n" in metadata
+    assert "Version: 0.0.0\n" in metadata
+    assert f"Summary: {EXPECTED_DESCRIPTION}\n" in metadata
+
+
+def _isolated_version(tmp_path: Path, package: Path) -> str:
+    env = create_isolated_venv(tmp_path)
+    env.pip_install(package)
+    completed = subprocess.run(
+        [
+            str(env.python),
+            "-c",
+            "from importlib.metadata import version; print(version('maatlog'))",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 0, completed.stderr
+    return completed.stdout.strip()
+
+
+def test_wheel_isolated_install_reports_version_0_0_0(tmp_path: Path, built_wheel: Path) -> None:
+    assert _isolated_version(tmp_path, built_wheel) == "0.0.0"
+
+
+def test_sdist_isolated_install_reports_version_0_0_0(tmp_path: Path, built_wheel: Path) -> None:
+    del built_wheel
+    assert _isolated_version(tmp_path, _sdist()) == "0.0.0"
+
+
 def test_wheel_contains_themes_and_package_data(built_wheel: Path) -> None:
     with zipfile.ZipFile(built_wheel) as archive:
         names = set(archive.namelist())
@@ -199,7 +307,7 @@ def test_wheel_contains_themes_and_package_data(built_wheel: Path) -> None:
 
 def test_sdist_exists_alongside_wheel(built_wheel: Path) -> None:
     del built_wheel
-    sdist = _latest_sdist()
+    sdist = _sdist()
     assert sdist.is_file()
     assert sdist.stat().st_size > 0
 
@@ -226,12 +334,12 @@ def _assert_public_distribution_members(names: set[str]) -> None:
 @pytest.mark.parametrize(
     "private_member",
     (
-        "maatlog-0.1.0/sync/gitleaks.toml",
-        "maatlog-0.1.0/tools/devenv_migration/tests/test_root_contract.py",
+        "maatlog-0.0.0/sync/gitleaks.toml",
+        "maatlog-0.0.0/tools/devenv_migration/tests/test_root_contract.py",
     ),
 )
 def test_distribution_gate_rejects_parent_only_tooling(private_member: str) -> None:
-    names = {"maatlog-0.1.0/LICENSE", private_member}
+    names = {"maatlog-0.0.0/LICENSE", private_member}
 
     with pytest.raises(AssertionError):
         _assert_public_distribution_members(names)
@@ -248,7 +356,7 @@ def test_wheel_has_license_and_no_private_paths(built_wheel: Path) -> None:
 
 def test_sdist_has_license_and_no_private_paths(built_wheel: Path) -> None:
     del built_wheel
-    with tarfile.open(_latest_sdist(), "r:gz") as archive:
+    with tarfile.open(_sdist(), "r:gz") as archive:
         _assert_public_distribution_members(set(archive.getnames()))
 
 
@@ -296,7 +404,7 @@ def test_wheel_builds_acceptance_site(tmp_path: Path, built_wheel: Path) -> None
 def test_sdist_builds_acceptance_site(tmp_path: Path, built_wheel: Path) -> None:
     """Spec §7: isolated install from sdist must build the same acceptance project."""
     del built_wheel  # ensures uv build ran; install from sdist, not the wheel
-    _isolated_install_builds_acceptance_site(tmp_path, _latest_sdist())
+    _isolated_install_builds_acceptance_site(tmp_path, _sdist())
 
 
 def test_setup_metadata_declares_parallel_write_safe() -> None:

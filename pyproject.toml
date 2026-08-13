@@ -1,11 +1,22 @@
 [project]
 name = "maatlog"
-version = "0.1.0"
+version = "0.0.0"
+description = "A Sphinx extension that turns documentation projects into static blogs."
 readme = "README.rst"
 requires-python = ">=3.14"
 license = "MIT"
 license-files = ["LICENSE"]
+authors = [{ name = "usaturn" }]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.14",
+    "Framework :: Sphinx :: Extension",
+]
 dependencies = ["Sphinx>=9.1", "myst-parser>=5.1", "pydantic>=2"]
+
+[project.urls]
+Homepage = "https://github.com/usaturn/maatlog"
 
 [build-system]
 requires = ["uv_build>=0.12.0,<0.13.0"]
