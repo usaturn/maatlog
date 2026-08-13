@@ -18,7 +18,8 @@ case "$profile" in
     uv run --no-sync ruff format --check "${quality_targets[@]}"
     uv run --no-sync ruff check "${quality_targets[@]}"
     uv run --no-sync pyright "${quality_targets[@]}"
-    uv build
+    uv build --out-dir dist --clear
+    uvx twine check --strict dist/*
     uv run --no-sync pytest tests/acceptance/test_distribution.py -v
     ;;
   minimum)
