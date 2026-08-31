@@ -327,7 +327,7 @@ def test_a11_theme_contract_errors(site: AcceptanceSite) -> None:
         text,
     )
     assert "field=api" in text
-    assert "core_api=1.0" in text
+    assert "core_api=1.2" in text
     assert "theme_api=2.0" in text
     assert "value=2.0" in text
 
@@ -338,7 +338,7 @@ def test_a11_theme_contract_errors(site: AcceptanceSite) -> None:
         manifest_text,
     )
     assert "field=manifest" in manifest_text
-    assert "core_api=1.0" in manifest_text
+    assert "core_api=1.2" in manifest_text
     assert "expected=maatlog-theme.toml" in manifest_text
 
     missing_block = site.build_invalid("missing-block")
@@ -348,7 +348,7 @@ def test_a11_theme_contract_errors(site: AcceptanceSite) -> None:
         block_text,
     )
     assert "field=block" in block_text
-    assert "core_api=1.0" in block_text
+    assert "core_api=1.2" in block_text
     assert "theme_api=1.0" in block_text
 
     missing_templates = site.build_invalid("missing-templates")
@@ -358,7 +358,7 @@ def test_a11_theme_contract_errors(site: AcceptanceSite) -> None:
         templates_text,
     )
     assert "field=template" in templates_text
-    assert "core_api=1.0" in templates_text
+    assert "core_api=1.2" in templates_text
     assert "theme_api=1.0" in templates_text
 
 

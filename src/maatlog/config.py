@@ -25,6 +25,8 @@ CONFIG_VALUES = {
     "maatlog_authors": (None, "env"),
     "maatlog_archive_docname": ("blog", "env"),
     "maatlog_page_size": (10, "env"),
+    "maatlog_tagline": (None, "html"),
+    "maatlog_home_docname": (None, "html"),
     "maatlog_generate_feeds": (True, "html"),
     "maatlog_feed_taxonomies": (("tag", "category", "author", "month"), "html"),
     "maatlog_feed_limit": (20, "html"),
@@ -46,6 +48,8 @@ class MaatlogConfig(BaseModel):
     authors: Mapping[str, str] | None
     archive_docname: str
     page_size: int
+    tagline: str | None
+    home_docname: str | None
     generate_feeds: bool
     feed_taxonomies: tuple[TaxonomyAxis, ...]
     feed_limit: int
@@ -70,8 +74,14 @@ class MaatlogConfig(BaseModel):
         tags = _validate_taxonomy_mapping("maatlog_tags", resolved["maatlog_tags"], diagnostics)
         categories = _validate_taxonomy_mapping("maatlog_categories", resolved["maatlog_categories"], diagnostics)
         authors = _validate_taxonomy_mapping("maatlog_authors", resolved["maatlog_authors"], diagnostics)
-        archive_docname = _validate_docname(resolved["maatlog_archive_docname"], diagnostics)
+        archive_docname = _validate_docname(
+            "maatlog_archive_docname", resolved["maatlog_archive_docname"], diagnostics
+        )
         page_size = _validate_positive_int("maatlog_page_size", resolved["maatlog_page_size"], diagnostics)
+        tagline = _validate_optional_text("maatlog_tagline", resolved["maatlog_tagline"], diagnostics)
+        home_docname = _validate_optional_docname(
+            "maatlog_home_docname", resolved["maatlog_home_docname"], diagnostics
+        )
         generate_feeds = _validate_bool("maatlog_generate_feeds", resolved["maatlog_generate_feeds"], diagnostics)
         feed_taxonomies = _validate_feed_taxonomies(resolved["maatlog_feed_taxonomies"], diagnostics)
         feed_limit = _validate_positive_int("maatlog_feed_limit", resolved["maatlog_feed_limit"], diagnostics)
@@ -92,6 +102,8 @@ class MaatlogConfig(BaseModel):
             authors=authors,
             archive_docname=archive_docname,
             page_size=page_size,
+            tagline=tagline,
+            home_docname=home_docname,
             generate_feeds=generate_feeds,
             feed_taxonomies=feed_taxonomies,
             feed_limit=feed_limit,
@@ -146,13 +158,28 @@ def _validate_taxonomy_mapping(field: str, value: Any, diagnostics: list[Diagnos
     return MappingProxyType(validated)
 
 
-def _validate_docname(value: Any, diagnostics: list[Diagnostic]) -> str | None:
+def _validate_docname(field: str, value: Any, diagnostics: list[Diagnostic]) -> str | None:
     if not isinstance(value, str) or not value:
-        _invalid(diagnostics, "maatlog_archive_docname", value, "a relative Sphinx document name")
+        _invalid(diagnostics, field, value, "a relative Sphinx document name")
         return None
     segments = value.split("/")
     if value.startswith("/") or value.endswith("/") or any(segment in {"", ".", ".."} for segment in segments):
-        _invalid(diagnostics, "maatlog_archive_docname", value, "a relative Sphinx document name")
+        _invalid(diagnostics, field, value, "a relative Sphinx document name")
+        return None
+    return value
+
+
+def _validate_optional_docname(field: str, value: Any, diagnostics: list[Diagnostic]) -> str | None:
+    if value is None:
+        return None
+    return _validate_docname(field, value, diagnostics)
+
+
+def _validate_optional_text(field: str, value: Any, diagnostics: list[Diagnostic]) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        _invalid(diagnostics, field, value, "a non-empty string")
         return None
     return value
 

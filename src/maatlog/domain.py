@@ -42,6 +42,7 @@ class MaatlogDomain(Domain):
     }
     initial_data = {
         "posts_by_docname": {},
+        "post_list_docnames": set(),
         "index": None,
         "generated_docnames": set(),
         # Independent ownership manifests; page cleanup must never touch feeds.
@@ -53,9 +54,23 @@ class MaatlogDomain(Domain):
         posts[post.docname] = post
         self._invalidate_index()
 
+    def note_post_list(self, docname: str) -> None:
+        """Record that *docname* embeds a ``post_list`` node.
+
+        Incremental builds rewrite these pages via ``env-get-updated`` when
+        the published index changes. ``setdefault`` tolerates environments
+        pickled before this key existed.
+        """
+        cast(set[str], self.data.setdefault("post_list_docnames", set())).add(docname)
+
+    def post_list_docnames(self) -> set[str]:
+        """Docnames embedding ``post_list`` nodes (tolerates old pickles)."""
+        return cast(set[str], self.data.setdefault("post_list_docnames", set()))
+
     def clear_doc(self, docname: str) -> None:
         posts = cast(dict[str, Post], self.data["posts_by_docname"])
         posts.pop(docname, None)
+        cast(set[str], self.data.setdefault("post_list_docnames", set())).discard(docname)
         self._invalidate_index()
 
     def merge(self, other_data: Mapping[str, Any], docnames: Collection[str]) -> None:
@@ -84,6 +99,17 @@ class MaatlogDomain(Domain):
 
         if diagnostics:
             raise MaatlogBuildError(diagnostics)
+
+        post_lists = cast(set[str], self.data.setdefault("post_list_docnames", set()))
+        other_post_lists = set(cast(Collection[str], other_data.get("post_list_docnames", ())))
+        for docname in docnames:
+            # Worker state is authoritative for the docnames it re-read: a
+            # missing entry means the directive was removed from the source.
+            if docname in other_post_lists:
+                post_lists.add(docname)
+            else:
+                post_lists.discard(docname)
+
         self._invalidate_index()
 
     def merge_domaindata(self, docnames: Set[str], otherdata: dict[str, Any]) -> None:

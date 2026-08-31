@@ -293,6 +293,30 @@ def test_finalize_runs_during_sphinx_build(make_sphinx: SphinxFactory) -> None:
     assert [post.slug for post in domain.published_posts()] == ["live"]
 
 
+def test_note_post_list_and_clear_doc() -> None:
+    domain = _empty_domain()
+
+    domain.note_post_list("listing")
+
+    assert domain.post_list_docnames() == {"listing"}
+
+    domain.clear_doc("listing")
+
+    assert domain.post_list_docnames() == set()
+
+
+def test_merge_updates_post_list_docnames_per_merged_docname() -> None:
+    domain = _empty_domain()
+    worker = _empty_domain()
+    # 親環境に残留する古い登録（再読込でディレクティブが消えた文書を想定）。
+    domain.note_post_list("stale")
+    worker.note_post_list("fresh")
+
+    domain.merge(worker.data, {"stale", "fresh"})
+
+    assert domain.post_list_docnames() == {"fresh"}
+
+
 class _FakeEnv:
     def __init__(self) -> None:
         self.domaindata: dict[str, dict[str, Any]] = {}

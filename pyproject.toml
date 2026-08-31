@@ -23,17 +23,30 @@ requires = ["uv_build>=0.12.0,<0.13.0"]
 build-backend = "uv_build"
 
 [dependency-groups]
-dev = ["pytest", "ruff", "pyright"]
+dev = [
+    "pytest",
+    "ruff",
+    "pyright",
+    "sphinx-autobuild",
+    "wabun-rst-ulint",
+    "playwright>=1.62.0",
+]
 
+# Keep every path in this file present in both layouts: this file is shared with the
+# public repository, where tools/public_sync does not exist. The parent-side sync
+# tests are passed to pytest explicitly by scripts/ci/verify.sh.
 [tool.pytest.ini_options]
-testpaths = ["tests", "tools/public_sync/tests"]
+testpaths = ["tests"]
 pythonpath = ["tests"]
 addopts = ["--import-mode=importlib"]
+markers = [
+    "browser: requires npm ci and an installed Playwright Chromium browser",
+]
 
 [tool.pyright]
 pythonVersion = "3.14"
 typeCheckingMode = "strict"
-include = ["src", "tests", "tools/public_sync"]
+include = ["src", "tests"]
 
 
 [tool.ruff]

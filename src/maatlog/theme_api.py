@@ -82,7 +82,7 @@ class ThemeManifest(BaseModel):
     implementation: ThemeImplementation
 
 
-CORE_THEME_API: Final = ThemeApiVersion(major=1, minor=0)
+CORE_THEME_API: Final = ThemeApiVersion(major=1, minor=2)
 
 
 def is_compatible(core: ThemeApiVersion, theme: ThemeApiVersion) -> bool:

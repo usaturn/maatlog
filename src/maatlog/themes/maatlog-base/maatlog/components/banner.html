@@ -1,0 +1,22 @@
+{# MaatLog header banner. Uses ``maatlog.site`` plus Sphinx' ``logo_url`` /
+   ``logo_alt`` / ``root_doc``. Adds no configuration of its own. #}
+<header class="maatlog-banner" data-maatlog-component="banner">
+  <div class="maatlog-banner-brand">
+    {%- if logo_url -%}
+    <a class="maatlog-banner-logo" href="{{ pathto(root_doc)|e }}">
+      <img src="{{ logo_url|e }}" alt="{{ logo_alt|e }}" />
+    </a>
+    {%- endif -%}
+    <div class="maatlog-banner-text">
+      <p class="maatlog-banner-title">
+        <a href="{{ pathto(root_doc)|e }}">{{ maatlog.site.title|e }}</a>
+      </p>
+      {%- if maatlog.site.tagline -%}
+      <p class="maatlog-banner-tagline">{{ maatlog.site.tagline|e }}</p>
+      {%- endif -%}
+    </div>
+  </div>
+  <div class="maatlog-banner-search">
+    {%- include "searchbox.html" -%}
+  </div>
+</header>

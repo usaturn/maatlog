@@ -1,0 +1,8 @@
+*.md
+*.rst
+build/
+dist/
+docs/_build/
+node_modules/
+public/
+tests/**/generated/

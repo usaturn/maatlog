@@ -1,0 +1,32 @@
+{
+  "name": "maatlog-frontend-tooling",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "lint:js": "eslint eslint.config.mjs prettier.config.mjs stylelint.config.mjs \"src/maatlog/themes/**/*.js\" --no-error-on-unmatched-pattern",
+    "format:check": "prettier --check package.json package-lock.json eslint.config.mjs prettier.config.mjs stylelint.config.mjs tsconfig.json \"src/maatlog/themes/**/*.{js,css}\"",
+    "format": "prettier --write package.json package-lock.json eslint.config.mjs prettier.config.mjs stylelint.config.mjs tsconfig.json \"src/maatlog/themes/**/*.{js,css}\"",
+    "typecheck:js": "tsc --noEmit",
+    "lint:css": "stylelint \"src/maatlog/themes/**/static/**/*.css\"",
+    "check": "npm run lint:js && npm run format:check && npm run typecheck:js && npm run lint:css"
+  },
+  "browserslist": [
+    "defaults",
+    "not IE 11"
+  ],
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "axe-core": "4.13.0",
+    "browserslist": "4.28.8",
+    "eslint": "10.9.1",
+    "eslint-plugin-compat": "7.0.2",
+    "globals": "17.11.0",
+    "prettier": "3.9.6",
+    "stylelint": "17.14.1",
+    "stylelint-config-standard": "40.0.0",
+    "typescript": "7.0.2"
+  }
+}

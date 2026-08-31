@@ -114,15 +114,33 @@ Documentation
 Development
 -----------
 
-Clone the repository, install the locked development environment, and run the
-shared verification entrypoint::
+Node.js 24 is required only for contributor-side JavaScript and CSS quality
+tooling. Installing and using the MaatLog Python package does not require
+Node.js.
+
+Install both locked development environments and run the frontend checks::
 
     uv sync --locked --all-groups
+    npm ci
+    npm run check
+
+The individual frontend commands are::
+
+    npm run lint:js
+    npm run format:check
+    npm run typecheck:js
+    npm run lint:css
+    npm run format
+
+The authoritative full repository verification remains::
+
     ./scripts/ci/verify.sh full
 
 License and status
 ------------------
 
-MaatLog MVP targets Sphinx-based static blogs. Public metadata keys, config
-names, roles, the Theme API major version, generated docname rules, and
-diagnostic codes are compatibility-managed surfaces.
+MaatLog MVP targets Sphinx-based static blogs. Development is still active
+and the published package has no known users. Until the project stabilizes,
+Theme API updates are breaking and do not keep older Theme API versions
+working. Public metadata keys, config names, roles, generated docname
+rules, and diagnostic codes remain compatibility-managed surfaces.

@@ -42,6 +42,7 @@ PARALLEL_FILES = {
     for i in range(8)
 }
 PARALLEL_FILES["draft.rst"] = _rst_post(slug="draft-x", published_at=None, tags="hidden")
+PARALLEL_FILES["listing.rst"] = "Listing\n=======\n\n.. maatlog:post-list::\n"
 PARALLEL_CONFIG = {"maatlog_timezone": "UTC"}
 
 

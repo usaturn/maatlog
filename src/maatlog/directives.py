@@ -11,6 +11,7 @@ from docutils import nodes
 from docutils.parsers.rst import directives
 from sphinx.application import Sphinx
 from sphinx.builders import Builder
+from sphinx.util import logging
 from sphinx.util.docutils import SphinxDirective
 from sphinx.util.nodes import make_refnode
 from sphinx.writers.html5 import HTML5Translator
@@ -21,7 +22,11 @@ from .archives import PostFilter, filter_posts
 from .config import TAXONOMY_KEY_PATTERN, MaatlogConfig
 from .errors import Diagnostic, MaatlogBuildError
 from .model import Post
+from .navigation import post_taxonomy_linker
+from .taxonomy import DomainIndex
 from .views import image_url_for, post_card_view, relative_page_url_for
+
+logger = logging.getLogger(__name__)
 
 _MONTH_PATTERN = re.compile(r"\d{4}-(0[1-9]|1[0-2])\Z")
 _POST_CARD_TEMPLATE = "maatlog/components/post-card.html"
@@ -201,6 +206,10 @@ def html_visit_post_list(self: HTML5Translator, node: post_list) -> None:
     posts = cast(tuple[Post, ...], node.get("maatlog_posts", ()))
     docname = str(node["docname"]) if "docname" in node else self.builder.current_docname
     builder = self.builder
+    config = MaatlogConfig.from_sphinx(builder.env.config)
+    domain = builder.env.get_domain("maatlog")
+    index = cast(DomainIndex | None, domain.data.get("index"))
+    linker = post_taxonomy_linker(index, builder=builder, from_docname=docname, root=config.archive_docname)
     cards_html: list[str] = []
     for post in posts:
         card = post_card_view(
@@ -208,6 +217,7 @@ def html_visit_post_list(self: HTML5Translator, node: post_list) -> None:
             page_url=relative_page_url_for(builder, docname, post.docname),
             image_url=image_url_for(builder, docname, post.image_uri),
             slug=post.slug,
+            taxonomies=linker.for_post(post),
         )
         cards_html.append(_render_post_card(builder, asdict(card)))
     body = "".join(cards_html)
@@ -234,8 +244,15 @@ def _render_post_card(builder: Any, card: Mapping[str, Any]) -> str:
     if templates is not None and hasattr(templates, "render"):
         try:
             return cast(str, templates.render(_POST_CARD_TEMPLATE, {"card": card}))
-        except Exception:  # noqa: BLE001 — fall back to minimal markup
-            pass
+        except Exception as error:  # noqa: BLE001 — fall back to minimal markup
+            logger.warning(
+                "Failed to render %s; falling back to minimal markup: %s",
+                _POST_CARD_TEMPLATE,
+                error,
+                type="maatlog",
+                subtype="theme.post-card-render-failed",
+                once=True,
+            )
     return _fallback_post_card_html(card)
 
 

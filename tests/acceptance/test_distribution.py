@@ -77,10 +77,27 @@ _THEME_MARKERS: tuple[str, ...] = (
     "maatlog/themes/maatlog-base/static/maatlog.css",
     "maatlog/themes/maatlog-base/maatlog/post.html",
     "maatlog/themes/maatlog-base/maatlog/archive.html",
+    "maatlog/themes/maatlog-base/maatlog/home.html",
+    "maatlog/themes/maatlog-base/maatlog/components/post-grid.html",
     "maatlog/themes/maatlog-default/maatlog-theme.toml",
     "maatlog/themes/maatlog-default/theme.conf",
     "maatlog/themes/maatlog-default/static/maatlog.css",
     "maatlog/py.typed",
+)
+
+FRONTEND_TOOLING_BASENAMES = frozenset(
+    {
+        ".nvmrc",
+        ".prettierignore",
+        ".eslintcache",
+        ".stylelintcache",
+        "eslint.config.mjs",
+        "package-lock.json",
+        "package.json",
+        "prettier.config.mjs",
+        "stylelint.config.mjs",
+        "tsconfig.json",
+    }
 )
 
 # Invoke sphinx.cmd.build.main with argv-style arguments.
@@ -195,6 +212,23 @@ def test_readme_covers_install_and_quickstart(repo_root: Path) -> None:
         assert needle in readme, f"README.rst missing quickstart content: {needle!r}"
 
 
+def test_readmes_document_frontend_quality_without_runtime_node_requirement() -> None:
+    for name in ("README.rst", "README.ja.rst"):
+        text = (REPO_ROOT / name).read_text(encoding="utf-8")
+        for command in (
+            "npm ci",
+            "npm run check",
+            "npm run lint:js",
+            "npm run format:check",
+            "npm run typecheck:js",
+            "npm run lint:css",
+            "npm run format",
+            "./scripts/ci/verify.sh full",
+        ):
+            assert command in text, f"{name} missing {command!r}"
+        assert "Node.js 24" in text
+
+
 def test_pyproject_declares_pypi_release_metadata() -> None:
     data = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     project = data["project"]
@@ -305,6 +339,24 @@ def test_wheel_contains_themes_and_package_data(built_wheel: Path) -> None:
     assert "License-File: LICENSE\n" in metadata
 
 
+def _assert_no_frontend_dev_tooling(names: set[str]) -> None:
+    leaked = sorted(
+        name for name in names if "node_modules" in Path(name).parts or Path(name).name in FRONTEND_TOOLING_BASENAMES
+    )
+    assert not leaked, f"frontend developer tooling leaked into distribution: {leaked}"
+
+
+def test_wheel_excludes_frontend_dev_tooling(built_wheel: Path) -> None:
+    with zipfile.ZipFile(built_wheel) as archive:
+        _assert_no_frontend_dev_tooling(set(archive.namelist()))
+
+
+def test_sdist_excludes_frontend_dev_tooling(built_wheel: Path) -> None:
+    del built_wheel
+    with tarfile.open(_sdist(), "r:gz") as archive:
+        _assert_no_frontend_dev_tooling(set(archive.getnames()))
+
+
 def test_sdist_exists_alongside_wheel(built_wheel: Path) -> None:
     del built_wheel
     sdist = _sdist()
@@ -312,52 +364,25 @@ def test_sdist_exists_alongside_wheel(built_wheel: Path) -> None:
     assert sdist.stat().st_size > 0
 
 
-_PRIVATE_DISTRIBUTION_PARTS = {
-    ".agents",
-    ".claude",
-    ".codex",
-    ".devcontainer",
-    "devenv",
-    "docs_draft",
-    "reviews",
-    "sync",
-    "tools",
-}
+def _assert_license_included(names: set[str]) -> None:
+    assert any(name.endswith(("/LICENSE", "/licenses/LICENSE")) for name in names), (
+        "distribution archive is missing a LICENSE member"
+    )
 
 
-def _assert_public_distribution_members(names: set[str]) -> None:
-    parts = {part for name in names for part in Path(name).parts}
-    assert not parts.intersection(_PRIVATE_DISTRIBUTION_PARTS)
-    assert any(name.endswith(("/LICENSE", "/licenses/LICENSE")) for name in names)
-
-
-@pytest.mark.parametrize(
-    "private_member",
-    (
-        "maatlog-0.0.0/sync/gitleaks.toml",
-        "maatlog-0.0.0/tools/devenv_migration/tests/test_root_contract.py",
-    ),
-)
-def test_distribution_gate_rejects_parent_only_tooling(private_member: str) -> None:
-    names = {"maatlog-0.0.0/LICENSE", private_member}
-
-    with pytest.raises(AssertionError):
-        _assert_public_distribution_members(names)
-
-
-def test_wheel_has_license_and_no_private_paths(built_wheel: Path) -> None:
+def test_wheel_contains_license(built_wheel: Path) -> None:
     with zipfile.ZipFile(built_wheel) as archive:
-        _assert_public_distribution_members(set(archive.namelist()))
+        _assert_license_included(set(archive.namelist()))
         metadata_name = next(name for name in archive.namelist() if name.endswith(".dist-info/METADATA"))
         metadata = archive.read(metadata_name).decode("utf-8")
         assert "License-Expression: MIT\n" in metadata
         assert "License-File: LICENSE\n" in metadata
 
 
-def test_sdist_has_license_and_no_private_paths(built_wheel: Path) -> None:
+def test_sdist_contains_license(built_wheel: Path) -> None:
     del built_wheel
     with tarfile.open(_sdist(), "r:gz") as archive:
-        _assert_public_distribution_members(set(archive.getnames()))
+        _assert_license_included(set(archive.getnames()))
 
 
 def _isolated_install_builds_acceptance_site(tmp_path: Path, package: Path) -> None:

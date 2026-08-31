@@ -1,8 +1,8 @@
-"""Stable, template-facing view models for the MaatLog Theme API 1.0 context."""
+"""Stable, template-facing view models for the MaatLog Theme API 1.2 context."""
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import Any, Literal, Self, cast
@@ -16,13 +16,40 @@ from .archives import ArchivePage
 from .model import Post
 from .urls import post_urls
 
-PageKind = Literal["normal", "post", "archive"]
+PageKind = Literal["normal", "post", "archive", "home"]
 
 
 @dataclass(frozen=True, slots=True)
 class FeedLinkView:
     title: str
     url: str
+
+
+@dataclass(frozen=True, slots=True)
+class SiteView:
+    title: str
+    tagline: str | None
+    archive_url: str
+
+
+@dataclass(frozen=True, slots=True)
+class TaxonomyLinkView:
+    """One taxonomy value on a post or card. ``url`` is empty when unresolvable."""
+
+    id: str
+    label: str
+    url: str
+
+
+@dataclass(frozen=True, slots=True)
+class PostTaxonomiesView:
+    tags: tuple[TaxonomyLinkView, ...]
+    categories: tuple[TaxonomyLinkView, ...]
+    authors: tuple[TaxonomyLinkView, ...]
+
+    @classmethod
+    def empty(cls) -> Self:
+        return cls((), (), ())
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,6 +84,7 @@ class PostCardView:
     authors: tuple[str, ...]
     external_url: str | None
     slug: str | None = None
+    taxonomies: PostTaxonomiesView = PostTaxonomiesView.empty()
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,6 +103,7 @@ class PostView:
     categories: tuple[str, ...]
     authors: tuple[str, ...]
     body_html: str | None
+    taxonomies: PostTaxonomiesView = PostTaxonomiesView.empty()
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,6 +114,7 @@ class ArchiveView:
     docname: str
     page_number: int
     total_posts: int
+    is_home: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,7 +134,7 @@ class NavigationView:
 
 @dataclass(frozen=True, slots=True)
 class MaatlogTemplateContext:
-    api_version: str = "1.0"
+    api_version: str = "1.2"
     page_kind: PageKind = "normal"
     post: PostView | None = None
     posts: tuple[PostCardView, ...] = ()
@@ -113,11 +143,33 @@ class MaatlogTemplateContext:
     navigation: NavigationView = NavigationView(None, None)
     feeds: tuple[FeedLinkView, ...] = ()
     taxonomies: TaxonomyNavigationView = TaxonomyNavigationView.empty()
+    site: SiteView = SiteView("", None, "")
 
 
-def empty_context() -> MaatlogTemplateContext:
+def empty_context(site: SiteView | None = None) -> MaatlogTemplateContext:
     """Return a fully-keyed normal-page context with empty / None values."""
-    return MaatlogTemplateContext()
+    if site is None:
+        return MaatlogTemplateContext()
+    return MaatlogTemplateContext(site=site)
+
+
+def normal_page_context(
+    *,
+    site: SiteView | None = None,
+    taxonomies: TaxonomyNavigationView | None = None,
+    feeds: tuple[FeedLinkView, ...] = (),
+) -> MaatlogTemplateContext:
+    """Return the context for a page that is neither a post, archive, nor home.
+
+    Theme API 1.2 guarantees ``taxonomies`` and ``feeds`` on every full-HTML
+    page so themes can render one site-wide navigation sidebar. ``page_kind``
+    stays ``"normal"``; 1.0 and 1.1 themes simply ignore the extra data.
+    """
+    return MaatlogTemplateContext(
+        site=site if site is not None else SiteView("", None, ""),
+        taxonomies=taxonomies if taxonomies is not None else TaxonomyNavigationView.empty(),
+        feeds=feeds,
+    )
 
 
 def as_template_mapping(context: MaatlogTemplateContext) -> dict[str, Any]:
@@ -131,6 +183,7 @@ def post_card_view(
     page_url: str = "",
     image_url: str | None = None,
     slug: str | None = None,
+    taxonomies: PostTaxonomiesView | None = None,
 ) -> PostCardView:
     """Project a domain :class:`Post` into a list/card view."""
     return PostCardView(
@@ -144,6 +197,7 @@ def post_card_view(
         authors=post.authors,
         external_url=post.external_url,
         slug=post.slug if slug is None else slug,
+        taxonomies=taxonomies if taxonomies is not None else PostTaxonomiesView.empty(),
     )
 
 
@@ -153,6 +207,7 @@ def post_view(
     body_html: str | None = None,
     page_url: str = "",
     image_url: str | None = None,
+    taxonomies: PostTaxonomiesView | None = None,
 ) -> PostView:
     """Project a domain :class:`Post` into a full post page view.
 
@@ -181,6 +236,7 @@ def post_view(
         categories=post.categories,
         authors=post.authors,
         body_html=resolved_body,
+        taxonomies=taxonomies if taxonomies is not None else PostTaxonomiesView.empty(),
     )
 
 
@@ -193,6 +249,8 @@ def build_post_context(
     navigation: NavigationView | None = None,
     feeds: tuple[FeedLinkView, ...] = (),
     taxonomies: TaxonomyNavigationView | None = None,
+    site: SiteView | None = None,
+    post_taxonomies: PostTaxonomiesView | None = None,
 ) -> MaatlogTemplateContext:
     """Build a ``page_kind="post"`` template context for *post*."""
     return MaatlogTemplateContext(
@@ -202,14 +260,16 @@ def build_post_context(
             body_html=body_html,
             page_url=page_url,
             image_url=image_url,
+            taxonomies=post_taxonomies,
         ),
         navigation=navigation if navigation is not None else NavigationView(None, None),
         feeds=feeds,
         taxonomies=taxonomies if taxonomies is not None else TaxonomyNavigationView.empty(),
+        site=site if site is not None else SiteView("", None, ""),
     )
 
 
-def archive_view(page: ArchivePage) -> ArchiveView:
+def archive_view(page: ArchivePage, *, is_home: bool = False) -> ArchiveView:
     """Project an :class:`ArchivePage` into an :class:`ArchiveView`."""
     kind = "all" if page.key.axis is None else page.key.axis.value
     return ArchiveView(
@@ -219,6 +279,7 @@ def archive_view(page: ArchivePage) -> ArchiveView:
         docname=page.docname,
         page_number=page.number,
         total_posts=page.total_posts,
+        is_home=is_home,
     )
 
 
@@ -262,6 +323,9 @@ def archive_context(
     all_pages: Sequence[ArchivePage] | None = None,
     taxonomies: TaxonomyNavigationView | None = None,
     feeds: tuple[FeedLinkView, ...] = (),
+    site: SiteView | None = None,
+    linker: Callable[[Post], PostTaxonomiesView] | None = None,
+    is_home: bool = False,
 ) -> MaatlogTemplateContext:
     """Build a ``page_kind="archive"`` template context for *page*.
 
@@ -274,16 +338,65 @@ def archive_context(
             post,
             page_url=relative_page_url_for(builder, page.docname, post.docname),
             image_url=image_url_for(builder, page.docname, post.image_uri),
+            taxonomies=linker(post) if linker is not None else None,
         )
         for post in page.posts
     )
     return MaatlogTemplateContext(
         page_kind="archive",
         posts=cards,
-        archive=archive_view(page),
+        archive=archive_view(page, is_home=is_home),
         pagination=pagination_view(page, builder, all_pages=pages),
         feeds=feeds,
         taxonomies=taxonomies if taxonomies is not None else TaxonomyNavigationView.empty(),
+        site=site if site is not None else SiteView("", None, ""),
+    )
+
+
+def home_context(
+    published: Sequence[Post],
+    builder: Builder,
+    *,
+    docname: str,
+    page_size: int,
+    site: SiteView,
+    label: str = "Posts",
+    linker: Callable[[Post], PostTaxonomiesView] | None = None,
+    taxonomies: TaxonomyNavigationView | None = None,
+    feeds: tuple[FeedLinkView, ...] = (),
+) -> MaatlogTemplateContext:
+    """Build a ``page_kind="home"`` context for the blog home page.
+
+    The home page has no pagination: it lists the newest *page_size* posts and
+    hands the reader on to the archive root via ``site.archive_url``. Archive
+    projection (:func:`project_archives`) is deliberately not used.
+    """
+    visible_posts = tuple(post for post in published if post.docname != docname)
+    cards = tuple(
+        post_card_view(
+            post,
+            page_url=relative_page_url_for(builder, docname, post.docname),
+            image_url=image_url_for(builder, docname, post.image_uri),
+            taxonomies=linker(post) if linker is not None else None,
+        )
+        for post in visible_posts[:page_size]
+    )
+    return MaatlogTemplateContext(
+        page_kind="home",
+        posts=cards,
+        archive=ArchiveView(
+            kind="all",
+            id=None,
+            label=label,
+            docname=docname,
+            page_number=1,
+            total_posts=len(published),
+            is_home=True,
+        ),
+        pagination=None,
+        feeds=feeds,
+        taxonomies=taxonomies if taxonomies is not None else TaxonomyNavigationView.empty(),
+        site=site,
     )
 
 

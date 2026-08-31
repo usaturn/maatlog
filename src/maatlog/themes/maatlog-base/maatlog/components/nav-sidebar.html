@@ -1,0 +1,16 @@
+{# MaatLog left navigation sidebar: the site toctree plus taxonomy navigation.
+   ``basic/globaltoc.html`` is deliberately NOT included: it wraps the toctree in
+   its own ``<h3>`` heading markup and expects to be placed through
+   ``html_sidebars``, which MaatLog does not use. This template calls
+   ``toctree()`` directly instead.
+   ``components/sidebar.html`` emits its own ``<div class="maatlog-sidebar">``;
+   this ``<nav>`` is the single navigation landmark. #}
+<nav class="maatlog-nav" data-maatlog-component="nav"
+     aria-label="{{ _('Site navigation') }}">
+  {%- if toctree -%}
+  <div class="maatlog-nav-toctree">
+    {{ toctree(collapse=False, includehidden=False, maxdepth=2, titles_only=True) }}
+  </div>
+  {%- endif -%}
+  {%- include "maatlog/components/sidebar.html" -%}
+</nav>

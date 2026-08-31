@@ -9,10 +9,18 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from maatlog import navigation as navigation_module
 from maatlog.config import MaatlogConfig, TaxonomyAxis
 from maatlog.model import Post, PublicationStatus
-from maatlog.navigation import neighbors, taxonomy_navigation
-from maatlog.taxonomy import build_domain_index
+from maatlog.navigation import (
+    _axis_rows,  # pyright: ignore[reportPrivateUsage]
+    _cached_axis_rows,  # pyright: ignore[reportPrivateUsage]
+    neighbors,
+    post_taxonomy_linker,
+    taxonomy_navigation,
+)
+from maatlog.taxonomy import DomainIndex, build_domain_index
+from maatlog.views import TaxonomyLinkView
 
 PostFactory = Callable[..., Post]
 
@@ -147,3 +155,222 @@ def test_taxonomy_navigation_sorts_labels_and_months_desc(make_post: PostFactory
     assert nav.months[0].count == 1
     assert nav.months[1].count == 1
     assert nav.months[0].url == "uri:blog/month/2026-08"
+
+
+def test_post_taxonomy_linker_builds_links_for_each_axis(make_post: PostFactory) -> None:
+    posts = {
+        "post": make_post(
+            docname="post",
+            slug="post",
+            tags=("sphinx",),
+            categories=("engineering",),
+            authors=("alice",),
+        )
+    }
+    config = MaatlogConfig.from_values(
+        {
+            "maatlog_tags": {"sphinx": "Sphinx"},
+            "maatlog_categories": {"engineering": "Engineering"},
+            "maatlog_authors": {"alice": "Alice"},
+        }
+    )
+    index = build_domain_index(posts, config)
+    builder = MagicMock()
+
+    def _relative_uri(_from: str, to: str) -> str:
+        return f"{to}.html"
+
+    builder.get_relative_uri.side_effect = _relative_uri
+
+    linker = post_taxonomy_linker(index, builder=builder, from_docname="post", root="blog")
+    taxonomies = linker.for_post(posts["post"])
+
+    assert taxonomies.tags == (TaxonomyLinkView(id="sphinx", label="Sphinx", url="blog/tag/sphinx.html"),)
+    assert taxonomies.categories == (
+        TaxonomyLinkView(id="engineering", label="Engineering", url="blog/category/engineering.html"),
+    )
+    assert taxonomies.authors == (TaxonomyLinkView(id="alice", label="Alice", url="blog/author/alice.html"),)
+
+
+def test_post_taxonomy_linker_falls_back_to_id_when_label_missing(make_post: PostFactory) -> None:
+    post = make_post(tags=("unknown",))
+    builder = MagicMock()
+
+    linker = post_taxonomy_linker(None, builder=builder, from_docname="post", root="blog")
+    taxonomies = linker.for_post(post)
+
+    assert taxonomies.tags == (TaxonomyLinkView(id="unknown", label="unknown", url=""),)
+    builder.get_relative_uri.assert_not_called()
+
+
+def test_post_taxonomy_linker_uses_empty_url_when_uri_fails(make_post: PostFactory) -> None:
+    post = make_post(docname="post", slug="post", tags=("sphinx",))
+    index = build_domain_index(
+        {"post": post},
+        MaatlogConfig.from_values({}),
+    )
+    builder = MagicMock()
+    builder.get_relative_uri.side_effect = RuntimeError("no uri")
+
+    linker = post_taxonomy_linker(index, builder=builder, from_docname="post", root="blog")
+    taxonomies = linker.for_post(post)
+
+    assert taxonomies.tags == (TaxonomyLinkView(id="sphinx", label="sphinx", url=""),)
+
+
+def test_post_taxonomy_linker_memoizes_resolved_urls(make_post: PostFactory) -> None:
+    first = make_post(docname="a", slug="a", tags=("sphinx",))
+    second = make_post(docname="b", slug="b", tags=("sphinx",))
+    index = build_domain_index(
+        {"a": first, "b": second},
+        MaatlogConfig.from_values({}),
+    )
+    builder = MagicMock()
+
+    def _relative_uri(_from: str, to: str) -> str:
+        return f"{to}.html"
+
+    builder.get_relative_uri.side_effect = _relative_uri
+
+    linker = post_taxonomy_linker(index, builder=builder, from_docname="post", root="blog")
+    linker.for_post(first)
+    linker.for_post(second)
+
+    assert builder.get_relative_uri.call_count == 1
+
+
+def test_post_taxonomy_linker_links_only_published_membership(make_post: PostFactory) -> None:
+    published = make_post(docname="published", slug="published", tags=("shared",))
+    scheduled = make_post(
+        docname="scheduled",
+        slug="scheduled",
+        tags=("shared", "secret"),
+        status=PublicationStatus.SCHEDULED,
+    )
+    index = build_domain_index(
+        {"published": published, "scheduled": scheduled},
+        MaatlogConfig.from_values({}),
+    )
+    builder = MagicMock()
+
+    def _relative_uri(_from: str, to: str) -> str:
+        return f"{to}.html"
+
+    builder.get_relative_uri.side_effect = _relative_uri
+
+    taxonomies = post_taxonomy_linker(
+        index,
+        builder=builder,
+        from_docname="scheduled",
+        root="blog",
+    ).for_post(scheduled)
+
+    assert taxonomies.tags == (
+        TaxonomyLinkView(id="shared", label="shared", url="blog/tag/shared.html"),
+        TaxonomyLinkView(id="secret", label="secret", url=""),
+    )
+    assert builder.get_relative_uri.call_count == 1
+
+
+def _source_to_target(source: str, target: str) -> str:
+    return f"{source}->{target}"
+
+
+def _index_with_two_tags(make_post: PostFactory) -> DomainIndex:
+    config = MaatlogConfig.from_values(
+        {
+            "maatlog_timezone": "UTC",
+            "maatlog_tags": {"zebra": "Zebra", "alpha": "Alpha"},
+        }
+    )
+    posts = {
+        "p1": make_post(
+            docname="p1", slug="p1", published_at=datetime(2026, 8, 2, tzinfo=UTC), tags=("zebra", "alpha")
+        ),
+        "p2": make_post(docname="p2", slug="p2", published_at=datetime(2026, 7, 15, tzinfo=UTC), tags=("alpha",)),
+    }
+    return build_domain_index(posts, config)
+
+
+def test_axis_rows_are_page_independent(make_post: PostFactory) -> None:
+    index = _index_with_two_tags(make_post)
+
+    rows = _axis_rows(index, axis=TaxonomyAxis.TAG, root="blog", reverse=False, sort_by_label=True)
+
+    assert [row.id for row in rows] == ["alpha", "zebra"]
+    assert [row.label for row in rows] == ["Alpha", "Zebra"]
+    assert [row.count for row in rows] == [2, 1]
+    assert [row.target_docname for row in rows] == ["blog/tag/alpha", "blog/tag/zebra"]
+
+
+def test_taxonomy_navigation_produces_same_links_from_two_pages(make_post: PostFactory) -> None:
+    index = _index_with_two_tags(make_post)
+    builder = MagicMock()
+    builder.get_relative_uri.side_effect = _source_to_target
+
+    from_root = taxonomy_navigation(index, builder=builder, from_docname="index", root="blog")
+    from_deep = taxonomy_navigation(index, builder=builder, from_docname="contents/post", root="blog")
+
+    assert [item.id for item in from_root.tags] == [item.id for item in from_deep.tags]
+    assert from_root.tags[0].url == "index->blog/tag/alpha"
+    assert from_deep.tags[0].url == "contents/post->blog/tag/alpha"
+
+
+def test_cached_axis_rows_key_covers_the_ordering_parameters(make_post: PostFactory) -> None:
+    """Memoisation must not latch the ordering of whichever call came first."""
+    index = _index_with_two_tags(make_post)
+    builder = MagicMock()
+
+    ascending = _cached_axis_rows(
+        index, builder=builder, axis=TaxonomyAxis.TAG, root="blog", reverse=False, sort_by_label=True
+    )
+    descending = _cached_axis_rows(
+        index, builder=builder, axis=TaxonomyAxis.TAG, root="blog", reverse=True, sort_by_label=True
+    )
+
+    assert [row.id for row in ascending] == ["alpha", "zebra"]
+    assert [row.id for row in descending] == ["zebra", "alpha"]
+
+
+def test_taxonomy_navigation_computes_rows_once_per_builder(
+    make_post: PostFactory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    index = _index_with_two_tags(make_post)
+    builder = MagicMock()
+    builder.get_relative_uri.side_effect = _source_to_target
+
+    calls: list[TaxonomyAxis] = []
+    original = navigation_module._axis_rows  # pyright: ignore[reportPrivateUsage]
+
+    def counting(index_arg: DomainIndex, **kwargs: Any) -> tuple[Any, ...]:
+        calls.append(kwargs["axis"])
+        return original(index_arg, **kwargs)
+
+    monkeypatch.setattr(navigation_module, "_axis_rows", counting)
+
+    first = taxonomy_navigation(index, builder=builder, from_docname="index", root="blog")
+    computed_after_first = len(calls)
+    second = taxonomy_navigation(index, builder=builder, from_docname="about", root="blog")
+
+    # 4 軸 (tag / category / author / month) を 1 度だけ集計し、2 度目はキャッシュを使う。
+    assert computed_after_first == 4
+    assert len(calls) == 4
+    assert [item.id for item in first.tags] == [item.id for item in second.tags]
+
+
+def test_taxonomy_navigation_recomputes_when_index_changes(make_post: PostFactory) -> None:
+    builder = MagicMock()
+    builder.get_relative_uri.side_effect = _source_to_target
+
+    first_index = _index_with_two_tags(make_post)
+    first = taxonomy_navigation(first_index, builder=builder, from_docname="index", root="blog")
+    assert [item.id for item in first.tags] == ["alpha", "zebra"]
+
+    config = MaatlogConfig.from_values({"maatlog_timezone": "UTC", "maatlog_tags": {"gamma": "Gamma"}})
+    second_index = build_domain_index(
+        {"p3": make_post(docname="p3", slug="p3", published_at=datetime(2026, 9, 1, tzinfo=UTC), tags=("gamma",))},
+        config,
+    )
+    second = taxonomy_navigation(second_index, builder=builder, from_docname="index", root="blog")
+
+    assert [item.id for item in second.tags] == ["gamma"]

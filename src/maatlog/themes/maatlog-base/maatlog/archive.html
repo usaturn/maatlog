@@ -13,6 +13,22 @@
 {%- block body -%}
 <section class="maatlog-archive" data-maatlog-component="archive">
   {%- block maatlog_archive_header -%}
+  {%- set is_home = maatlog.archive and maatlog.archive.is_home -%}
+  {%- if is_home -%}
+  <header class="maatlog-archive-header maatlog-hero" data-maatlog-component="hero">
+    <h1 class="maatlog-hero-title">{{ maatlog.site.title|e }}</h1>
+    {%- if maatlog.site.tagline -%}
+    <p class="maatlog-hero-tagline">{{ maatlog.site.tagline|e }}</p>
+    {%- endif -%}
+    <p class="maatlog-hero-meta">
+      <span class="maatlog-archive-count">{{ maatlog.archive.total_posts }} posts</span>
+      {%- if maatlog.posts and maatlog.posts[0].published_at -%}
+      <time class="maatlog-hero-updated" datetime="{{ maatlog.posts[0].published_at.isoformat() }}">{{ maatlog.posts[0].published_at.strftime('%Y-%m-%d') }}</time>
+      {%- endif -%}
+    </p>
+    {%- include "maatlog/components/feed-links.html" -%}
+  </header>
+  {%- else -%}
   <header class="maatlog-archive-header">
     {%- if maatlog.archive -%}
     <h1>{{ maatlog.archive.label|e }}</h1>
@@ -24,17 +40,14 @@
     <h1>{{ title|e }}</h1>
     {%- endif -%}
   </header>
+  {%- endif -%}
   {%- endblock maatlog_archive_header -%}
 
   {%- block maatlog_archive_items -%}
   <div class="maatlog-post-list">
-    {%- for card in maatlog.posts -%}
-    {%- with card=card -%}
-    {%- include "maatlog/components/post-card.html" -%}
+    {%- with cards=maatlog.posts, featured_count=(3 if maatlog.archive and maatlog.archive.is_home else 0) -%}
+    {%- include "maatlog/components/post-grid.html" -%}
     {%- endwith -%}
-    {%- else -%}
-    <p class="maatlog-archive-empty">No posts.</p>
-    {%- endfor -%}
   </div>
   {%- endblock maatlog_archive_items -%}
 
@@ -47,8 +60,8 @@
   {%- include "maatlog/components/pagination.html" -%}
   {%- endblock maatlog_pagination -%}
 
-  {%- block maatlog_sidebar -%}
-  {%- include "maatlog/components/sidebar.html" -%}
-  {%- endblock maatlog_sidebar -%}
+  {#- The sidebar now lives in the layout's left column (Theme API 1.2).
+      The block stays because it is a required block of the contract. -#}
+  {%- block maatlog_sidebar -%}{%- endblock maatlog_sidebar -%}
 </section>
 {%- endblock body -%}

@@ -39,6 +39,14 @@
      - 正の ``int``
      - ``10``
      - ``env``
+   * - ``maatlog_tagline``
+     - ``str | None``
+     - ``None``
+     - ``html``
+   * - ``maatlog_home_docname``
+     - 相対 docname の ``str | None``
+     - ``None``
+     - ``html``
    * - ``maatlog_generate_feeds``
      - ``bool``
      - ``True``
@@ -62,6 +70,18 @@
   Theme API 互換のサードパーティテーマを指定します。
 * ``html_search_language`` をはじめとする Sphinx の検索関連設定には手を加えません。
   MaatLog は独自の検索インデックスをインストールしません。
+
+ヘッダーバナー
+--------------
+
+公式テーマのヘッダーバナーは、既存の設定だけで組み立てられます。バナー専用の
+設定はありません。
+
+* ``html_logo`` — バナー左端のロゴ。未設定ならロゴは出力されません
+* ``project`` — サイト名 (``maatlog.site.title``)
+* ``maatlog_tagline`` — サイト名の下のタグライン。未設定なら出力されません
+
+検索フォームは Sphinx の ``searchbox.html`` をそのまま使います。
 
 タクソノミー辞書
 ----------------
@@ -91,6 +111,21 @@ Sphinx ドキュメント名でなければなりません。
 * 月: ``blog/month/YYYY-MM``、…
 * サイト Atom フィード: ``blog/atom.xml``
 * タクソノミーフィード: ``blog/<axis>/<id>/atom.xml``
+
+ブログのホーム
+--------------
+
+``maatlog_home_docname`` に既存の docname（例: ``"index"``）を指定すると、そのページが
+ブログのホームになります。ユーザは導入文をそのドキュメントに書き、その下にテーマが
+投稿一覧を描画します。
+
+* ホームに並ぶ件数は ``maatlog_page_size`` と同じです。
+* ホームはページ送りを持たず、末尾の「All posts」からアーカイブルートへ送ります。
+* ホームが有効なとき、アーカイブルート 1 ページ目の hero は出ません。
+* 指定した docname が存在しないときは ``maatlog.home.docname-unknown`` を警告して
+  ホーム化を無効にします。
+* テーマが ``maatlog/home.html`` を持たないときは
+  ``maatlog.theme.home-template-missing`` を警告し、通常のページとして描画します。
 
 フィード
 --------

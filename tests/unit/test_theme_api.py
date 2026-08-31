@@ -11,6 +11,8 @@ from sphinx.application import Sphinx
 from maatlog.errors import MaatlogBuildError
 from maatlog.theme_api import (
     CORE_THEME_API,
+    REQUIRED_BLOCKS,
+    REQUIRED_TEMPLATES,
     ThemeApiVersion,
     ThemeImplementation,
     ThemeManifest,
@@ -101,6 +103,17 @@ def test_core_is_compatible_with_equal_or_lower_minor() -> None:
     assert not is_compatible(core, ThemeApiVersion(major=2, minor=0))
 
 
+def test_core_theme_api_is_1_2() -> None:
+    assert CORE_THEME_API == ThemeApiVersion(major=1, minor=2)
+
+
+def test_theme_api_1_0_and_1_1_stay_compatible_with_core_1_2() -> None:
+    assert is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=0)) is True
+    assert is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=1)) is True
+    assert is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=2)) is True
+    assert is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=3)) is False
+
+
 def test_load_maatlog_section_reads_toml() -> None:
     section = load_maatlog_section(
         """
@@ -147,11 +160,55 @@ def test_theme_models_are_frozen_pydantic() -> None:
         setattr(version, field_name, 2)
 
 
-def test_required_contract_constants() -> None:
-    from maatlog.theme_api import REQUIRED_BLOCKS, REQUIRED_TEMPLATES
+@pytest.mark.parametrize("theme_name", ["maatlog-base", "maatlog-default"])
+def test_bundled_theme_manifest_requires_api_1_2(theme_name: str) -> None:
+    manifest_path = (
+        Path(__file__).resolve().parents[2] / "src" / "maatlog" / "themes" / theme_name / "maatlog-theme.toml"
+    )
+    section = load_maatlog_section(manifest_path.read_text(encoding="utf-8"))
+    manifest = parse_and_validate_manifest(section, core_api=CORE_THEME_API)
 
+    assert manifest.api == ThemeApiVersion(major=1, minor=2)
+
+
+def test_required_contract_constants() -> None:
     assert "maatlog/post.html" in REQUIRED_TEMPLATES
     assert "maatlog/archive.html" in REQUIRED_TEMPLATES
     assert len(REQUIRED_BLOCKS) == 9
     assert "maatlog_post_body" in REQUIRED_BLOCKS
     assert "maatlog_sidebar" in REQUIRED_BLOCKS
+
+
+def test_core_theme_api_is_one_two() -> None:
+    assert str(CORE_THEME_API) == "1.2"
+
+
+def test_older_theme_api_versions_stay_compatible() -> None:
+    assert is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=0))
+    assert is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=1))
+    assert is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=2))
+    assert not is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=3))
+    assert not is_compatible(CORE_THEME_API, ThemeApiVersion(major=2, minor=0))
+
+
+def test_required_contract_is_unchanged_by_one_two() -> None:
+    # 1.2 は任意契約だけを足す。必須テンプレートとブロックは 1.0 のまま。
+    assert REQUIRED_TEMPLATES == (
+        "maatlog/post.html",
+        "maatlog/archive.html",
+        "maatlog/components/post-card.html",
+        "maatlog/components/pagination.html",
+        "maatlog/components/sidebar.html",
+        "maatlog/components/feed-links.html",
+    )
+    assert REQUIRED_BLOCKS == (
+        "maatlog_head",
+        "maatlog_post_header",
+        "maatlog_post_meta",
+        "maatlog_post_body",
+        "maatlog_post_navigation",
+        "maatlog_archive_header",
+        "maatlog_archive_items",
+        "maatlog_pagination",
+        "maatlog_sidebar",
+    )

@@ -3,13 +3,54 @@
 from __future__ import annotations
 
 import re
+from io import StringIO
+from pathlib import Path
 
 import pytest
 from conftest import ProjectFactory, SphinxFactory
+from sphinx.application import Sphinx
 
 from maatlog.errors import MaatlogBuildError
 
-# SOURCE_DATE_EPOCH default is 2026-08-01T00:00:00Z
+# SOURCE_DATE_EPOCH default is 2026-08-01T00:00:00Z — publish before that.
+MULTIPAGE_PROJECT = {
+    "one.md": """---
+maatlog-post: true
+maatlog-slug: one
+maatlog-published-at: 2026-07-31T09:00:00Z
+maatlog-tags: [sphinx]
+maatlog-categories: [engineering]
+maatlog-authors: [alice]
+---
+# One
+
+First sphinx post.
+""",
+    "two.md": """---
+maatlog-post: true
+maatlog-slug: two
+maatlog-published-at: 2026-07-30T09:00:00Z
+maatlog-tags: [sphinx]
+maatlog-categories: [engineering]
+maatlog-authors: [alice]
+---
+# Two
+
+Second sphinx post.
+""",
+    "three.md": """---
+maatlog-post: true
+maatlog-slug: three
+maatlog-published-at: 2026-07-29T09:00:00Z
+maatlog-tags: [python]
+maatlog-authors: [bob]
+---
+# Three
+
+Non-sphinx post for pagination contrast.
+""",
+}
+
 POST_LIST_PROJECT = {
     "index.rst": """\
 Root
@@ -127,10 +168,12 @@ maatlog-tags: [missing]
     page = result.html("index.html")
     assert page.select_one(".maatlog-post-list") is not None
     assert page.select(".maatlog-post-list .maatlog-post-card") == []
-    # Empty list must not disclose unpublished posts (draft matches the filter tag).
+    # Empty list must not disclose unpublished posts, neither as listing cards
+    # nor as a title anywhere on the page (draft matches the filter tag).
+    assert page.select('.maatlog-post-card[data-slug="draft-secret"]') == []
     lower = page.text.lower()
-    assert "draft secret" not in lower
     assert "draft-secret" not in lower
+    assert "draft secret" not in lower
     assert "unpublished" not in lower
 
 
@@ -321,3 +364,157 @@ maatlog-authors: [alice]
     assert archive.select_one(".maatlog-taxonomy-tags") is not None
     assert archive.select_one(".maatlog-taxonomy-authors") is not None
     assert archive.select_one(".maatlog-taxonomy-months") is not None
+
+
+def test_post_list_cards_are_not_fallback_markup(make_project: ProjectFactory) -> None:
+    """post-list renders the theme card, not the minimal fallback markup.
+
+    ``_render_post_card`` swallows template errors and degrades to a
+    title-only card. Asserting on the date proves the real template ran.
+    """
+    files = dict(MULTIPAGE_PROJECT)
+    files["index.rst"] = (
+        "Home\n====\n\n.. maatlog:post-list::\n\n.. toctree::\n   :hidden:\n\n   one\n   two\n   three\n"
+    )
+    result = make_project(files=files).build()
+    page = result.html("index.html")
+
+    assert page.select_one(".maatlog-post-list .maatlog-post-card") is not None
+    assert page.select_one("time.maatlog-post-card-date") is not None
+
+
+TAXONOMY_POST_LIST_PROJECT = {
+    "index.rst": "Home\n====\n\n.. maatlog:post-list::\n",
+    "one.md": """---
+maatlog-post: true
+maatlog-slug: one
+maatlog-published-at: 2026-07-31T09:00:00Z
+maatlog-tags: [sphinx]
+maatlog-categories: [engineering]
+maatlog-authors: [alice]
+maatlog-excerpt: An excerpt.
+---
+# One
+
+First post.
+""",
+}
+
+
+def test_post_list_cards_expose_taxonomy_links(make_project: ProjectFactory) -> None:
+    """Cards rendered through the directive must not fall back to minimal markup."""
+    result = make_project(files=TAXONOMY_POST_LIST_PROJECT).build()
+    page = result.html("index.html")
+    # Fallback markup has no date and no excerpt — assert the full card is rendered.
+    assert page.select_one(".maatlog-post-card-date") is not None
+    assert page.select_one(".maatlog-post-card-excerpt") is not None
+    assert page.select_one(".maatlog-post-card [href='blog/tag/sphinx.html']") is not None
+    assert page.select_one(".maatlog-post-card [href='blog/category/engineering.html']") is not None
+    assert page.select_one(".maatlog-post-card [href='blog/author/alice.html']") is not None
+
+
+def test_post_card_render_failure_warns_and_falls_back(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A broken post-card template warns instead of degrading silently."""
+    srcdir = tmp_path / "source"
+    theme_dir = srcdir / "_themes" / "broken"
+    (theme_dir / "maatlog" / "components").mkdir(parents=True)
+    (theme_dir / "maatlog-theme.toml").write_text(
+        '[maatlog]\napi = "1.0"\nimplementation = "inherits-base"\n', encoding="utf-8"
+    )
+    (theme_dir / "theme.conf").write_text(
+        "[theme]\ninherit = maatlog-base\nstylesheet = maatlog.css\n", encoding="utf-8"
+    )
+    # Raises inside Jinja at render time; ``card`` has no ``does_not_exist``.
+    (theme_dir / "maatlog" / "components" / "post-card.html").write_text(
+        "{{ card.does_not_exist.boom }}", encoding="utf-8"
+    )
+    for name, content in TAXONOMY_POST_LIST_PROJECT.items():
+        (srcdir / name).write_text(content, encoding="utf-8")
+    (srcdir / "conf.py").write_text(
+        "\n".join(
+            [
+                "extensions = ['maatlog']",
+                "source_suffix = {'.rst': 'restructuredtext', '.md': 'markdown'}",
+                "root_doc = 'index'",
+                "html_baseurl = 'https://example.test/'",
+                "html_theme_path = ['_themes']",
+                "html_theme = 'broken'",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    monkeypatch.setenv("SOURCE_DATE_EPOCH", "1785542400")
+
+    # Archive pages {% include %} the same post-card template; skip them so this
+    # test only exercises ``_render_post_card`` (the visitor catch path).
+    def skip_archive_pages(_app: Sphinx) -> list[tuple[str, dict[str, object], str]]:
+        return []
+
+    monkeypatch.setattr("maatlog.extension.collect_archive_pages", skip_archive_pages)
+    warning_stream = StringIO()
+    app = Sphinx(
+        str(srcdir),
+        str(srcdir),
+        str(tmp_path / "output"),
+        str(tmp_path / "doctrees"),
+        "html",
+        status=StringIO(),
+        warning=warning_stream,
+        warningiserror=False,
+        freshenv=True,
+    )
+    app.__dict__["_maatlog_test_warning_stream"] = warning_stream
+    app.build()
+
+    warnings = warning_stream.getvalue()
+    assert "theme.post-card-render-failed" in warnings
+    # Warned once, not once per card.
+    assert warnings.count("theme.post-card-render-failed") == 1
+    html = (Path(app.outdir) / "index.html").read_text(encoding="utf-8")
+    assert 'class="maatlog-post-card"' in html
+
+
+@pytest.mark.parametrize("feeds", [False, True], ids=["feeds-off", "feeds-on"])
+def test_post_list_page_rewritten_when_scheduled_post_publishes(make_project: ProjectFactory, feeds: bool) -> None:
+    """Issue #32: post-list pages must follow publication changes incrementally.
+
+    The listing page must not be the scheduled post's direct toctree parent
+    (``nav.rst`` is): Sphinx rewrites direct toctree parents of changed docs
+    via ``files_to_rebuild``, which would mask a missing ``env-get-updated``
+    entry for the listing page itself.
+    """
+    files = {
+        "listing.rst": "Posts\n=====\n\n.. maatlog:post-list::\n",
+        "nav.rst": "Nav\n===\n\n.. toctree::\n\n   scheduled\n",
+        "scheduled.md": """---
+maatlog-post: true
+maatlog-slug: future-post
+maatlog-published-at: 2026-08-01T12:00:00Z
+maatlog-tags: [secret]
+---
+# Future Post
+
+Scheduled body.
+""",
+    }
+    project = make_project(
+        files=files,
+        source_date_epoch="1782864000",  # 2026-07-01 — before publication
+        config={"maatlog_generate_feeds": feeds, "maatlog_timezone": "UTC"},
+    )
+    first = project.build(reuse_environment=False)
+    first_page = first.html("listing.html")
+    assert first_page.select(".maatlog-post-list .maatlog-post-card") == []
+    assert not first.path("blog/tag/secret.html").exists()
+
+    project.source_date_epoch = "1786752000"  # 2026-08-15 — after publication
+    second = project.build(reuse_environment=True)
+    second_page = second.html("listing.html")
+    assert second_page.select(".maatlog-post-list .maatlog-post-card") != []
+    assert second_page.select_one(".maatlog-post-card [href='blog/tag/secret.html']") is not None
+    assert second.path("blog/tag/secret.html").exists()

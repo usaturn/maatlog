@@ -1,0 +1,21 @@
+{# MaatLog blog home page — optional Theme API 1.1 template. Extends the archive
+   page so the hero, sidebar, and layout stay identical. #}
+{%- extends "maatlog/archive.html" -%}
+
+{%- block maatlog_archive_items -%}
+<div class="maatlog-post-list">
+  {%- block maatlog_home_intro -%}
+  {%- if body -%}
+  <div class="maatlog-home-intro">{{ body }}</div>
+  {%- endif -%}
+  {%- endblock maatlog_home_intro -%}
+  {%- if maatlog.posts or maatlog.archive.total_posts == 0 -%}
+  {%- with cards=maatlog.posts, featured_count=3 -%}
+  {%- include "maatlog/components/post-grid.html" -%}
+  {%- endwith -%}
+  {%- endif -%}
+  {%- if maatlog.site.archive_url -%}
+  <a class="maatlog-home-archive-link" href="{{ maatlog.site.archive_url|e }}">All posts</a>
+  {%- endif -%}
+</div>
+{%- endblock maatlog_archive_items -%}

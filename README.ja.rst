@@ -113,14 +113,31 @@ MaatLog HTML メタデータ）が保証されるのは ``html`` および ``dir
 開発
 ----
 
-リポジトリを clone し、lock 済みの開発環境を構築して共通検証を実行します::
+Node.js 24 は、開発者向けの JavaScript / CSS 品質ツールにだけ必要です。
+MaatLog の Python パッケージをインストールして利用する環境には Node.js を要求しません。
+
+Python と frontend の lock 済み開発環境を構築し、frontend 検査を実行します::
 
     uv sync --locked --all-groups
+    npm ci
+    npm run check
+
+frontend 検査の個別コマンドは次のとおりです::
+
+    npm run lint:js
+    npm run format:check
+    npm run typecheck:js
+    npm run lint:css
+    npm run format
+
+リポジトリ全体の authoritative な検証入口は引き続き次です::
+
     ./scripts/ci/verify.sh full
 
 ライセンスとステータス
 ----------------------
 
-MaatLog MVP は Sphinx ベースの静的ブログを対象とします。公開メタデータキー、
-設定名、ロール、Theme API のメジャーバージョン、生成 docname 規則、診断コードは
-互換性管理の対象です。
+MaatLog MVP は Sphinx ベースの静的ブログを対象とします。開発はまだ活発で安定して
+おらず、パッケージは公開済みですが既知の利用者はいません。開発が安定するまで、
+Theme API の更新は下位互換しない破壊的変更です。公開メタデータキー、設定名、
+ロール、生成 docname 規則、診断コードは互換性管理の対象です。

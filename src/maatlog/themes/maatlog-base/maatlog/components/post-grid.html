@@ -1,0 +1,25 @@
+{# Post grid component. Expects ``cards`` (sequence of PostCardView mappings) and
+   an optional ``featured_count``. Never reads the ``maatlog`` namespace so that
+   it can be included from any render path. #}
+{%- set featured = featured_count if featured_count is defined else 0 -%}
+{%- if cards -%}
+{%- if featured -%}
+<div class="maatlog-post-featured">
+  {%- for card in cards[:featured] -%}
+  {%- with card=card, card_variant="featured", card_anchor=card.slug -%}
+  {%- include "maatlog/components/post-card.html" -%}
+  {%- endwith -%}
+  {%- endfor -%}
+</div>
+{%- if cards|length > featured -%}
+<h2 class="maatlog-post-list-heading">Older posts</h2>
+{%- endif -%}
+{%- endif -%}
+{%- for card in cards[featured:] -%}
+{%- with card=card, card_anchor=card.slug -%}
+{%- include "maatlog/components/post-card.html" -%}
+{%- endwith -%}
+{%- endfor -%}
+{%- else -%}
+<p class="maatlog-archive-empty">No posts yet. Add a document with maatlog metadata to see it listed here.</p>
+{%- endif -%}
