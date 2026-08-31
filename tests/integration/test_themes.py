@@ -53,6 +53,10 @@ This body must not appear for external posts.
 CSS_CUSTOM_PROPERTIES = (
     "--maatlog-content-width",
     "--maatlog-sidebar-width",
+    "--maatlog-nav-width",
+    "--maatlog-toc-width",
+    "--maatlog-banner-background",
+    "--maatlog-banner-height",
     "--maatlog-space-xs",
     "--maatlog-space-sm",
     "--maatlog-space-md",

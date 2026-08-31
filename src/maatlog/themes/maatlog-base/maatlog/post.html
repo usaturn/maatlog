@@ -1,6 +1,14 @@
 {# MaatLog post page — implements Theme API 1.0 blocks and semantic classes. #}
 {%- extends "layout.html" -%}
 
+{%- macro taxonomy_links(links) -%}
+{%- for link in links -%}
+{%- if not loop.first -%}{{ ", " }}{%- endif -%}
+{%- if link.url -%}<a class="maatlog-taxonomy-link" href="{{ link.url|e }}">{{ link.label|e }}</a>
+{%- else -%}<span class="maatlog-taxonomy-link">{{ link.label|e }}</span>{%- endif -%}
+{%- endfor -%}
+{%- endmacro -%}
+
 {%- block extrahead -%}
   {{ super() }}
   {%- block maatlog_head -%}
@@ -28,13 +36,13 @@
     <time datetime="{{ maatlog.post.published_at }}">{{ maatlog.post.published_at }}</time>
     {%- endif -%}
     {%- if maatlog.post.authors -%}
-    <span class="maatlog-post-authors">{{ maatlog.post.authors|join(', ')|e }}</span>
+    <span class="maatlog-post-authors">{{ taxonomy_links(maatlog.post.taxonomies.authors) }}</span>
     {%- endif -%}
     {%- if maatlog.post.categories -%}
-    <span class="maatlog-post-categories">{{ maatlog.post.categories|join(', ')|e }}</span>
+    <span class="maatlog-post-categories">{{ taxonomy_links(maatlog.post.taxonomies.categories) }}</span>
     {%- endif -%}
     {%- if maatlog.post.tags -%}
-    <span class="maatlog-post-tags">{{ maatlog.post.tags|join(', ')|e }}</span>
+    <span class="maatlog-post-tags">{{ taxonomy_links(maatlog.post.taxonomies.tags) }}</span>
     {%- endif -%}
     {%- if maatlog.post.external_url -%}
     <span class="maatlog-post-external-badge">External</span>
@@ -84,8 +92,8 @@
   {%- include "maatlog/components/pagination.html" -%}
   {%- endblock maatlog_pagination -%}
 
-  {%- block maatlog_sidebar -%}
-  {%- include "maatlog/components/sidebar.html" -%}
-  {%- endblock maatlog_sidebar -%}
+  {#- The sidebar now lives in the layout's left column (Theme API 1.2).
+      The block stays because it is a required block of the contract. -#}
+  {%- block maatlog_sidebar -%}{%- endblock maatlog_sidebar -%}
 </article>
 {%- endblock body -%}

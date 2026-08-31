@@ -1,45 +1,50 @@
 {# Sidebar with taxonomy navigation and feeds. #}
-<aside class="maatlog-sidebar" data-maatlog-component="sidebar">
+{%- macro taxonomy_links(items) -%}
+<ul>
+  {%- for item in items -%}
+  <li><a href="{{ item.url|e }}">{{ item.label|e }}</a> ({{ item.count }})</li>
+  {%- endfor -%}
+</ul>
+{%- endmacro -%}
+{%- macro taxonomy_section(items, heading, css_class, all_label) -%}
+{%- if items -%}
+{%- set ordered = items|sort(attribute='count', reverse=true) -%}
+<section class="maatlog-taxonomy {{ css_class }}">
+  <h2>{{ heading }}</h2>
+  {{ taxonomy_links(ordered[:5]) }}
+  {%- if ordered|length > 5 -%}
+  <details class="maatlog-taxonomy-more">
+    <summary>{{ all_label }} ({{ ordered|length }})</summary>
+    {{ taxonomy_links(ordered[5:]) }}
+  </details>
+  {%- endif -%}
+</section>
+{%- endif -%}
+{%- endmacro -%}
+<div class="maatlog-sidebar" data-maatlog-component="sidebar">
   {%- set tax = maatlog.taxonomies -%}
-  {%- if tax.tags -%}
-  <section class="maatlog-taxonomy maatlog-taxonomy-tags">
-    <h2>Tags</h2>
-    <ul>
-      {%- for item in tax.tags -%}
-      <li><a href="{{ item.url|e }}">{{ item.label|e }}</a> ({{ item.count }})</li>
-      {%- endfor -%}
-    </ul>
-  </section>
-  {%- endif -%}
-  {%- if tax.categories -%}
-  <section class="maatlog-taxonomy maatlog-taxonomy-categories">
-    <h2>Categories</h2>
-    <ul>
-      {%- for item in tax.categories -%}
-      <li><a href="{{ item.url|e }}">{{ item.label|e }}</a> ({{ item.count }})</li>
-      {%- endfor -%}
-    </ul>
-  </section>
-  {%- endif -%}
-  {%- if tax.authors -%}
-  <section class="maatlog-taxonomy maatlog-taxonomy-authors">
-    <h2>Authors</h2>
-    <ul>
-      {%- for item in tax.authors -%}
-      <li><a href="{{ item.url|e }}">{{ item.label|e }}</a> ({{ item.count }})</li>
-      {%- endfor -%}
-    </ul>
-  </section>
-  {%- endif -%}
+  {{ taxonomy_section(tax.tags, "Tags", "maatlog-taxonomy-tags", "All tags") }}
+  {{ taxonomy_section(tax.categories, "Categories", "maatlog-taxonomy-categories", "All categories") }}
+  {{ taxonomy_section(tax.authors, "Authors", "maatlog-taxonomy-authors", "All authors") }}
   {%- if tax.months -%}
+  {%- set months = tax.months|sort(attribute='id', reverse=true) -%}
+  {%- set years = [] -%}
+  {%- for item in months -%}
+  {%- if item.id[:4] not in years -%}{%- set _ = years.append(item.id[:4]) -%}{%- endif -%}
+  {%- endfor -%}
   <section class="maatlog-taxonomy maatlog-taxonomy-months">
     <h2>Archives</h2>
-    <ul>
-      {%- for item in tax.months -%}
-      <li><a href="{{ item.url|e }}">{{ item.label|e }}</a> ({{ item.count }})</li>
-      {%- endfor -%}
-    </ul>
+    {%- for year in years -%}
+    <details class="maatlog-taxonomy-year" open>
+      <summary>{{ year }}</summary>
+      <ul>
+        {%- for item in months if item.id[:4] == year -%}
+        <li><a href="{{ item.url|e }}">{{ item.label|e }}</a> ({{ item.count }})</li>
+        {%- endfor -%}
+      </ul>
+    </details>
+    {%- endfor -%}
   </section>
   {%- endif -%}
   {%- include "maatlog/components/feed-links.html" -%}
-</aside>
+</div>

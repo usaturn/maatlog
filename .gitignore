@@ -3,6 +3,9 @@ __pycache__/
 .venv/
 .pytest_cache/
 .ruff_cache/
+node_modules/
+.eslintcache
+.stylelintcache
 .coverage
 .coverage.*
 htmlcov/

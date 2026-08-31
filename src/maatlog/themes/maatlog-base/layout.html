@@ -1,0 +1,36 @@
+{# MaatLog page shell — banner and a three-column layout.
+   Overrides ``header``, ``content``, ``relbar1`` and ``relbar2`` of Sphinx'
+   basic theme. Both Sphinx related bars are blanked; visible navigation is
+   provided by the MaatLog banner, sidebars, post neighbors and pagination. #}
+{%- extends "basic/layout.html" -%}
+
+{%- block header -%}
+<a class="maatlog-skip-link" href="#maatlog-main">{{ _('Skip to content') }}</a>
+{%- block maatlog_banner -%}
+{%- include "maatlog/components/banner.html" -%}
+{%- endblock maatlog_banner -%}
+{%- endblock header -%}
+
+{%- block content -%}
+<div class="maatlog-layout" data-maatlog-component="layout">
+  {%- block maatlog_nav -%}
+  {%- include "maatlog/components/nav-sidebar.html" -%}
+  {%- endblock maatlog_nav -%}
+  <main id="maatlog-main" class="document maatlog-layout-main">
+    <div class="documentwrapper">
+      <div class="bodywrapper">
+        <div class="body">
+          {% block body %}{% endblock %}
+          <div class="clearer"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+  {%- block maatlog_toc -%}
+  {%- include "maatlog/components/toc-sidebar.html" -%}
+  {%- endblock maatlog_toc -%}
+</div>
+{%- endblock content -%}
+
+{%- block relbar1 -%}{%- endblock relbar1 -%}
+{%- block relbar2 -%}{%- endblock relbar2 -%}

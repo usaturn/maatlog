@@ -3,6 +3,10 @@
 :root {
   --maatlog-content-width: 42rem;
   --maatlog-sidebar-width: 16rem;
+  --maatlog-nav-width: 15rem;
+  --maatlog-toc-width: 14rem;
+  --maatlog-banner-background: #fff;
+  --maatlog-banner-height: auto;
   --maatlog-space-xs: 0.25rem;
   --maatlog-space-sm: 0.5rem;
   --maatlog-space-md: 1rem;
@@ -11,7 +15,7 @@
   --maatlog-color-muted: #5c5c5c;
   --maatlog-color-link: #004b6b;
   --maatlog-color-border: #d0d0d0;
-  --maatlog-card-background: #ffffff;
+  --maatlog-card-background: #fff;
 }
 
 .maatlog-post,
@@ -25,6 +29,38 @@
 .maatlog-post-header,
 .maatlog-archive-header {
   margin-bottom: var(--maatlog-space-md, 1rem);
+}
+
+.maatlog-hero {
+  padding-bottom: var(--maatlog-space-md, 1rem);
+  border-bottom: 1px solid var(--maatlog-color-border, #d0d0d0);
+}
+
+.maatlog-hero-tagline {
+  color: var(--maatlog-color-muted, #5c5c5c);
+  margin: var(--maatlog-space-xs, 0.25rem) 0 0;
+}
+
+.maatlog-hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--maatlog-space-sm, 0.5rem);
+  color: var(--maatlog-color-muted, #5c5c5c);
+  font-size: 0.9rem;
+  margin: var(--maatlog-space-sm, 0.5rem) 0 0;
+}
+
+.maatlog-feed-links {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.maatlog-hero .maatlog-feed-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--maatlog-space-sm, 0.5rem);
+  margin-top: var(--maatlog-space-sm, 0.5rem);
 }
 
 .maatlog-post-meta {
@@ -51,10 +87,23 @@
 }
 
 .maatlog-post-card {
-  background: var(--maatlog-card-background, #ffffff);
+  background: var(--maatlog-card-background, #fff);
   border: 1px solid var(--maatlog-color-border, #d0d0d0);
   padding: var(--maatlog-space-md, 1rem);
   margin-bottom: var(--maatlog-space-md, 1rem);
+}
+
+.maatlog-post-featured {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: var(--maatlog-space-md, 1rem);
+  margin-bottom: var(--maatlog-space-lg, 2rem);
+}
+
+.maatlog-post-list-heading {
+  margin: var(--maatlog-space-lg, 2rem) 0 var(--maatlog-space-md, 1rem);
+  font-size: 1rem;
+  color: var(--maatlog-color-muted, #5c5c5c);
 }
 
 .maatlog-post-card-image {
@@ -79,6 +128,10 @@
   margin: var(--maatlog-space-md, 1rem) 0;
 }
 
+.maatlog-pagination-more {
+  margin-left: auto;
+}
+
 .maatlog-sidebar {
   margin-top: var(--maatlog-space-lg, 2rem);
   padding-top: var(--maatlog-space-md, 1rem);
@@ -96,7 +149,95 @@
   margin: var(--maatlog-space-xs, 0.25rem) 0 0;
 }
 
-.maatlog-feed-links {
+.maatlog-taxonomy-more,
+.maatlog-taxonomy-year {
+  margin-top: var(--maatlog-space-xs, 0.25rem);
+}
+
+.maatlog-taxonomy-more summary,
+.maatlog-taxonomy-year summary {
+  cursor: pointer;
+  color: var(--maatlog-color-muted, #5c5c5c);
+}
+
+.maatlog-taxonomy-link + .maatlog-taxonomy-link {
+  margin-left: var(--maatlog-space-xs, 0.25rem);
+}
+
+.maatlog-home-intro {
+  margin-bottom: var(--maatlog-space-md, 1rem);
+}
+
+.maatlog-home-archive-link {
+  display: inline-block;
+  margin-top: var(--maatlog-space-md, 1rem);
+}
+
+/* Page shell. The base theme stacks the regions; maatlog-default lays them out. */
+
+.maatlog-skip-link {
+  position: absolute;
+  left: -9999px;
+}
+
+.maatlog-skip-link:focus {
+  left: var(--maatlog-space-md, 1rem);
+  top: var(--maatlog-space-md, 1rem);
+  z-index: 1;
+  background: var(--maatlog-banner-background, #fff);
+  padding: var(--maatlog-space-sm, 0.5rem);
+}
+
+.maatlog-banner {
+  background: var(--maatlog-banner-background, #fff);
+  min-height: var(--maatlog-banner-height, auto);
+  padding: var(--maatlog-space-md, 1rem);
+  border-bottom: 1px solid var(--maatlog-color-border, #d0d0d0);
+}
+
+.maatlog-banner-title {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.maatlog-banner-tagline {
+  margin: var(--maatlog-space-xs, 0.25rem) 0 0;
+  color: var(--maatlog-color-muted, #5c5c5c);
+}
+
+/* basic.css floats the document wrapper; the shell owns the layout instead. */
+.maatlog-layout-main .documentwrapper {
+  float: none;
+  width: auto;
+}
+
+.maatlog-layout-main .bodywrapper {
+  margin: 0;
+}
+
+.maatlog-layout-main pre {
+  max-width: 100%;
+  overflow: auto hidden;
+}
+
+.maatlog-layout-main .highlight {
+  overflow-x: auto;
+}
+
+.maatlog-nav,
+.maatlog-toc {
+  padding: var(--maatlog-space-md, 1rem);
+}
+
+.maatlog-nav {
+  max-width: var(--maatlog-nav-width, 15rem);
+}
+
+.maatlog-toc {
+  max-width: var(--maatlog-toc-width, 14rem);
+}
+
+.maatlog-toc-posts {
   list-style: none;
   padding: 0;
   margin: 0;

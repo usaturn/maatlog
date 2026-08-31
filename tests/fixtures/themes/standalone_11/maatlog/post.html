@@ -1,0 +1,41 @@
+{%- extends "layout.html" -%}
+
+{%- block extrahead -%}
+  {{ super() }}
+  {%- block maatlog_head -%}{%- endblock maatlog_head -%}
+{%- endblock extrahead -%}
+
+{%- block body -%}
+<article class="maatlog-post" data-maatlog-component="post">
+  {%- block maatlog_post_header -%}
+  <header class="maatlog-post-header">
+    <h1>{{ maatlog.post.title|e if maatlog.post else title|e }}</h1>
+  </header>
+  {%- endblock maatlog_post_header -%}
+
+  {%- block maatlog_post_meta -%}
+  <div class="maatlog-post-meta"></div>
+  {%- endblock maatlog_post_meta -%}
+
+  {%- block maatlog_post_body -%}
+  <div class="maatlog-post-body">
+    {%- if maatlog.post and maatlog.post.body_html -%}
+    {{ maatlog.post.body_html|safe }}
+    {%- else -%}
+    {{ body }}
+    {%- endif -%}
+  </div>
+  {%- endblock maatlog_post_body -%}
+
+  {%- block maatlog_post_navigation -%}
+  <nav class="maatlog-post-navigation"></nav>
+  {%- endblock maatlog_post_navigation -%}
+
+  {%- block maatlog_archive_header -%}{%- endblock maatlog_archive_header -%}
+  {%- block maatlog_archive_items -%}{%- endblock maatlog_archive_items -%}
+  {%- block maatlog_pagination -%}{%- endblock maatlog_pagination -%}
+  {%- block maatlog_sidebar -%}
+  {%- include "maatlog/components/sidebar.html" -%}
+  {%- endblock maatlog_sidebar -%}
+</article>
+{%- endblock body -%}

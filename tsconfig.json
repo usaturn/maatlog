@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "strict": true,
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "skipLibCheck": true
+  },
+  "include": ["src/maatlog/themes/**/*.js", "eslint.config.mjs", "prettier.config.mjs", "stylelint.config.mjs"],
+  "exclude": ["build", "dist", "docs/_build", "node_modules", "public"]
+}

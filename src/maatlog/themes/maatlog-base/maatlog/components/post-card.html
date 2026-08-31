@@ -1,5 +1,12 @@
 {# Post card component. Expects ``card`` (PostCardView mapping) in context. #}
-<article class="maatlog-post-card" data-maatlog-component="post-card"{% if card.slug %} data-slug="{{ card.slug|e }}"{% endif %}>
+{%- macro taxonomy_links(links) -%}
+{%- for link in links -%}
+{%- if not loop.first -%}{{ ", " }}{%- endif -%}
+{%- if link.url -%}<a class="maatlog-taxonomy-link" href="{{ link.url|e }}">{{ link.label|e }}</a>
+{%- else -%}<span class="maatlog-taxonomy-link">{{ link.label|e }}</span>{%- endif -%}
+{%- endfor -%}
+{%- endmacro -%}
+<article class="maatlog-post-card{% if card_variant is defined and card_variant == 'featured' %} maatlog-post-card-featured{% endif %}" data-maatlog-component="post-card"{% if card_anchor is defined and card_anchor %} id="maatlog-post-{{ card_anchor|e }}"{% endif %}{% if card.slug %} data-slug="{{ card.slug|e }}"{% endif %}>
   {%- if card.image_url -%}
   <img class="maatlog-post-card-image" src="{{ card.image_url|e }}" alt="" />
   {%- endif -%}
@@ -11,21 +18,21 @@
     {%- endif -%}
   </h2>
   {%- if card.published_at -%}
-  <p class="maatlog-post-card-date">{{ card.published_at }}</p>
+  <time class="maatlog-post-card-date" datetime="{{ card.published_at.isoformat() }}">{{ card.published_at.strftime('%Y-%m-%d') }}</time>
   {%- endif -%}
   {%- if card.excerpt -%}
   <p class="maatlog-post-card-excerpt">{{ card.excerpt|e }}</p>
   {%- endif -%}
-  {%- if card.tags or card.categories or card.authors -%}
+  {%- if card.taxonomies.tags or card.taxonomies.categories or card.taxonomies.authors -%}
   <p class="maatlog-post-card-meta">
-    {%- if card.categories -%}
-    <span class="maatlog-post-card-categories">{{ card.categories|join(', ')|e }}</span>
+    {%- if card.taxonomies.categories -%}
+    <span class="maatlog-post-card-categories">{{ taxonomy_links(card.taxonomies.categories) }}</span>
     {%- endif -%}
-    {%- if card.tags -%}
-    <span class="maatlog-post-card-tags">{{ card.tags|join(', ')|e }}</span>
+    {%- if card.taxonomies.tags -%}
+    <span class="maatlog-post-card-tags">{{ taxonomy_links(card.taxonomies.tags) }}</span>
     {%- endif -%}
-    {%- if card.authors -%}
-    <span class="maatlog-post-card-authors">{{ card.authors|join(', ')|e }}</span>
+    {%- if card.taxonomies.authors -%}
+    <span class="maatlog-post-card-authors">{{ taxonomy_links(card.taxonomies.authors) }}</span>
     {%- endif -%}
   </p>
   {%- endif -%}

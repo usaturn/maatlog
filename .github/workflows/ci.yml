@@ -22,4 +22,16 @@ jobs:
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           python-version: "3.14"
+      - name: Set up Node.js
+        if: matrix.profile == 'full'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: ".nvmrc"
+          cache: "npm"
+          cache-dependency-path: "package-lock.json"
+      - name: Install Chromium
+        if: matrix.profile == 'full'
+        run: |
+          uv sync --locked --all-groups
+          uv run playwright install --with-deps chromium
       - run: ./scripts/ci/verify.sh "${{ matrix.profile }}"

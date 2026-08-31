@@ -1,10 +1,12 @@
 import os
+import pickle
 from collections.abc import Collection, Iterator
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 
 from docutils import nodes
+from sphinx import addnodes
 from sphinx.application import Sphinx
 from sphinx.config import Config
 from sphinx.environment import BuildEnvironment
@@ -45,7 +47,7 @@ from .html_metadata import (
 )
 from .metadata import capture_source, cleanup_sources, collect_post
 from .model import Post
-from .navigation import neighbors, taxonomy_navigation
+from .navigation import PostTaxonomyLinker, neighbors, post_taxonomy_linker, taxonomy_navigation
 from .outputs import commit_page_outputs
 from .taxonomy import DomainIndex
 from .theme_api import validate_selected_theme
@@ -54,11 +56,14 @@ from .views import (
     FeedLinkView,
     NavigationView,
     PostCardView,
+    SiteView,
     archive_context,
     as_template_mapping,
     build_post_context,
     empty_context,
+    home_context,
     image_url_for,
+    normal_page_context,
     post_card_view,
     register_representative_images,
     relative_page_url_for,
@@ -69,6 +74,7 @@ logger = logging.getLogger(__name__)
 
 POST_TEMPLATE = "maatlog/post.html"
 ARCHIVE_TEMPLATE = "maatlog/archive.html"
+HOME_TEMPLATE = "maatlog/home.html"
 _THEMES_DIR = Path(__file__).resolve().parent / "themes"
 
 
@@ -106,11 +112,20 @@ def merge_info(
 def finalize_domain(app: Sphinx, env: BuildEnvironment) -> None:
     domain = cast(MaatlogDomain, env.get_domain("maatlog"))
     build_time = cast(datetime, app.__dict__["_maatlog_build_time"])
+    config = MaatlogConfig.from_sphinx(app.config)
     domain.finalize(
-        MaatlogConfig.from_sphinx(app.config),
+        config,
         build_time=build_time,
         known_docnames=set(env.found_docs),
     )
+    if config.home_docname is not None and config.home_docname not in env.found_docs:
+        logger.warning(
+            "maatlog_home_docname %r does not match any document; the blog home is disabled",
+            config.home_docname,
+            type="maatlog",
+            subtype="home.docname-unknown",
+            once=True,
+        )
 
 
 def inject_maatlog_page_context(
@@ -120,38 +135,112 @@ def inject_maatlog_page_context(
     context: dict[str, Any],
     doctree: nodes.document | None,
 ) -> str | None:
-    """Always inject the stable ``maatlog`` namespace; override post template when available.
+    """Always inject the stable ``maatlog`` namespace; override post/home templates when available.
 
-    Non-post pages get :func:`empty_context` only when ``context["maatlog"]`` is
+    Non-post pages get :func:`normal_page_context` only when ``context["maatlog"]`` is
     not already set (so Plan 04 archive collectors can pre-seed archive context).
-    Post pages always get :func:`build_post_context` with neighbors, taxonomies,
-    absolute page／canonical URLs, and feed discovery links. Internal post body
-    fragments are persisted to the build-local fragment store when feeds are on.
-    Template override to ``maatlog/post.html`` only happens when the selected theme
-    can resolve that template.
+    The configured home docname (when it exists) gets :func:`home_context` before
+    the post branch, so a document that is both home and a post renders as home.
+    If that document is also a post, :func:`capture_internal_body` still runs so
+    Atom feeds can read the fragment. Post pages always get :func:`build_post_context`
+    with neighbors, taxonomies, absolute page／canonical URLs, and feed discovery
+    links. Internal post body fragments are persisted to the build-local fragment
+    store when feeds are on.
+    Template override to ``maatlog/home.html`` or ``maatlog/post.html`` only happens
+    when the selected theme can resolve that template. When the theme cannot resolve
+    ``maatlog/home.html``, the configured home page renders as a normal page (with
+    the ``maatlog.theme.home-template-missing`` warning) and the archive root's
+    first page carries ``is_home`` instead.
     """
     del templatename, doctree
+    config = MaatlogConfig.from_sphinx(app.config)
+    site = _site_view(app, pagename, config)
     # Full HTML only: archives / theme post template / body store / feed discovery.
     if builder_capability(app.builder) is not BuilderCapability.FULL_HTML:
-        context.setdefault("maatlog", as_template_mapping(empty_context()))
+        context.setdefault("maatlog", as_template_mapping(empty_context(site=site)))
         return None
 
     domain = cast(MaatlogDomain, app.env.get_domain("maatlog"))
     posts = cast(dict[str, Post], domain.data["posts_by_docname"])
+    home_docname = resolved_home_docname(app, config)
+    if home_docname is not None and pagename == home_docname:
+        post = posts.get(pagename)
+        if post is not None:
+            capture_internal_body(app, pagename, post, context)
+            if post.canonical_url is not None:
+                context["pageurl"] = post.canonical_url
+        index = cast(DomainIndex | None, domain.data.get("index"))
+        published = index.published if index is not None else ()
+        linker = post_taxonomy_linker(index, builder=app.builder, from_docname=pagename, root=config.archive_docname)
+        context["maatlog"] = as_template_mapping(
+            home_context(
+                published,
+                app.builder,
+                docname=pagename,
+                page_size=config.page_size,
+                site=site,
+                linker=linker.for_post,
+                taxonomies=(
+                    taxonomy_navigation(
+                        index,
+                        builder=app.builder,
+                        from_docname=pagename,
+                        root=config.archive_docname,
+                    )
+                    if index is not None
+                    else None
+                ),
+                feeds=_archive_discovery_feeds(app, page_axis=None, taxonomy_id=None, label="Posts"),
+            )
+        )
+        return HOME_TEMPLATE
+
+    if (
+        config.home_docname is not None
+        and pagename == config.home_docname
+        and config.home_docname in app.env.found_docs
+        and not theme_can_resolve_template(app, HOME_TEMPLATE)
+    ):
+        logger.warning(
+            "Theme cannot resolve %r; %r is rendered as a normal page without the post list",
+            HOME_TEMPLATE,
+            pagename,
+            type="maatlog",
+            subtype="theme.home-template-missing",
+            once=True,
+        )
+
     post = posts.get(pagename)
 
     if post is None:
-        context.setdefault("maatlog", as_template_mapping(empty_context()))
+        index = cast(DomainIndex | None, domain.data.get("index"))
+        if "maatlog" not in context:
+            context["maatlog"] = as_template_mapping(
+                normal_page_context(
+                    site=site,
+                    taxonomies=(
+                        taxonomy_navigation(
+                            index,
+                            builder=app.builder,
+                            from_docname=pagename,
+                            root=config.archive_docname,
+                        )
+                        if index is not None
+                        else None
+                    ),
+                    feeds=_archive_discovery_feeds(app, page_axis=None, taxonomy_id=None, label="Posts"),
+                )
+            )
         return None
 
     body_html = capture_internal_body(app, pagename, post, context)
-    config = MaatlogConfig.from_sphinx(app.config)
     index = cast(DomainIndex | None, domain.data.get("index"))
     published = index.published if index is not None else ()
     newer, older = neighbors(published, post.slug)
+    linker = post_taxonomy_linker(index, builder=app.builder, from_docname=pagename, root=config.archive_docname)
     navigation = NavigationView(
-        newer_post=_neighbor_card(app, pagename, newer),
-        older_post=_neighbor_card(app, pagename, older),
+        newer_post=_neighbor_card(app, pagename, newer, linker),
+        older_post=_neighbor_card(app, pagename, older, linker),
     )
     taxonomies = (
         taxonomy_navigation(
@@ -173,6 +262,8 @@ def inject_maatlog_page_context(
         navigation=navigation,
         feeds=feeds,
         taxonomies=taxonomies,
+        site=site,
+        post_taxonomies=linker.for_post(post),
     )
     context["maatlog"] = as_template_mapping(maatlog_context)
     # Suppress Sphinx basic-theme ``pageurl`` canonical; ``maatlog_head`` owns it
@@ -211,6 +302,7 @@ def collect_archive_pages(app: Sphinx) -> Iterator[tuple[str, dict[str, Any], st
         tuple(page.docname for page in pages),
         known_docnames=set(app.env.found_docs),
     )
+    home_docname = resolved_home_docname(app, config)
     for page in pages:
         taxonomies = taxonomy_navigation(
             index,
@@ -221,6 +313,10 @@ def collect_archive_pages(app: Sphinx) -> Iterator[tuple[str, dict[str, Any], st
         feeds = _archive_discovery_feeds(
             app, page_axis=page.key.axis, taxonomy_id=page.key.value, label=page.key.label
         )
+        linker = post_taxonomy_linker(
+            index, builder=app.builder, from_docname=page.docname, root=config.archive_docname
+        )
+        is_home = home_docname is None and page.key.axis is None and page.number == 1
         maatlog = as_template_mapping(
             archive_context(
                 page,
@@ -228,6 +324,9 @@ def collect_archive_pages(app: Sphinx) -> Iterator[tuple[str, dict[str, Any], st
                 all_pages=pages,
                 taxonomies=taxonomies,
                 feeds=feeds,
+                site=_site_view(app, page.docname, config),
+                linker=linker.for_post,
+                is_home=is_home,
             )
         )
         yield (
@@ -289,13 +388,197 @@ def _archive_discovery_feeds(
     )
 
 
-def _neighbor_card(app: Sphinx, from_docname: str, post: Post | None) -> PostCardView | None:
+def _site_view(app: Sphinx, pagename: str, config: MaatlogConfig) -> SiteView:
+    """Build the per-page ``maatlog.site`` view (archive URL is page-relative)."""
+    return SiteView(
+        title=str(getattr(app.config, "project", "") or ""),
+        tagline=config.tagline,
+        archive_url=relative_page_url_for(app.builder, pagename, config.archive_docname),
+    )
+
+
+def resolved_home_docname(app: Sphinx, config: MaatlogConfig) -> str | None:
+    """Return the configured home docname when the site renders it as the blog top.
+
+    ``None`` when home is not configured, the docname does not exist, or the
+    selected theme cannot resolve ``maatlog/home.html``. In the last case the
+    configured page falls back to a normal page (with the
+    ``maatlog.theme.home-template-missing`` warning) and the archive root's
+    first page carries ``is_home`` instead, so exactly one page in the site
+    stays the blog top.
+    """
+    if config.home_docname is None:
+        return None
+    if config.home_docname not in app.env.found_docs:
+        return None
+    if not theme_can_resolve_template(app, HOME_TEMPLATE):
+        return None
+    return config.home_docname
+
+
+def collect_post_lists(app: Sphinx, doctree: nodes.document) -> None:
+    """Record docnames embedding ``post_list`` nodes for incremental rewrites.
+
+    Runs on ``doctree-read``: unchanged documents are not re-read on
+    incremental builds, so the domain keeps this set across builds until the
+    document is purged (``clear_doc``) before its next read or replaced by a
+    parallel worker merge.
+    """
+    if next(doctree.findall(post_list), None) is None:
+        return
+    docname = app.env.current_document.docname
+    domain = cast(MaatlogDomain, app.env.get_domain("maatlog"))
+    domain.note_post_list(docname)
+
+
+type ToctreeShape = tuple[tuple[tuple[str, str], ...], bool, int | None, str, bool]
+type HtmlShellFingerprint = tuple[
+    tuple[str, ...],
+    tuple[tuple[str, tuple[tuple[str, tuple[str, ...]], ...]], ...],
+    tuple[tuple[str, str], ...],
+    tuple[tuple[str, tuple[ToctreeShape, ...]], ...],
+]
+
+_HTML_SHELL_STATE_FILENAME = "maatlog_html_shell_fingerprints.pickle"
+
+
+def _published_index_fingerprint(
+    index: DomainIndex | None,
+) -> tuple[tuple[str, ...], tuple[tuple[str, tuple[tuple[str, tuple[str, ...]], ...]], ...]]:
+    """Published slugs and taxonomy membership of a domain index (no titles)."""
+    if index is None:
+        return ((), ())
+    slugs = tuple(post.slug for post in index.published)
+    members = tuple(
+        (
+            axis.value,
+            tuple(sorted((key, tuple(values)) for key, values in mapping.items())),
+        )
+        for axis, mapping in sorted(index.members.items(), key=lambda item: item[0].value)
+    )
+    return (slugs, members)
+
+
+def _document_toctree_shapes(env: BuildEnvironment, docname: str) -> tuple[ToctreeShape, ...]:
+    """Shape of every toctree in one document, in document order.
+
+    Captures what ``nav-sidebar.html`` renders: each entry's explicit title
+    (empty when the title is implicit) plus the referenced docname, whether
+    the toctree is hidden, the depth and caption that shape the list, and
+    whether ``includehidden`` on the node overrides the helper argument.
+    Implicit titles stay empty so heading edits remain the job of ``env.titles``.
+    """
+    toc = env.tocs.get(docname)
+    if toc is None:
+        return ()
+    return tuple(
+        (
+            tuple((title or "", reference) for title, reference in node["entries"]),
+            bool(node.get("hidden", False)),
+            node.get("maxdepth"),
+            node.get("caption") or "",
+            bool(node.get("includehidden", False)),
+        )
+        for node in toc.findall(addnodes.toctree)
+    )
+
+
+def _toctree_fingerprint(env: BuildEnvironment) -> tuple[tuple[str, tuple[ToctreeShape, ...]], ...]:
+    """Site-wide toctree structure, so nav-only edits invalidate plain pages."""
+    return tuple((docname, _document_toctree_shapes(env, docname)) for docname in sorted(env.found_docs))
+
+
+def _html_shell_fingerprint(index: DomainIndex | None, env: BuildEnvironment) -> HtmlShellFingerprint:
+    """Snapshot of what every plain page embeds: posts, taxonomies, titles, toctrees."""
+    slugs, members = _published_index_fingerprint(index)
+    titles = tuple(
+        (docname, env.titles[docname].astext() if docname in env.titles else "") for docname in sorted(env.found_docs)
+    )
+    return (slugs, members, titles, _toctree_fingerprint(env))
+
+
+def _html_shell_state_key(app: Sphinx) -> tuple[str, str]:
+    return (app.builder.name, str(Path(app.outdir).resolve()))
+
+
+def _html_shell_state_path(app: Sphinx) -> Path:
+    return Path(app.doctreedir) / _HTML_SHELL_STATE_FILENAME
+
+
+def _load_html_shell_fingerprints(app: Sphinx) -> dict[tuple[str, str], HtmlShellFingerprint]:
+    """Load the sidecar state; a corrupt or unreadable file means "no state"."""
+    path = _html_shell_state_path(app)
+    if not path.is_file():
+        return {}
+    try:
+        with path.open("rb") as handle:
+            value = pickle.load(handle)
+    except OSError, pickle.PickleError, AttributeError, EOFError, TypeError, ValueError:
+        return {}
+    return cast(dict[tuple[str, str], HtmlShellFingerprint], value) if isinstance(value, dict) else {}
+
+
+def commit_html_shell_fingerprint(app: Sphinx, exception: Exception | None) -> None:
+    """Persist the pending shell fingerprint only after a successful full HTML build."""
+    if exception is not None or not is_full_html_builder(app.builder):
+        return
+    pending = cast(HtmlShellFingerprint | None, getattr(app, "_maatlog_pending_html_shell_fingerprint", None))
+    if pending is None:
+        return
+    fingerprints = _load_html_shell_fingerprints(app)
+    fingerprints[_html_shell_state_key(app)] = pending
+    path = _html_shell_state_path(app)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("wb") as handle:
+        pickle.dump(fingerprints, handle, pickle.HIGHEST_PROTOCOL)
+
+
+def force_home_doc_updated(app: Sphinx, env: BuildEnvironment) -> list[str]:
+    """Rewrite HTML that embeds the published index, without re-reading sources.
+
+    Home and post pages always rewrite. Pages embedding ``maatlog:post-list``
+    always rewrite too, because cards can change when excerpt or body changes
+    without shifting slugs, membership, titles, or toctrees. Other found docs
+    rewrite only when the HTML shell fingerprint — published slugs, taxonomy
+    membership, document titles, and site-wide toctree structure — changed
+    since the last successful full HTML build (compared per builder name and
+    resolved output directory).
+    """
+    if not is_full_html_builder(app.builder):
+        return []
+    config = MaatlogConfig.from_sphinx(app.config)
+    docnames: dict[str, None] = {}
+    home_docname = resolved_home_docname(app, config)
+    if home_docname is not None:
+        docnames[home_docname] = None
+    domain = cast(MaatlogDomain, env.get_domain("maatlog"))
+    posts = cast(dict[str, Post], domain.data.get("posts_by_docname", {}))
+    for docname in posts:
+        docnames[docname] = None
+    for docname in domain.post_list_docnames():
+        docnames[docname] = None
+    current = _html_shell_fingerprint(cast(DomainIndex | None, domain.data.get("index")), env)
+    setattr(app, "_maatlog_pending_html_shell_fingerprint", current)  # noqa: B010 — dynamic attr on Sphinx, unknown to pyright
+    previous = _load_html_shell_fingerprints(app).get(_html_shell_state_key(app))
+    if current != previous:
+        for docname in sorted(env.found_docs):
+            docnames[docname] = None
+    return list(docnames)
+
+
+def _neighbor_card(
+    app: Sphinx,
+    from_docname: str,
+    post: Post | None,
+    linker: PostTaxonomyLinker | None = None,
+) -> PostCardView | None:
     if post is None:
         return None
     return post_card_view(
         post,
         page_url=relative_page_url_for(app.builder, from_docname, post.docname),
         image_url=image_url_for(app.builder, from_docname, post.image_uri),
+        taxonomies=linker.for_post(post) if linker is not None else None,
     )
 
 
@@ -338,10 +621,12 @@ def setup(app: Sphinx) -> ExtensionMetadata:
     app.connect("builder-inited", _initialize_html_metadata)
     app.connect("source-read", capture_source, priority=999)
     app.connect("doctree-read", collect_post, priority=100)
+    app.connect("doctree-read", collect_post_lists, priority=101)
     app.connect("env-get-outdated", force_post_docs_outdated_for_feeds)
     app.connect("env-purge-doc", purge_doc)
     app.connect("env-merge-info", merge_info)
     app.connect("env-updated", finalize_domain)
+    app.connect("env-get-updated", force_home_doc_updated)
     app.connect("doctree-resolved", process_post_list_nodes)
     app.connect("html-collect-pages", collect_archive_pages)
     app.connect("html-page-context", inject_maatlog_page_context)
@@ -350,9 +635,14 @@ def setup(app: Sphinx) -> ExtensionMetadata:
     # Pages then feeds, then fragment-store cleanup (always).
     app.connect("build-finished", finalize_generated_outputs)
     app.connect("build-finished", cleanup_sources)
+    # Shell refresh state commits last; never on a failed build.
+    app.connect("build-finished", commit_html_shell_fingerprint)
     return {
         "version": PACKAGE_VERSION,
-        "env_version": 1,
+        # 2: the domain now tracks ``post_list_docnames``. Environments
+        # pickled before the key existed would leave post-list pages stale,
+        # so force one full rebuild to repopulate the tracking set.
+        "env_version": 2,
         "parallel_read_safe": True,
         # parallel_write_safe: archive HTML is produced only via main-process
         # html-collect-pages (Sphinx write/finish), not worker writers.

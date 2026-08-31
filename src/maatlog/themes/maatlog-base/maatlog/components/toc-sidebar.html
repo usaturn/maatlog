@@ -1,0 +1,21 @@
+{# MaatLog right sidebar: the table of contents of what this page shows.
+   ``toc`` and ``display_toc`` only reach real documents (Sphinx builds them in
+   ``get_doc_context``), so generated archive pages fall back to the cards they
+   list. Renders nothing at all when there is neither. #}
+{%- set has_headings = display_toc and toc -%}
+{%- set has_posts = maatlog.posts and maatlog.page_kind in ("home", "archive") -%}
+{%- if has_headings or has_posts -%}
+<aside class="maatlog-toc" data-maatlog-component="toc" aria-label="{{ _('On this page') }}">
+  {%- if has_posts -%}
+  <h2>{{ _('Posts on this page') }}</h2>
+  <ul class="maatlog-toc-posts">
+    {%- for card in maatlog.posts -%}
+    <li><a href="{% if card.slug %}#maatlog-post-{{ card.slug|e }}{% else %}{{ card.page_url|e }}{% endif %}">{{ card.title|e }}</a></li>
+    {%- endfor -%}
+  </ul>
+  {%- else -%}
+  <h2>{{ _('Contents') }}</h2>
+  <div class="maatlog-toc-headings">{{ toc }}</div>
+  {%- endif -%}
+</aside>
+{%- endif -%}

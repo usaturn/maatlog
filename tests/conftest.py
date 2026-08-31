@@ -55,10 +55,12 @@ class DomainSnapshot:
     docname_by_slug: dict[str, str]
     members: dict[str, dict[str, tuple[str, ...]]]
     labels: dict[str, dict[str, str]]
+    post_list_docnames: frozenset[str] = frozenset()
 
     @classmethod
     def from_domain(cls, domain: MaatlogDomain) -> DomainSnapshot:
         posts = dict(domain.data["posts_by_docname"])
+        post_lists = frozenset(domain.data.get("post_list_docnames", ()))
         index = domain.data.get("index")
         if index is None:
             return cls(
@@ -67,6 +69,7 @@ class DomainSnapshot:
                 docname_by_slug={},
                 members={},
                 labels={},
+                post_list_docnames=post_lists,
             )
         assert isinstance(index, DomainIndex)
         return cls(
@@ -75,6 +78,7 @@ class DomainSnapshot:
             docname_by_slug=dict(index.docname_by_slug),
             members={axis.value: {k: tuple(v) for k, v in mapping.items()} for axis, mapping in index.members.items()},
             labels={axis.value: dict(mapping) for axis, mapping in index.labels.items()},
+            post_list_docnames=post_lists,
         )
 
 
