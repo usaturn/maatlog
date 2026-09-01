@@ -118,6 +118,10 @@ Node.js 24 is required only for contributor-side JavaScript and CSS quality
 tooling. Installing and using the MaatLog Python package does not require
 Node.js.
 
+Official HTML and CSS support follows the ``browserslist`` query in
+``package.json``. Long-tail browsers that still appear in ``defaults``
+(Opera Mini, KaiOS 2.x, UC Browser, and QQ Browser) are out of scope.
+
 Install both locked development environments and run the frontend checks::
 
     uv sync --locked --all-groups
@@ -131,6 +135,13 @@ The individual frontend commands are::
     npm run typecheck:js
     npm run lint:css
     npm run format
+
+The full verification profile runs browser-based accessibility tests, so
+install the Playwright browser once before running it. On a system that also
+needs the browser's OS packages, run the same command with ``--with-deps``
+(it uses ``sudo``)::
+
+    uv run playwright install chromium
 
 The authoritative full repository verification remains::
 

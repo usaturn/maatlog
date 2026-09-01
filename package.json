@@ -15,7 +15,11 @@
   },
   "browserslist": [
     "defaults",
-    "not IE 11"
+    "not IE 11",
+    "not op_mini all",
+    "not kaios 2.5",
+    "not and_uc 15.5",
+    "not and_qq 14.9"
   ],
   "devDependencies": {
     "@eslint/js": "10.0.1",

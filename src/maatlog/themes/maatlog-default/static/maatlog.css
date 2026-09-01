@@ -2,6 +2,7 @@
 
 :root {
   --maatlog-content-width: 42rem;
+  --maatlog-main-width: 50rem;
   --maatlog-sidebar-width: 16rem;
   --maatlog-nav-width: 15rem;
   --maatlog-toc-width: 14rem;
@@ -30,7 +31,9 @@
     "nav"
     "pagination";
   gap: var(--maatlog-space-md, 1rem);
-  max-width: var(--maatlog-content-width, 42rem);
+  box-sizing: border-box;
+  width: 100%;
+  max-width: none;
   margin: 0 auto;
   padding: var(--maatlog-space-md, 1rem);
   color: var(--maatlog-color-text, #1a1a1a);
@@ -85,6 +88,45 @@
   grid-area: body;
   min-width: 0;
   margin-bottom: 0;
+}
+
+.maatlog-post-body {
+  width: 100%;
+  max-width: none;
+  margin-inline: 0;
+}
+
+/* Generic list cap; page-kind rules below lift it for home/archive/normal/post. */
+.maatlog-post-list {
+  width: 100%;
+  max-width: var(--maatlog-content-width, 42rem);
+  margin-inline: auto;
+}
+
+.maatlog-layout-page-normal .body {
+  width: 100%;
+  max-width: none;
+  margin-inline: 0;
+}
+
+.maatlog-layout-page-home .body,
+.maatlog-layout-page-archive .body,
+.maatlog-layout-page-post .body {
+  width: 100%;
+  max-width: none;
+  margin-inline: 0;
+}
+
+.maatlog-layout-page-home .maatlog-post-list,
+.maatlog-layout-page-archive .maatlog-post-list {
+  max-width: none;
+}
+
+/* Normal and post pages: any-depth ``maatlog:post-list`` fills main. */
+.maatlog-layout-page-post .maatlog-post-list,
+.maatlog-layout-page-normal .maatlog-post-list {
+  width: 100%;
+  max-width: none;
 }
 
 .maatlog-post-navigation {
@@ -196,7 +238,7 @@ img {
       "body"
       "nav"
       "pagination";
-    max-width: var(--maatlog-content-width, 42rem);
+    max-width: 100%;
   }
 
   .maatlog-post-featured {
@@ -292,23 +334,34 @@ img {
   margin: 0;
 }
 
-/* Three-column shell */
+/* Wide shell: nav/TOC keep their max width; spare viewport width goes to main. */
 .maatlog-layout {
   display: grid;
-  grid-template-columns: var(--maatlog-nav-width, 15rem) minmax(0, 1fr) var(--maatlog-toc-width, 14rem);
-  grid-template-areas: "nav main toc";
+  grid-template-columns:
+    minmax(0, var(--maatlog-nav-width, 15rem))
+    minmax(0, 1fr);
+  grid-template-areas: "nav main";
   gap: var(--maatlog-space-lg, 2rem);
   align-items: start;
-  max-width: calc(
-    var(--maatlog-nav-width, 15rem) + var(--maatlog-content-width, 42rem) + var(--maatlog-toc-width, 14rem) + 4 *
-      var(--maatlog-space-lg, 2rem)
-  );
-  margin: 0 auto;
+  max-width: none;
+  margin: 0;
   padding: var(--maatlog-space-md, 1rem);
+}
+
+/* Same element, same specificity — this rule must stay after ``.maatlog-layout``. */
+.maatlog-layout-has-toc {
+  grid-template-columns:
+    minmax(0, var(--maatlog-nav-width, 15rem))
+    minmax(0, 1fr)
+    minmax(0, var(--maatlog-toc-width, 14rem));
+  grid-template-areas: "nav main toc";
 }
 
 .maatlog-nav {
   grid-area: nav;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: var(--maatlog-nav-width, 15rem);
 }
 
 .maatlog-layout-main {
@@ -327,6 +380,9 @@ img {
 
 .maatlog-toc {
   grid-area: toc;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: var(--maatlog-toc-width, 14rem);
 }
 
 .maatlog-nav,
@@ -342,9 +398,14 @@ img {
   margin-bottom: var(--maatlog-space-xs, 0.25rem);
 }
 
-/* Medium: drop the third column; the page TOC moves above the content. */
+/* Medium: the page TOC moves above the content; without one, nothing changes. */
 @media (width <= 64rem) {
   .maatlog-layout {
+    grid-template-columns: var(--maatlog-nav-width, 15rem) minmax(0, 1fr);
+    grid-template-areas: "nav main";
+  }
+
+  .maatlog-layout-has-toc {
     grid-template-columns: var(--maatlog-nav-width, 15rem) minmax(0, 1fr);
     grid-template-areas:
       "nav toc"
@@ -356,11 +417,23 @@ img {
     max-height: none;
     max-width: none;
   }
+
+  .maatlog-layout-page-normal .body > section > .maatlog-post-list {
+    width: 100%;
+    max-width: none;
+  }
 }
 
 /* Narrow: one column. The page TOC comes first, site navigation last. */
 @media (width <= 48rem) {
   .maatlog-layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "main"
+      "nav";
+  }
+
+  .maatlog-layout-has-toc {
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas:
       "toc"

@@ -82,7 +82,14 @@ EXPECTED_SCRIPTS = {
 def test_frontend_scripts_and_browser_policy_are_explicit() -> None:
     package = _json("package.json")
     assert package["scripts"] == EXPECTED_SCRIPTS
-    assert package["browserslist"] == ["defaults", "not IE 11"]
+    assert package["browserslist"] == [
+        "defaults",
+        "not IE 11",
+        "not op_mini all",
+        "not kaios 2.5",
+        "not and_uc 15.5",
+        "not and_qq 14.9",
+    ]
 
 
 def test_typescript_checks_configs_and_future_product_javascript() -> None:

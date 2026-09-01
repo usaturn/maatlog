@@ -44,9 +44,13 @@ Theme API の現在のバージョンは **1.2** です。``api = "1.0"`` を宣
 * **任意クラス** — ``.maatlog-skip-link``、``.maatlog-banner``、
   ``.maatlog-banner-brand``、``.maatlog-banner-logo``、``.maatlog-banner-title``、
   ``.maatlog-banner-tagline``、``.maatlog-banner-search``、``.maatlog-layout``、
-  ``.maatlog-layout-main``、``.maatlog-nav``、``.maatlog-nav-toctree``、
-  ``.maatlog-toc``、``.maatlog-toc-headings``、``.maatlog-toc-posts``
-* **任意 CSS カスタムプロパティ** — ``--maatlog-nav-width``、
+  ``.maatlog-layout-has-toc``、``.maatlog-layout-page-normal``、``.maatlog-layout-page-home``、
+  ``.maatlog-layout-page-archive``、``.maatlog-layout-page-post``、
+  ``.maatlog-layout-main``、``.maatlog-nav``、
+  ``.maatlog-nav-toctree``、``.maatlog-toc``、``.maatlog-toc-headings``、
+  ``.maatlog-toc-posts``
+* **任意 CSS カスタムプロパティ** — ``--maatlog-main-width``、
+  ``--maatlog-nav-width``、
   ``--maatlog-toc-width``、``--maatlog-banner-background``、
   ``--maatlog-banner-height``
 * **保証の格上げ** — ``maatlog.taxonomies`` と ``maatlog.feeds`` は、投稿・
@@ -57,6 +61,18 @@ Theme API の現在のバージョンは **1.2** です。``api = "1.0"`` を宣
   ``<div>`` に変わりました。ナビゲーションのランドマークは外側の
   ``<nav class="maatlog-nav">`` が担います。クラス名による契約は変わりませんが、
   ``aside.maatlog-sidebar`` を選択している CSS は当たらなくなります
+* **レイアウト状態クラス** — ``.maatlog-layout`` は、そのページが実際に
+  ``<aside class="maatlog-toc">`` を出力するときだけ ``maatlog-layout-has-toc`` を
+  併せ持ちます。判定は ``layout.html`` の ``maatlog_has_toc`` が一度だけ行います。
+  派生テンプレートが root-level で ``maatlog_has_toc`` を定義していれば、親レイアウト
+  はその値を尊重します。未定義のときだけ標準条件を計算します。
+  ``maatlog_toc`` ブロックを上書きして標準と異なる条件で TOC を出力するときは、
+  同じテンプレートの root-level で ``maatlog_has_toc`` を明示してください。
+  手順は下記「``maatlog_toc`` を上書きする」を参照してください。
+  ``maatlog.page_kind`` は、同じ要素に ``maatlog-layout-page-normal``、
+  ``maatlog-layout-page-home``、``maatlog-layout-page-archive``、
+  ``maatlog-layout-page-post`` のいずれかとして出力されます。ページ種別クラスと
+  ``maatlog-layout-has-toc`` は独立した状態であり、同時に付く場合があります。
 
 必須テンプレートと必須ブロックは 1.0 から変わっていません。``api = "1.0"`` や
 ``api = "1.1"`` を宣言するテーマは引き続き検証を通ります。ただし
@@ -112,8 +128,9 @@ Theme API の現在のバージョンは **1.2** です。``api = "1.0"`` を宣
 次の順序です。
 
 #. ヘッダーバナー (``maatlog_banner`` ブロック)
-#. 3 カラムのレイアウト — 左ナビ (``maatlog_nav``)、本文 (``body``)、
-   右目次 (``maatlog_toc``)
+#. ページレイアウト — 基本は左ナビ (``maatlog_nav``) と本文 (``body``) の
+   2 カラム。右目次 (``maatlog_toc``) を出力するページだけ、右目次を加えた
+   3 カラム
 
 ``relbar1`` と ``relbar2`` はどちらも空にしてあり、Sphinx の関連リンク帯は
 出力しません。可視ナビゲーションは MaatLog のバナー、サイドバー、投稿前後ナビ、
@@ -122,6 +139,12 @@ Theme API の現在のバージョンは **1.2** です。``api = "1.0"`` を宣
 ``main.document > div.documentwrapper > div.bodywrapper > div.body`` の入れ子は
 そのまま残しています。``basic.css`` や sphinx-copybutton、利用者の追加 CSS が
 この構造に依存している為です。
+
+``--maatlog-content-width`` と ``--maatlog-main-width`` は派生テーマが行長や中央列の
+上限を置くための任意プロパティです。公式 default の wide layout は中央列を ``1fr``
+にし、余剰の viewport 幅を main へ渡します。投稿・アーカイブ外枠、カード一覧、
+通常ページ本文、投稿本文はいずれも main 幅を使います。左右 nav/TOC の最大幅は
+従来どおり ``--maatlog-nav-width`` / ``--maatlog-toc-width`` が担います。
 
 ``maatlog_sidebar`` ブロックの位置
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -154,6 +177,24 @@ Theme API 1.2 から、``maatlog/components/sidebar.html`` の出力はレイア
 左ナビの文書一覧は Sphinx の可視 toctree に従い、``:hidden:`` の toctree は
 表示しません。可視 toctree に明示した文書は MaatLog の公開状態では再フィルター
 しないため、draft / scheduled 投稿を可視 toctree に入れるとタイトルも表示されます。
+
+``maatlog_toc`` を上書きする
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+右目次を標準と異なる条件で出すときは、同じ ``layout.html`` の root-level で
+``maatlog_has_toc`` を明示します。親レイアウトは定義済みの値を尊重します。
+未定義のときだけ標準条件を計算します::
+
+    {%- extends "maatlog-base/layout.html" -%}
+    {%- set maatlog_has_toc = True -%}
+
+    {%- block maatlog_toc -%}
+    <aside class="maatlog-toc" data-maatlog-component="toc">
+      <p>On this page</p>
+    </aside>
+    {%- endblock maatlog_toc -%}
+
+``maatlog_has_toc`` を ``False`` にした場合も、親はその値を上書きしません。
 
 JavaScript は同梱しません
 ~~~~~~~~~~~~~~~~~~~~~~~~~

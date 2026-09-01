@@ -1,4 +1,4 @@
-"""Integration tests for the MaatLog page shell (banner / 3-column layout)."""
+"""Integration tests for the MaatLog page shell (banner / responsive layout)."""
 
 from __future__ import annotations
 
@@ -41,6 +41,16 @@ RELATED_BAR_PAGES = (
     "search.html",
     "genindex.html",
 )
+
+CHILD_LAYOUT_OPT_IN = """\
+{%- extends "!layout.html" -%}
+{%- set maatlog_has_toc = True -%}
+{%- block maatlog_toc -%}
+<aside class="maatlog-toc" data-maatlog-component="toc">
+<p>Custom TOC</p>
+</aside>
+{%- endblock maatlog_toc -%}
+"""
 
 
 @pytest.mark.parametrize("page_name", SHELL_PAGES)
@@ -87,4 +97,78 @@ def test_base_theme_gets_the_same_shell(make_project: ProjectFactory) -> None:
     page = result.html("post.html")
 
     assert page.select_one(".maatlog-layout[data-maatlog-component='layout']")
+    assert page.select_one(".maatlog-layout.maatlog-layout-has-toc")
     assert len(page.select("div.related")) == 0
+
+
+@pytest.mark.parametrize(
+    ("page_name", "expected"),
+    [
+        # 見出しが2つある投稿ページ / 投稿カードを持つアーカイブ → TOC あり
+        ("post.html", True),
+        ("blog.html", True),
+        # 見出し1つだけの通常ページ → TOC なし
+        ("about.html", False),
+    ],
+)
+def test_layout_marks_only_pages_that_render_a_toc(
+    make_project: ProjectFactory, page_name: str, expected: bool
+) -> None:
+    # 空の TOC トラックを作らないため、レイアウトは TOC の有無を状態クラスで公開する。
+    result = make_project(files=LAYOUT_PROJECT, theme="maatlog-default").build()
+    page = result.html(page_name)
+
+    assert (page.select_one(".maatlog-layout.maatlog-layout-has-toc") is not None) is expected
+    assert (page.select_one(".maatlog-toc") is not None) is expected
+
+
+def test_child_layout_can_opt_in_to_toc_state(make_project: ProjectFactory) -> None:
+    # 派生テンプレートが root-level で maatlog_has_toc を明示し、標準より広い
+    # 条件で maatlog_toc を出せば、状態クラスと aside は両方存在する。
+    files = {
+        **LAYOUT_PROJECT,
+        "_templates/layout.html": CHILD_LAYOUT_OPT_IN,
+    }
+    page = (
+        make_project(
+            files=files,
+            theme="maatlog-default",
+            config={"templates_path": ["_templates"]},
+        )
+        .build()
+        .html("about.html")
+    )
+
+    assert page.select_one(".maatlog-toc") is not None
+    assert page.select_one(".maatlog-layout.maatlog-layout-has-toc") is not None
+
+
+@pytest.mark.parametrize(
+    ("page_name", "page_kind"),
+    [
+        ("index.html", "normal"),
+        ("about.html", "normal"),
+        ("post.html", "post"),
+        ("blog.html", "archive"),
+    ],
+)
+def test_layout_exposes_the_page_kind_as_a_state_class(
+    make_project: ProjectFactory, page_name: str, page_kind: str
+) -> None:
+    page = make_project(files=LAYOUT_PROJECT, theme="maatlog-default").build().html(page_name)
+
+    assert page.select_one(f".maatlog-layout.maatlog-layout-page-{page_kind}") is not None
+
+
+def test_home_layout_exposes_the_home_page_kind(make_project: ProjectFactory) -> None:
+    page = (
+        make_project(
+            files=LAYOUT_PROJECT,
+            theme="maatlog-default",
+            config={"maatlog_home_docname": "index"},
+        )
+        .build()
+        .html("index.html")
+    )
+
+    assert page.select_one(".maatlog-layout.maatlog-layout-page-home") is not None
