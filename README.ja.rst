@@ -116,6 +116,9 @@ MaatLog HTML メタデータ）が保証されるのは ``html`` および ``dir
 Node.js 24 は、開発者向けの JavaScript / CSS 品質ツールにだけ必要です。
 MaatLog の Python パッケージをインストールして利用する環境には Node.js を要求しません。
 
+公式の HTML / CSS 対応範囲は ``package.json`` の ``browserslist`` です。
+``defaults`` に残る長尾ブラウザ（Opera Mini、KaiOS 2.x、UC Browser、QQ Browser）は対象外です。
+
 Python と frontend の lock 済み開発環境を構築し、frontend 検査を実行します::
 
     uv sync --locked --all-groups
@@ -129,6 +132,12 @@ frontend 検査の個別コマンドは次のとおりです::
     npm run typecheck:js
     npm run lint:css
     npm run format
+
+full プロファイルはブラウザを使うアクセシビリティテストを実行するため、
+実行前に一度 Playwright のブラウザを導入します。ブラウザの OS 依存パッケージも
+必要な環境では、同じコマンドに ``--with-deps`` を付けます（``sudo`` を使います）::
+
+    uv run playwright install chromium
 
 リポジトリ全体の authoritative な検証入口は引き続き次です::
 

@@ -110,3 +110,25 @@ def test_toc_sidebar_is_absent_without_posts_or_headings(make_project: ProjectFa
     page = result.html("about.html")
 
     assert page.select_one(".maatlog-toc") is None
+    assert page.select_one(".maatlog-layout-has-toc") is None
+
+
+CONSISTENCY_PAGES = (
+    "index.html",
+    "about.html",
+    "post.html",
+    "blog.html",
+    "blog/tag/sphinx.html",
+    "blog/month/2026-07.html",
+)
+
+
+def test_state_class_matches_the_rendered_toc_aside(make_project: ProjectFactory) -> None:
+    # 状態クラスと実際の <aside> がずれると、空の TOC 列や欠けた列が生まれる。
+    result = make_project(files=LAYOUT_PROJECT, theme="maatlog-default").build()
+
+    for page_name in CONSISTENCY_PAGES:
+        page = result.html(page_name)
+        has_aside = page.select_one(".maatlog-toc") is not None
+        has_state = page.select_one(".maatlog-layout-has-toc") is not None
+        assert has_aside == has_state, page_name

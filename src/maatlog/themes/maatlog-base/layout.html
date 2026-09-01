@@ -1,8 +1,20 @@
-{# MaatLog page shell — banner and a three-column layout.
+{# MaatLog page shell — banner and a two-column layout, with a third column
+   only when the page renders a TOC.
    Overrides ``header``, ``content``, ``relbar1`` and ``relbar2`` of Sphinx'
    basic theme. Both Sphinx related bars are blanked; visible navigation is
    provided by the MaatLog banner, sidebars, post neighbors and pagination. #}
 {%- extends "basic/layout.html" -%}
+
+{#- TOC の有無はレイアウトの状態。派生テンプレートが root-level で
+    ``maatlog_has_toc`` を定義していればその値を使い、未定義なら
+    ``toc-sidebar.html`` と同じ条件をここで一度だけ評価する。
+    列グリッドと実際の <aside> がずれないようにする。 -#}
+{%- set maatlog_has_toc =
+  maatlog_has_toc if maatlog_has_toc is defined else (
+    (display_toc and toc)
+    or (maatlog.posts and maatlog.page_kind in ("home", "archive"))
+  )
+-%}
 
 {%- block header -%}
 <a class="maatlog-skip-link" href="#maatlog-main">{{ _('Skip to content') }}</a>
@@ -12,7 +24,7 @@
 {%- endblock header -%}
 
 {%- block content -%}
-<div class="maatlog-layout" data-maatlog-component="layout">
+<div class="maatlog-layout maatlog-layout-page-{{ maatlog.page_kind }}{% if maatlog_has_toc %} maatlog-layout-has-toc{% endif %}" data-maatlog-component="layout">
   {%- block maatlog_nav -%}
   {%- include "maatlog/components/nav-sidebar.html" -%}
   {%- endblock maatlog_nav -%}

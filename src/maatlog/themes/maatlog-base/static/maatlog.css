@@ -2,6 +2,7 @@
 
 :root {
   --maatlog-content-width: 42rem;
+  --maatlog-main-width: 50rem;
   --maatlog-sidebar-width: 16rem;
   --maatlog-nav-width: 15rem;
   --maatlog-toc-width: 14rem;
