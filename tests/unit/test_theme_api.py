@@ -11,14 +11,18 @@ from sphinx.application import Sphinx
 from maatlog.errors import MaatlogBuildError
 from maatlog.theme_api import (
     CORE_THEME_API,
+    PALETTES_RELATIVE,
     REQUIRED_BLOCKS,
     REQUIRED_TEMPLATES,
+    PaletteDeclaration,
     ThemeApiVersion,
     ThemeImplementation,
     ThemeManifest,
     is_compatible,
     load_maatlog_section,
     parse_and_validate_manifest,
+    parse_palette_declaration,
+    resolve_palette_declaration,
     validate_selected_theme,
 )
 
@@ -95,23 +99,18 @@ def test_valid_manifest_standalone() -> None:
 
 
 def test_core_is_compatible_with_equal_or_lower_minor() -> None:
-    core = ThemeApiVersion(major=1, minor=2)
+    core = ThemeApiVersion(major=1, minor=3)
 
     assert is_compatible(core, ThemeApiVersion(major=1, minor=0))
+    assert is_compatible(core, ThemeApiVersion(major=1, minor=1))
     assert is_compatible(core, ThemeApiVersion(major=1, minor=2))
-    assert not is_compatible(core, ThemeApiVersion(major=1, minor=3))
+    assert is_compatible(core, ThemeApiVersion(major=1, minor=3))
+    assert not is_compatible(core, ThemeApiVersion(major=1, minor=4))
     assert not is_compatible(core, ThemeApiVersion(major=2, minor=0))
 
 
-def test_core_theme_api_is_1_2() -> None:
-    assert CORE_THEME_API == ThemeApiVersion(major=1, minor=2)
-
-
-def test_theme_api_1_0_and_1_1_stay_compatible_with_core_1_2() -> None:
-    assert is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=0)) is True
-    assert is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=1)) is True
-    assert is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=2)) is True
-    assert is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=3)) is False
+def test_core_theme_api_is_the_current_contract_version() -> None:
+    assert CORE_THEME_API == ThemeApiVersion(major=1, minor=5)
 
 
 def test_load_maatlog_section_reads_toml() -> None:
@@ -161,14 +160,14 @@ def test_theme_models_are_frozen_pydantic() -> None:
 
 
 @pytest.mark.parametrize("theme_name", ["maatlog-base", "maatlog-default"])
-def test_bundled_theme_manifest_requires_api_1_2(theme_name: str) -> None:
+def test_bundled_theme_manifest_requires_api_1_5(theme_name: str) -> None:
     manifest_path = (
         Path(__file__).resolve().parents[2] / "src" / "maatlog" / "themes" / theme_name / "maatlog-theme.toml"
     )
     section = load_maatlog_section(manifest_path.read_text(encoding="utf-8"))
     manifest = parse_and_validate_manifest(section, core_api=CORE_THEME_API)
 
-    assert manifest.api == ThemeApiVersion(major=1, minor=2)
+    assert manifest.api == ThemeApiVersion(major=1, minor=5)
 
 
 def test_required_contract_constants() -> None:
@@ -179,20 +178,23 @@ def test_required_contract_constants() -> None:
     assert "maatlog_sidebar" in REQUIRED_BLOCKS
 
 
-def test_core_theme_api_is_one_two() -> None:
-    assert str(CORE_THEME_API) == "1.2"
+def test_core_theme_api_renders_as_a_dotted_string() -> None:
+    assert str(CORE_THEME_API) == "1.5"
 
 
 def test_older_theme_api_versions_stay_compatible() -> None:
     assert is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=0))
     assert is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=1))
     assert is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=2))
-    assert not is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=3))
+    assert is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=3))
+    assert is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=4))
+    assert is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=5))
+    assert is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=6)) is False
     assert not is_compatible(CORE_THEME_API, ThemeApiVersion(major=2, minor=0))
 
 
-def test_required_contract_is_unchanged_by_one_two() -> None:
-    # 1.2 は任意契約だけを足す。必須テンプレートとブロックは 1.0 のまま。
+def test_required_contract_is_unchanged_by_one_five() -> None:
+    # 1.5 も任意契約だけを足す。必須テンプレートとブロックは 1.0 のまま。
     assert REQUIRED_TEMPLATES == (
         "maatlog/post.html",
         "maatlog/archive.html",
@@ -212,3 +214,105 @@ def test_required_contract_is_unchanged_by_one_two() -> None:
         "maatlog_pagination",
         "maatlog_sidebar",
     )
+
+
+def test_manifest_without_palettes_is_palette_unaware() -> None:
+    # api 1.0 〜 1.4 の既存テーマはすべてこれ。何もしなければ従来どおり動く。
+    section = load_maatlog_section('[maatlog]\napi = "1.0"\nimplementation = "standalone"\n')
+
+    assert parse_palette_declaration(section) is None
+
+
+def test_palette_declaration_is_parsed() -> None:
+    section = load_maatlog_section(
+        "[maatlog]\n"
+        'api = "1.5"\n'
+        'implementation = "standalone"\n'
+        'default_palette = "indigo"\n'
+        'palettes = ["indigo", "neon"]\n'
+    )
+
+    declaration = parse_palette_declaration(section)
+
+    assert declaration == PaletteDeclaration(palettes=("indigo", "neon"), default_palette="indigo")
+
+
+@pytest.mark.parametrize(
+    "table",
+    [
+        # default_palette だけの宣言は不完全。
+        'default_palette = "indigo"\n',
+        # palettes は空にできない。
+        "palettes = []\n",
+        # default_palette は palettes の 1 つでなければならない。
+        'palettes = ["indigo"]\ndefault_palette = "neon"\n',
+        # default_palette は必須。
+        'palettes = ["indigo"]\n',
+        # 名前は小文字の識別子。パス片として使うため .. や / を弾く。
+        'palettes = ["../evil"]\ndefault_palette = "../evil"\n',
+        'palettes = ["Indigo"]\ndefault_palette = "Indigo"\n',
+        # 重複は許さない。
+        'palettes = ["indigo", "indigo"]\ndefault_palette = "indigo"\n',
+        # 文字列以外は許さない。
+        "palettes = [1]\ndefault_palette = 1\n",
+    ],
+)
+def test_invalid_palette_declaration_is_a_manifest_error(table: str) -> None:
+    section = load_maatlog_section(f'[maatlog]\napi = "1.5"\nimplementation = "standalone"\n{table}')
+
+    with pytest.raises(MaatlogBuildError, match="maatlog.theme.manifest-invalid"):
+        parse_palette_declaration(section)
+
+
+def test_palette_declaration_is_inherited_from_the_chain(tmp_path: Path) -> None:
+    # 宣言を持たないテーマは、継承チェーンの最初の宣言を使う。
+    child = tmp_path / "child"
+    parent = tmp_path / "parent"
+    child.mkdir()
+    parent.mkdir()
+    (child / "maatlog-theme.toml").write_text(
+        '[maatlog]\napi = "1.5"\nimplementation = "inherits-base"\n', encoding="utf-8"
+    )
+    (parent / "maatlog-theme.toml").write_text(
+        "[maatlog]\n"
+        'api = "1.5"\n'
+        'implementation = "standalone"\n'
+        'default_palette = "indigo"\n'
+        'palettes = ["indigo", "neon"]\n',
+        encoding="utf-8",
+    )
+
+    declaration = resolve_palette_declaration([str(child), str(parent)])
+
+    assert declaration is not None
+    assert declaration.default_palette == "indigo"
+
+
+def test_palette_declaration_is_absent_without_any_manifest(tmp_path: Path) -> None:
+    assert resolve_palette_declaration([str(tmp_path)]) is None
+
+
+def test_bundled_base_theme_declares_all_five_palettes() -> None:
+    theme_root = Path(__file__).resolve().parents[2] / "src" / "maatlog" / "themes" / "maatlog-base"
+    section = load_maatlog_section((theme_root / "maatlog-theme.toml").read_text(encoding="utf-8"))
+
+    declaration = parse_palette_declaration(section)
+
+    assert declaration is not None
+    assert declaration.palettes == ("indigo", "github", "solarized", "nord", "neon")
+    assert declaration.default_palette == "indigo"
+    for name in declaration.palettes:
+        stylesheet = theme_root / PALETTES_RELATIVE / f"{name}.css"
+        assert stylesheet.is_file() is (name != declaration.default_palette), name
+
+
+def test_bundled_default_theme_inherits_the_base_palette_declaration() -> None:
+    themes = Path(__file__).resolve().parents[2] / "src" / "maatlog" / "themes"
+    section = load_maatlog_section((themes / "maatlog-default" / "maatlog-theme.toml").read_text(encoding="utf-8"))
+
+    assert parse_palette_declaration(section) is None
+
+    declaration = resolve_palette_declaration([str(themes / "maatlog-default"), str(themes / "maatlog-base")])
+
+    assert declaration is not None
+    assert declaration.default_palette == "indigo"

@@ -30,9 +30,13 @@ CONFIG_VALUES = {
     "maatlog_generate_feeds": (True, "html"),
     "maatlog_feed_taxonomies": (("tag", "category", "author", "month"), "html"),
     "maatlog_feed_limit": (20, "html"),
+    "maatlog_palette": (None, "html"),
 }
 
 TAXONOMY_KEY_PATTERN = re_compile(r"[a-z0-9][a-z0-9._-]*\Z")
+
+# パレット名はテーマの static/palettes/<name>.css というパス片になる。
+PALETTE_NAME_PATTERN = re_compile(r"[a-z0-9][a-z0-9-]*\Z")
 
 
 class MaatlogConfig(BaseModel):
@@ -53,6 +57,7 @@ class MaatlogConfig(BaseModel):
     generate_feeds: bool
     feed_taxonomies: tuple[TaxonomyAxis, ...]
     feed_limit: int
+    palette: str | None
 
     @field_validator("tags", "categories", "authors")
     @classmethod
@@ -85,6 +90,7 @@ class MaatlogConfig(BaseModel):
         generate_feeds = _validate_bool("maatlog_generate_feeds", resolved["maatlog_generate_feeds"], diagnostics)
         feed_taxonomies = _validate_feed_taxonomies(resolved["maatlog_feed_taxonomies"], diagnostics)
         feed_limit = _validate_positive_int("maatlog_feed_limit", resolved["maatlog_feed_limit"], diagnostics)
+        palette = _validate_palette(resolved["maatlog_palette"], diagnostics)
 
         if diagnostics:
             raise MaatlogBuildError(diagnostics)
@@ -107,6 +113,7 @@ class MaatlogConfig(BaseModel):
             generate_feeds=generate_feeds,
             feed_taxonomies=feed_taxonomies,
             feed_limit=feed_limit,
+            palette=palette,
         )
 
 
@@ -194,6 +201,16 @@ def _validate_positive_int(field: str, value: Any, diagnostics: list[Diagnostic]
 def _validate_bool(field: str, value: Any, diagnostics: list[Diagnostic]) -> bool | None:
     if not isinstance(value, bool):
         _invalid(diagnostics, field, value, "a boolean")
+        return None
+    return value
+
+
+def _validate_palette(value: Any, diagnostics: list[Diagnostic]) -> str | None:
+    """None は「そのテーマの default_palette を使う」を意味する。"""
+    if value is None:
+        return None
+    if not isinstance(value, str) or PALETTE_NAME_PATTERN.fullmatch(value) is None:
+        _invalid(diagnostics, "maatlog_palette", value, "a lowercase palette name")
         return None
     return value
 

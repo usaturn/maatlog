@@ -1,0 +1,21 @@
+{# MaatLog theme toggle.
+
+   Hidden until ``maatlog.js`` adds ``maatlog-js`` to <html>, so readers without
+   JavaScript never see a dead control. State travels on ``aria-pressed``; the
+   sun/moon icons repeat it visually so it does not rest on colour alone. #}
+<button type="button"
+        class="maatlog-theme-toggle"
+        data-maatlog-component="theme-toggle"
+        aria-pressed="false">
+  <svg class="maatlog-theme-toggle-icon maatlog-theme-toggle-icon-light"
+       viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <circle cx="12" cy="12" r="5" fill="currentColor" />
+    <path d="M12 1v3M12 20v3M1 12h3M20 12h3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M19.8 4.2l-2.1 2.1M6.3 17.7l-2.1 2.1"
+          stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none" />
+  </svg>
+  <svg class="maatlog-theme-toggle-icon maatlog-theme-toggle-icon-dark"
+       viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z" fill="currentColor" />
+  </svg>
+  <span class="maatlog-theme-toggle-label">{{ _('Dark theme') }}</span>
+</button>

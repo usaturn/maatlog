@@ -4,7 +4,7 @@ from typing import cast
 import pytest
 from pydantic import BaseModel, ValidationError
 
-from maatlog.config import MaatlogConfig
+from maatlog.config import CONFIG_VALUES, MaatlogConfig
 from maatlog.errors import MaatlogBuildError
 
 
@@ -120,3 +120,22 @@ def test_home_docname_rejects_invalid_values(value: object) -> None:
         MaatlogConfig.from_values({"maatlog_home_docname": value})
     fields = {diagnostic.field for diagnostic in caught.value.diagnostics}
     assert fields == {"maatlog_home_docname"}
+
+
+def test_palette_defaults_to_none() -> None:
+    # None は「そのテーマの default_palette を使う」の意味。"indigo" を
+    # リテラルの既定にすると、既定名の異なる第三者テーマと食い違う。
+    assert CONFIG_VALUES["maatlog_palette"] == (None, "html")
+    assert MaatlogConfig.from_values({}).palette is None
+
+
+def test_palette_accepts_a_lowercase_name() -> None:
+    assert MaatlogConfig.from_values({"maatlog_palette": "neon"}).palette == "neon"
+
+
+@pytest.mark.parametrize("value", ["", "Neon", "../evil", "neon/x", 1, True, ["neon"]])
+def test_invalid_palette_is_rejected(value: object) -> None:
+    with pytest.raises(MaatlogBuildError, match="maatlog.config.invalid") as error:
+        MaatlogConfig.from_values({"maatlog_palette": value})
+
+    assert error.value.diagnostics[0].field == "maatlog_palette"

@@ -1,9 +1,10 @@
 {# Sidebar with taxonomy navigation and feeds. #}
+{%- macro taxonomy_item(item) -%}
+<li><a class="maatlog-taxonomy-item" href="{{ item.url|e }}"{% if item.is_current %} aria-current="page"{% endif %}><span class="maatlog-taxonomy-label">{{ item.label|e }}</span><span class="maatlog-taxonomy-count">{{ item.count }}</span></a></li>
+{%- endmacro -%}
 {%- macro taxonomy_links(items) -%}
-<ul>
-  {%- for item in items -%}
-  <li><a href="{{ item.url|e }}">{{ item.label|e }}</a> ({{ item.count }})</li>
-  {%- endfor -%}
+<ul class="maatlog-taxonomy-list">
+  {%- for item in items -%}{{ taxonomy_item(item) }}{%- endfor -%}
 </ul>
 {%- endmacro -%}
 {%- macro taxonomy_section(items, heading, css_class, all_label) -%}
@@ -37,10 +38,8 @@
     {%- for year in years -%}
     <details class="maatlog-taxonomy-year" open>
       <summary>{{ year }}</summary>
-      <ul>
-        {%- for item in months if item.id[:4] == year -%}
-        <li><a href="{{ item.url|e }}">{{ item.label|e }}</a> ({{ item.count }})</li>
-        {%- endfor -%}
+      <ul class="maatlog-taxonomy-list">
+        {%- for item in months if item.id[:4] == year -%}{{ taxonomy_item(item) }}{%- endfor -%}
       </ul>
     </details>
     {%- endfor -%}

@@ -1,4 +1,4 @@
-"""Stable, template-facing view models for the MaatLog Theme API 1.2 context."""
+"""Stable, template-facing view models for the MaatLog Theme API context."""
 
 from __future__ import annotations
 
@@ -14,7 +14,9 @@ from sphinx.util.osutil import relative_uri
 
 from .archives import ArchivePage
 from .model import Post
+from .theme_api import CORE_THEME_API
 from .urls import post_urls
+from .version import PACKAGE_VERSION
 
 PageKind = Literal["normal", "post", "archive", "home"]
 
@@ -58,6 +60,8 @@ class TaxonomyItemView:
     label: str
     count: int
     url: str
+    #: このページがこの分類のアーカイブ（ページ送りを含む）かどうか。
+    is_current: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -134,7 +138,8 @@ class NavigationView:
 
 @dataclass(frozen=True, slots=True)
 class MaatlogTemplateContext:
-    api_version: str = "1.2"
+    api_version: str = str(CORE_THEME_API)
+    version: str = PACKAGE_VERSION
     page_kind: PageKind = "normal"
     post: PostView | None = None
     posts: tuple[PostCardView, ...] = ()

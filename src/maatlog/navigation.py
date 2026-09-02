@@ -164,6 +164,17 @@ def _axis_rows(
     return tuple(rows)
 
 
+def _is_current_archive(from_docname: str, target_docname: str) -> bool:
+    """*from_docname* が *target_docname* のアーカイブ本体かページ送りか。
+
+    ``archive_docname`` は 1 ページ目を接尾辞なし、2 ページ目以降を
+    ``{base}/page/{n}`` で返す。接頭辞一致だけで判定すると
+    ``blog/tag/alpha`` が ``blog/tag/alphabet`` に誤って一致するため、
+    完全一致か ``/page/`` 付きかのどちらかに限定する。
+    """
+    return from_docname == target_docname or from_docname.startswith(f"{target_docname}/page/")
+
+
 def _axis_items(
     index: DomainIndex,
     *,
@@ -188,6 +199,7 @@ def _axis_items(
             label=row.label,
             count=row.count,
             url=relative_page_url_for(builder, from_docname, row.target_docname),
+            is_current=_is_current_archive(from_docname, row.target_docname),
         )
         for row in rows
     )

@@ -15,11 +15,17 @@
 <h2 class="maatlog-post-list-heading">Older posts</h2>
 {%- endif -%}
 {%- endif -%}
-{%- for card in cards[featured:] -%}
-{%- with card=card, card_anchor=card.slug -%}
-{%- include "maatlog/components/post-card.html" -%}
-{%- endwith -%}
-{%- endfor -%}
+{#- The rest ride in their own grid container so the hero, the featured block
+    and the heading above stay out of the card grid. -#}
+{%- if cards[featured:] -%}
+<div class="maatlog-post-grid">
+  {%- for card in cards[featured:] -%}
+  {%- with card=card, card_anchor=card.slug -%}
+  {%- include "maatlog/components/post-card.html" -%}
+  {%- endwith -%}
+  {%- endfor -%}
+</div>
+{%- endif -%}
 {%- else -%}
 <p class="maatlog-archive-empty">No posts yet. Add a document with maatlog metadata to see it listed here.</p>
 {%- endif -%}

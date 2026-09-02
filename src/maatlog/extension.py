@@ -41,6 +41,7 @@ from .html_metadata import (
     discovery_feeds_enabled,
     ensure_feed_baseurl,
     force_post_docs_outdated_for_feeds,
+    format_post_date,
     post_feed_links,
     prepare_body_fragment_store,
     resolved_baseurl,
@@ -50,7 +51,7 @@ from .model import Post
 from .navigation import PostTaxonomyLinker, neighbors, post_taxonomy_linker, taxonomy_navigation
 from .outputs import commit_page_outputs
 from .taxonomy import DomainIndex
-from .theme_api import validate_selected_theme
+from .theme_api import resolve_palette, validate_selected_theme
 from .version import PACKAGE_VERSION
 from .views import (
     FeedLinkView,
@@ -84,6 +85,20 @@ def _register_bundled_themes(app: Sphinx) -> None:
         path = _THEMES_DIR / name
         if path.is_dir():
             app.add_html_theme(name, str(path))
+
+
+def link_palette_stylesheet(app: Sphinx) -> None:
+    """Link the selected palette's CSS after the theme stylesheet.
+
+    Extension priority (500) puts it after the theme's own ``maatlog.css``
+    (priority 200), so palette tokens win by source order. Nothing is linked
+    for the theme's default palette: those values already live in
+    ``static/maatlog.css``.
+    """
+    stylesheet = resolve_palette(app)
+    if stylesheet is None:
+        return
+    app.add_css_file(stylesheet, priority=500)
 
 
 def initialize_build_time(app: Sphinx, config: Config) -> None:
@@ -618,6 +633,7 @@ def setup(app: Sphinx) -> ExtensionMetadata:
     app.connect("config-inited", initialize_build_time)
     app.connect("builder-inited", warn_partial_support_once)
     app.connect("builder-inited", validate_selected_theme)
+    app.connect("builder-inited", link_palette_stylesheet)
     app.connect("builder-inited", _initialize_html_metadata)
     app.connect("source-read", capture_source, priority=999)
     app.connect("doctree-read", collect_post, priority=100)
@@ -662,3 +678,20 @@ def _initialize_html_metadata(app: Sphinx) -> None:
     if not is_full_html_builder(app.builder):
         return
     ensure_feed_baseurl(app)
+    _register_template_filters(app)
+
+
+def _register_template_filters(app: Sphinx) -> None:
+    templates = getattr(app.builder, "templates", None)
+    if templates is None:
+        return
+    environment = getattr(templates, "environment", None)
+    if environment is None:
+        return
+    config = MaatlogConfig.from_sphinx(app.config)
+    timezone = config.timezone
+
+    def maatlog_post_date(value: datetime) -> str:
+        return format_post_date(value, timezone)
+
+    environment.filters["maatlog_post_date"] = maatlog_post_date

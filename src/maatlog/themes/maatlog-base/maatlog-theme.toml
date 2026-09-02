@@ -1,3 +1,5 @@
 [maatlog]
-api = "1.2"
+api = "1.5"
 implementation = "standalone"
+default_palette = "indigo"
+palettes = ["indigo", "github", "solarized", "nord", "neon"]

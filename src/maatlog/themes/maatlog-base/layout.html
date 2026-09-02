@@ -16,6 +16,13 @@
   )
 -%}
 
+{#- テーマ JS は head 内で同期読み込みする。保存済みのライト/ダーク設定を
+    <body> の描画前に <html> へ反映するため、defer も type="module" も付けない。 -#}
+{%- block scripts -%}
+{{ super() }}
+<script src="{{ pathto('_static/maatlog.js', 1) }}?v={{ maatlog.version }}"></script>
+{%- endblock scripts -%}
+
 {%- block header -%}
 <a class="maatlog-skip-link" href="#maatlog-main">{{ _('Skip to content') }}</a>
 {%- block maatlog_banner -%}

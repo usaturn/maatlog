@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
 import pytest
+from playwright.sync_api import sync_playwright
 
 from maatlog.feeds import ATOM
 
@@ -108,12 +109,18 @@ def test_a03_unpublished_posts_are_excluded(site: AcceptanceSite) -> None:
     sidebar_html = result.text("posts/rst-post.html")
     assert 'class="maatlog-sidebar"' in sidebar_html or "maatlog-sidebar" in sidebar_html
     for label, count in SIDEBAR_COUNTS:
-        assert re.search(rf">{re.escape(label)}</a>\s*\({count}\)", sidebar_html), (
-            f"expected sidebar count {label} ({count}) excluding unpublished"
-        )
+        assert re.search(
+            rf'maatlog-taxonomy-label">{re.escape(label)}</span>'
+            rf'<span class="maatlog-taxonomy-count">{count}</span>',
+            sidebar_html,
+        ), f"expected sidebar count {label} ({count}) excluding unpublished"
     # Counts must not inflate to include draft/scheduled/expired (would be 3+).
     for label, _count in SIDEBAR_COUNTS:
-        assert not re.search(rf">{re.escape(label)}</a>\s*\([3-9]|\d{{2,}}\)", sidebar_html)
+        assert not re.search(
+            rf'maatlog-taxonomy-label">{re.escape(label)}</span>'
+            rf'<span class="maatlog-taxonomy-count">([3-9]|\d{{2,}})</span>',
+            sidebar_html,
+        )
 
     for atom_path in (
         "blog/atom.xml",
@@ -304,6 +311,42 @@ def test_a09_default_theme(site: AcceptanceSite) -> None:
     assert archive.select(".maatlog-post-card")
 
 
+@pytest.mark.browser
+def test_default_post_taxonomy_styles_apply_in_browser(site: AcceptanceSite) -> None:
+    """M-1: maatlog-default serves taxonomy layout rules from its own stylesheet."""
+    result = site.build("html", theme="maatlog-default")
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        try:
+            page = browser.new_page()
+            page.goto(result.path("posts/md-post.html").resolve().as_uri(), wait_until="load")
+            badge = page.locator(".maatlog-category-badge").first
+            tags = page.locator(".maatlog-post-tags").first
+            border_width = badge.evaluate("el => getComputedStyle(el).borderTopWidth")
+            border_radius = badge.evaluate("el => getComputedStyle(el).borderTopLeftRadius")
+            background = badge.evaluate("el => getComputedStyle(el).backgroundColor")
+            display = tags.evaluate("el => getComputedStyle(el).display")
+            gap = tags.evaluate("el => getComputedStyle(el).gap")
+            assert border_width == "0px"
+            assert float(border_radius.replace("px", "")) >= 9999
+            assert background not in {"", "rgba(0, 0, 0, 0)", "transparent"}
+            assert display in {"flex", "inline-flex"}
+            assert gap not in {"", "normal", "0px"}
+            tag_links = page.locator(".maatlog-post-tags .maatlog-tag-link")
+            assert tag_links.count() >= 2
+            spacing = tag_links.evaluate_all(
+                """(elements) => {
+                  const gap = parseFloat(getComputedStyle(elements[0].parentElement).gap) || 0;
+                  const distance = elements[1].getBoundingClientRect().left
+                    - elements[0].getBoundingClientRect().right;
+                  return { gap, distance };
+                }"""
+            )
+            assert abs(spacing["distance"] - spacing["gap"]) <= 2, spacing
+        finally:
+            browser.close()
+
+
 def test_a10_third_party_theme(site: AcceptanceSite) -> None:
     """A10: registered maatlog-base child can override templates/CSS markers."""
     result = site.build("html", theme="contract_theme")
@@ -327,7 +370,7 @@ def test_a11_theme_contract_errors(site: AcceptanceSite) -> None:
         text,
     )
     assert "field=api" in text
-    assert "core_api=1.2" in text
+    assert "core_api=1.5" in text
     assert "theme_api=2.0" in text
     assert "value=2.0" in text
 
@@ -338,7 +381,7 @@ def test_a11_theme_contract_errors(site: AcceptanceSite) -> None:
         manifest_text,
     )
     assert "field=manifest" in manifest_text
-    assert "core_api=1.2" in manifest_text
+    assert "core_api=1.5" in manifest_text
     assert "expected=maatlog-theme.toml" in manifest_text
 
     missing_block = site.build_invalid("missing-block")
@@ -348,7 +391,7 @@ def test_a11_theme_contract_errors(site: AcceptanceSite) -> None:
         block_text,
     )
     assert "field=block" in block_text
-    assert "core_api=1.2" in block_text
+    assert "core_api=1.5" in block_text
     assert "theme_api=1.0" in block_text
 
     missing_templates = site.build_invalid("missing-templates")
@@ -358,7 +401,7 @@ def test_a11_theme_contract_errors(site: AcceptanceSite) -> None:
         templates_text,
     )
     assert "field=template" in templates_text
-    assert "core_api=1.2" in templates_text
+    assert "core_api=1.5" in templates_text
     assert "theme_api=1.0" in templates_text
 
 

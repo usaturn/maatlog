@@ -60,6 +60,7 @@ def test_empty_context_has_all_public_keys() -> None:
     context = empty_context()
     assert tuple(asdict(context)) == (
         "api_version",
+        "version",
         "page_kind",
         "post",
         "posts",
@@ -70,13 +71,22 @@ def test_empty_context_has_all_public_keys() -> None:
         "taxonomies",
         "site",
     )
-    assert context.api_version == "1.2"
+    assert context.api_version == "1.5"
     assert context.site == SiteView(title="", tagline=None, archive_url="")
+
+
+def test_context_exposes_the_maatlog_distribution_version() -> None:
+    from maatlog.version import PACKAGE_VERSION
+
+    context = empty_context()
+
+    assert context.version == PACKAGE_VERSION
+    assert context.version != context.api_version
 
 
 def test_empty_context_defaults() -> None:
     context = empty_context()
-    assert context.api_version == "1.2"
+    assert context.api_version == "1.5"
     assert context.page_kind == "normal"
     assert context.post is None
     assert context.posts == ()
@@ -114,7 +124,7 @@ def test_build_post_context_sets_page_kind(post: PostFactory) -> None:
     assert context.post.page_url == "hello.html"
     assert context.post.body_html == "<p>x</p>"
     mapping = as_template_mapping(context)
-    assert mapping["api_version"] == "1.2"
+    assert mapping["api_version"] == "1.5"
     assert mapping["page_kind"] == "post"
     assert mapping["post"]["body_html"] == "<p>x</p>"
 
@@ -123,6 +133,7 @@ def test_as_template_mapping_preserves_public_key_order() -> None:
     mapping = as_template_mapping(MaatlogTemplateContext())
     assert tuple(mapping) == (
         "api_version",
+        "version",
         "page_kind",
         "post",
         "posts",
@@ -263,7 +274,7 @@ def test_normal_page_context_keeps_page_kind_normal() -> None:
     context = normal_page_context(site=site, taxonomies=taxonomies, feeds=feeds)
 
     assert context.page_kind == "normal"
-    assert context.api_version == "1.2"
+    assert context.api_version == "1.5"
     assert context.post is None
     assert context.posts == ()
     assert context.archive is None
