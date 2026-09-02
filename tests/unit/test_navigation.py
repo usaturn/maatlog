@@ -374,3 +374,73 @@ def test_taxonomy_navigation_recomputes_when_index_changes(make_post: PostFactor
     second = taxonomy_navigation(second_index, builder=builder, from_docname="index", root="blog")
 
     assert [item.id for item in second.tags] == ["gamma"]
+
+
+def _labelled_index(make_post: PostFactory) -> DomainIndex:
+    """タグ 2 つ・記事 2 本の最小インデックス。"""
+    config = MaatlogConfig.from_values(
+        {
+            "maatlog_timezone": "UTC",
+            "maatlog_tags": {"alpha": "Alpha", "zebra": "Zebra"},
+        }
+    )
+    posts = {
+        "p1": make_post(
+            docname="p1",
+            slug="p1",
+            published_at=datetime(2026, 8, 2, tzinfo=UTC),
+            tags=("alpha", "zebra"),
+        ),
+        "p2": make_post(
+            docname="p2",
+            slug="p2",
+            published_at=datetime(2026, 7, 15, tzinfo=UTC),
+            tags=("alpha",),
+        ),
+    }
+    return build_domain_index(posts, config)
+
+
+def _uri_builder() -> MagicMock:
+    builder = MagicMock()
+
+    def _relative_uri(_from: str, to: str) -> str:
+        return f"uri:{to}"
+
+    builder.get_relative_uri.side_effect = _relative_uri
+    return builder
+
+
+def test_taxonomy_item_is_current_on_its_own_archive(make_post: PostFactory) -> None:
+    index = _labelled_index(make_post)
+
+    nav = taxonomy_navigation(index, builder=_uri_builder(), from_docname="blog/tag/alpha", root="blog")
+
+    current = {item.id: item.is_current for item in nav.tags}
+    assert current == {"alpha": True, "zebra": False}
+
+
+def test_taxonomy_item_is_current_on_a_paginated_archive(make_post: PostFactory) -> None:
+    # ページ送りされた 2 ページ目でも現在地として点灯する。
+    index = _labelled_index(make_post)
+
+    nav = taxonomy_navigation(index, builder=_uri_builder(), from_docname="blog/tag/alpha/page/2", root="blog")
+
+    assert [item.is_current for item in nav.tags if item.id == "alpha"] == [True]
+
+
+def test_taxonomy_item_is_not_current_elsewhere(make_post: PostFactory) -> None:
+    index = _labelled_index(make_post)
+
+    nav = taxonomy_navigation(index, builder=_uri_builder(), from_docname="about", root="blog")
+
+    assert not any(item.is_current for item in nav.tags)
+
+
+def test_taxonomy_item_is_not_current_for_a_prefix_lookalike(make_post: PostFactory) -> None:
+    # "blog/tag/alpha" は "blog/tag/alphabet" の接頭辞。素朴な startswith では誤判定する。
+    index = _labelled_index(make_post)
+
+    nav = taxonomy_navigation(index, builder=_uri_builder(), from_docname="blog/tag/alphabet", root="blog")
+
+    assert not any(item.is_current for item in nav.tags)

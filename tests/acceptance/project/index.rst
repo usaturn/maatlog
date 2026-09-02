@@ -25,6 +25,7 @@ Cross-references
    :maxdepth: 2
    :hidden:
 
+   home
    guide
    api
    posts/rst-post

@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import hashlib
+import html
 import json
 import os
+import re
 import shutil
 import tempfile
 from collections.abc import Mapping, Sequence, Set
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Final, cast
 from zoneinfo import ZoneInfo
@@ -28,6 +31,45 @@ from .views import FeedLinkView, page_url_for
 _BASEURL_ATTR = "_maatlog_baseurl"
 
 BODY_FRAGMENT_DIRNAME: Final[str] = "maatlog_body_fragments"
+_H1_PATTERN: Final[re.Pattern[str]] = re.compile(
+    r"<h1\b[^>]*>(.*?)</h1>\s*",
+    re.IGNORECASE | re.DOTALL,
+)
+_HEADERLINK_PATTERN: Final[re.Pattern[str]] = re.compile(
+    r'<a\b[^>]*\bclass="[^"]*\bheaderlink\b[^"]*"[^>]*>.*?</a>',
+    re.IGNORECASE | re.DOTALL,
+)
+_SECTION_NUMBER_PATTERN: Final[re.Pattern[str]] = re.compile(
+    r'<span\b[^>]*\bclass="[^"]*\bsection-number\b[^"]*"[^>]*>.*?</span>',
+    re.IGNORECASE | re.DOTALL,
+)
+_HTML_TAG_PATTERN: Final[re.Pattern[str]] = re.compile(r"<[^>]+>")
+
+
+def _h1_visible_text(inner_html: str) -> str:
+    without_headerlinks = _HEADERLINK_PATTERN.sub("", inner_html)
+    without_section_numbers = _SECTION_NUMBER_PATTERN.sub("", without_headerlinks)
+    visible = _HTML_TAG_PATTERN.sub("", without_section_numbers).strip()
+    return html.unescape(visible)
+
+
+def strip_leading_document_title(body_html: str, *, document_title: str) -> str:
+    """Remove the first ``<h1>`` whose visible text matches *document_title*.
+
+    Post pages render the title in ``.maatlog-post-header``; Sphinx also emits
+    the document title as an ``<h1>`` in the body fragment. Only that matching
+    heading is removed so earlier unrelated ``<h1>`` elements are preserved.
+    """
+    for match in _H1_PATTERN.finditer(body_html):
+        if _h1_visible_text(match.group(1)) == document_title:
+            return body_html[: match.start()] + body_html[match.end() :]
+    return body_html
+
+
+def format_post_date(value: datetime, timezone: ZoneInfo) -> str:
+    """Format *value* as a human-readable calendar date in *timezone*."""
+    local = value.astimezone(timezone)
+    return f"{local.year}年{local.month}月{local.day}日"
 
 
 def _body_fragment_dir(app: Sphinx) -> Path:
@@ -169,6 +211,8 @@ def capture_internal_body(app: Sphinx, pagename: str, post: Post, context: dict[
     body_html = body if isinstance(body, str) else None
     if post.external_url is not None:
         return None
+    if body_html is not None:
+        body_html = strip_leading_document_title(body_html, document_title=post.title)
     if not is_full_html_builder(app.builder):
         return body_html
     if body_html is not None and discovery_feeds_enabled(app):

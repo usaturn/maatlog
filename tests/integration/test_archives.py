@@ -478,11 +478,20 @@ def test_sidebar_groups_months_by_year(make_project: ProjectFactory) -> None:
     assert "2025" in page
 
 
-def test_taxonomy_links_keep_text_separators(make_project: ProjectFactory) -> None:
+def test_post_taxonomy_links_include_screen_reader_separators(make_project: ProjectFactory) -> None:
     result = make_project(files=MANY_TAXONOMY_PROJECT).build()
 
-    assert ">t1</a>, <a" in result.html("blog.html").text
-    assert ">t1</a>, <a" in result.html("a.html").text
+    # カードも記事ページと同じく、区切りは読み上げ専用にする。pill の外へ
+    # カンマが落ちると二重の区切りになる。
+    card_page = result.html("blog.html").text
+    assert '>t1</a><span class="maatlog-visually-hidden">, </span>' in card_page
+    assert ">t1</a>, <a" not in card_page
+    page = result.html("a.html")
+    assert page.select_one(".maatlog-post-tags .maatlog-tag-link[href='blog/tag/t1.html']")
+    assert page.select_one(".maatlog-post-tags .maatlog-tag-link[href='blog/tag/t2.html']")
+    separators = page.select(".maatlog-post-tags .maatlog-visually-hidden")
+    assert len(separators) == 6
+    assert page.text.count('<span class="maatlog-visually-hidden">, </span>') == 6
 
 
 def test_scheduled_post_does_not_link_to_missing_taxonomy_archive(
@@ -546,3 +555,25 @@ Scheduled body.
     second_page = second.html("scheduled.html")
     assert second_page.select_one(".maatlog-post-tags [href='blog/tag/secret.html']") is not None
     assert second.path("blog/tag/secret.html").exists()
+
+
+def test_non_featured_cards_are_wrapped_in_a_grid(make_project: ProjectFactory) -> None:
+    # featured の下に並ぶカードだけをグリッドに載せるため、専用のラッパが要る。
+    # .maatlog-post-list 直下のままだと hero / featured / 見出しまでグリッドの子になる。
+    result = make_project(files=FOUR_POST_PROJECT).build()
+    page = result.html("blog.html")
+
+    grid = page.select_one(".maatlog-post-list .maatlog-post-grid")
+    assert grid is not None
+    assert page.select_one(".maatlog-post-grid .maatlog-post-card") is not None
+    assert page.select_one(".maatlog-post-grid .maatlog-post-card-featured") is None
+    assert page.select_one(".maatlog-post-grid .maatlog-post-list-heading") is None
+
+
+def test_taxonomy_archive_cards_also_ride_the_grid(make_project: ProjectFactory) -> None:
+    # featured を出さない一覧でも、カードは同じグリッドで並ぶ。
+    result = make_project(files=FOUR_POST_PROJECT).build()
+    page = result.html("blog/tag/sphinx.html")
+
+    assert page.select_one(".maatlog-post-featured") is None
+    assert page.select_one(".maatlog-post-grid .maatlog-post-card") is not None

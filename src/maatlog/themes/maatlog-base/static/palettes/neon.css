@@ -1,0 +1,70 @@
+/* MaatLog palette: neon — MaatLog 独自。黒地にビビッドなピンク（ダークが主役）。
+
+   17 個のカラートークンだけを差し替える。余白・角丸・フォント・モーションは
+   maatlog.css の :root が持ち続ける。
+
+   カスタムプロパティは他ブロックの値を参照できないため、ダークは 2 度書く。
+   2 つのダークブロックは同一内容に保つこと（tests/integration/test_palettes.py
+   が強制する）。 */
+
+:root {
+  --maatlog-color-background: #f7f2f6;
+  --maatlog-color-surface: #fff;
+  --maatlog-color-surface-hover: #f0e8ee;
+  --maatlog-color-text: #16121a;
+  --maatlog-color-muted: #5c5266;
+  --maatlog-color-link: #c2007a;
+  --maatlog-color-accent: #8b0050;
+  --maatlog-color-border: #e4d9e2;
+  --maatlog-color-control-border: #7d6f7d;
+  --maatlog-code-background: #16101c;
+  --maatlog-code-text: #f2e9f5;
+  --maatlog-code-border: #2e2036;
+  --maatlog-inline-code-background: #fce7f3;
+  --maatlog-inline-code-text: #8b0050;
+  --maatlog-badge-background: #fce7f3;
+  --maatlog-badge-text: #8b0050;
+  --maatlog-shadow-color: 15 23 42 / 8%;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --maatlog-color-background: #0b0710;
+    --maatlog-color-surface: #16101c;
+    --maatlog-color-surface-hover: #201628;
+    --maatlog-color-text: #f2e9f5;
+    --maatlog-color-muted: #b9a8c4;
+    --maatlog-color-link: #ff4fa3;
+    --maatlog-color-accent: #ff8cc6;
+    --maatlog-color-border: #2e2036;
+    --maatlog-color-control-border: #8d7a99;
+    --maatlog-code-background: #05030a;
+    --maatlog-code-text: #f2e9f5;
+    --maatlog-code-border: #2e2036;
+    --maatlog-inline-code-background: #3d0b2b;
+    --maatlog-inline-code-text: #ffa8d4;
+    --maatlog-badge-background: #3d0b2b;
+    --maatlog-badge-text: #ffa8d4;
+    --maatlog-shadow-color: 0 0 0 / 45%;
+  }
+}
+
+:root[data-theme="dark"] {
+  --maatlog-color-background: #0b0710;
+  --maatlog-color-surface: #16101c;
+  --maatlog-color-surface-hover: #201628;
+  --maatlog-color-text: #f2e9f5;
+  --maatlog-color-muted: #b9a8c4;
+  --maatlog-color-link: #ff4fa3;
+  --maatlog-color-accent: #ff8cc6;
+  --maatlog-color-border: #2e2036;
+  --maatlog-color-control-border: #8d7a99;
+  --maatlog-code-background: #05030a;
+  --maatlog-code-text: #f2e9f5;
+  --maatlog-code-border: #2e2036;
+  --maatlog-inline-code-background: #3d0b2b;
+  --maatlog-inline-code-text: #ffa8d4;
+  --maatlog-badge-background: #3d0b2b;
+  --maatlog-badge-text: #ffa8d4;
+  --maatlog-shadow-color: 0 0 0 / 45%;
+}

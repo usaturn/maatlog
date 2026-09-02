@@ -6,7 +6,7 @@ import pytest
 from playwright.sync_api import Page, sync_playwright
 
 if TYPE_CHECKING:
-    from acceptance.site import AcceptanceSite
+    from acceptance.conftest import AcceptanceSite, ProjectFactory
 
 WIDE_VIEWPORTS = ((1280, 720), (1920, 1080), (2560, 1440))
 REPRESENTATIVE_PAGES = (
@@ -144,6 +144,211 @@ def test_responsive_pages_have_no_horizontal_overflow(site: AcceptanceSite, widt
 
             page.goto(result.path("index.html").resolve().as_uri(), wait_until="load")
             assert _element_width(page, ".maatlog-post-list") <= _element_width(page, ".body")
+        finally:
+            page.close()
+            browser.close()
+
+
+# 5 記事 = featured 3 枚 + グリッド 2 枚。受け入れプロジェクトは公開記事が 2 本しか
+# 無く、3 枚 Bento も .maatlog-post-grid も出ないので、ここだけ使い捨ての
+# プロジェクトを組む。固定コーパスを増やすと test_mvp の期待値が連鎖的に壊れる。
+BENTO_PROJECT = {
+    f"post{n}.md": f"""---
+maatlog-post: true
+maatlog-slug: post{n}
+maatlog-published-at: 2026-07-2{n}T09:00:00Z
+maatlog-tags: [sphinx]
+---
+# Post {n}
+
+Body of post {n}.
+"""
+    for n in (1, 2, 3, 4, 5)
+}
+
+
+@pytest.mark.browser
+def test_home_featured_lead_card_is_wider_than_its_neighbours(
+    make_project: ProjectFactory,
+) -> None:
+    # Bento の狙いは「先頭記事が視覚的に強い」こと。幅で固定する。
+    result = make_project(files=BENTO_PROJECT).build()
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page(viewport={"width": 1440, "height": 900})
+        try:
+            page.goto(result.path("blog.html").resolve().as_uri(), wait_until="load")
+            widths = page.evaluate(
+                """() => Array.from(
+                     document.querySelectorAll('.maatlog-post-featured .maatlog-post-card')
+                   ).map((card) => Math.round(card.getBoundingClientRect().width))"""
+            )
+
+            assert len(widths) == 3, widths
+            assert widths[0] > widths[1], widths
+            assert widths[1] == widths[2], widths
+        finally:
+            page.close()
+            browser.close()
+
+
+@pytest.mark.browser
+def test_home_latest_cards_form_a_multi_column_grid(make_project: ProjectFactory) -> None:
+    result = make_project(files=BENTO_PROJECT).build()
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page(viewport={"width": 1440, "height": 900})
+        try:
+            page.goto(result.path("blog.html").resolve().as_uri(), wait_until="load")
+            lefts = page.evaluate(
+                """() => Array.from(
+                     document.querySelectorAll('.maatlog-post-grid .maatlog-post-card')
+                   ).map((card) => Math.round(card.getBoundingClientRect().left))"""
+            )
+
+            assert len(lefts) == 2, lefts
+            assert len(set(lefts)) == 2, lefts
+        finally:
+            page.close()
+            browser.close()
+
+
+@pytest.mark.browser
+def test_home_cards_collapse_to_one_column_on_mobile(make_project: ProjectFactory) -> None:
+    result = make_project(files=BENTO_PROJECT).build()
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page(viewport={"width": 390, "height": 844})
+        try:
+            page.goto(result.path("blog.html").resolve().as_uri(), wait_until="load")
+            lefts = page.evaluate(
+                """() => Array.from(
+                     document.querySelectorAll('.maatlog-post-card')
+                   ).map((card) => Math.round(card.getBoundingClientRect().left))"""
+            )
+            overflow = page.evaluate("document.documentElement.scrollWidth - document.documentElement.clientWidth")
+
+            assert len(lefts) == 5, lefts
+            assert len(set(lefts)) == 1, lefts
+            assert overflow == 0
+        finally:
+            page.close()
+            browser.close()
+
+
+@pytest.mark.browser
+def test_inline_post_reference_stays_inline(site: AcceptanceSite) -> None:
+    # ``{maatlog:post}`` の出す <code class="maatlog-post"> が記事コンテナの
+    # grid ルールを拾うと、インライン参照が全幅の空箱になる。
+    result = site.build("html", theme="maatlog-default")
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page(viewport={"width": 1440, "height": 900})
+        try:
+            page.goto(result.path("guide.html").resolve().as_uri(), wait_until="load")
+            metrics = page.evaluate(
+                """() => {
+                  const ref = document.querySelector('code.maatlog-post');
+                  if (!ref) return null;
+                  const box = ref.getBoundingClientRect();
+                  const main = document.querySelector('.maatlog-layout-main').getBoundingClientRect();
+                  return {
+                    height: Math.round(box.height),
+                    width: Math.round(box.width),
+                    main_width: Math.round(main.width),
+                    display: getComputedStyle(ref).display,
+                  };
+                }"""
+            )
+            assert metrics is not None, "guide.html renders no {maatlog:post} reference"
+            assert metrics["display"] != "grid", metrics
+            assert metrics["height"] <= 40, metrics
+            assert metrics["width"] < metrics["main_width"] / 2, metrics
+        finally:
+            page.close()
+            browser.close()
+
+
+@pytest.mark.browser
+def test_wide_tables_scroll_without_widening_the_page(site: AcceptanceSite) -> None:
+    # 表は内側でスクロールしてよいが、ページ本体を広げてはいけない。
+    result = site.build("html", theme="maatlog-default")
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page(viewport={"width": 390, "height": 844})
+        try:
+            page.goto(result.path("guide.html").resolve().as_uri(), wait_until="load")
+            metrics = page.evaluate(
+                """() => {
+                  const table = document.querySelector('.maatlog-layout-main table.docutils');
+                  return {
+                    page_overflow: document.documentElement.scrollWidth
+                      - document.documentElement.clientWidth,
+                    table_width: table ? Math.round(table.getBoundingClientRect().width) : null,
+                    table_scrolls: table ? table.scrollWidth > table.clientWidth : null,
+                    viewport: document.documentElement.clientWidth,
+                  };
+                }"""
+            )
+            assert metrics["table_width"] is not None, "guide.html renders no table"
+            assert metrics["page_overflow"] == 0, metrics
+            assert metrics["table_width"] <= metrics["viewport"], metrics
+            assert metrics["table_scrolls"] is True, metrics
+        finally:
+            page.close()
+            browser.close()
+
+
+@pytest.mark.browser
+def test_normal_page_prose_is_narrower_than_its_container(site: AcceptanceSite) -> None:
+    # 通常ページのコンテナは main いっぱいのまま、段落だけが行長で止まる。
+    result = site.build("html", theme="maatlog-default")
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page(viewport={"width": 1920, "height": 1080})
+        try:
+            page.goto(result.path("guide.html").resolve().as_uri(), wait_until="load")
+            body_width = _element_width(page, ".body")
+            paragraph_width = page.evaluate(
+                """() => {
+                  const p = document.querySelector('.body > section > p');
+                  return p ? Math.round(p.getBoundingClientRect().width) : null;
+                }"""
+            )
+            assert paragraph_width is not None, "guide.html renders no top-level paragraph"
+            # 42rem = 672px。コンテナは main いっぱいなので明確に広い。
+            assert paragraph_width <= 680, paragraph_width
+            assert body_width > paragraph_width, (body_width, paragraph_width)
+        finally:
+            page.close()
+            browser.close()
+
+
+# ページ種別を 1 つずつ。home = bento、archive = カードグリッド、
+# post = editorial header、normal = 表とコードブロック。
+MODERNIZED_PAGES = (
+    "home.html",
+    "blog.html",
+    "posts/rst-post.html",
+    "guide.html",
+    "api.html",
+)
+
+
+@pytest.mark.browser
+@pytest.mark.parametrize(("width", "height"), [(1920, 1080), (1024, 768), (390, 844)])
+def test_every_page_kind_stays_within_the_viewport(site: AcceptanceSite, width: int, height: int) -> None:
+    result = site.build("html", theme="maatlog-default")
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page(viewport={"width": width, "height": height})
+        try:
+            for relative in MODERNIZED_PAGES:
+                target = result.path(relative)
+                assert target.exists(), f"{relative} was not built"
+                page.goto(target.resolve().as_uri(), wait_until="load")
+                overflow = page.evaluate("document.documentElement.scrollWidth - document.documentElement.clientWidth")
+                assert overflow == 0, f"{relative}@{width}: overflow {overflow}px"
         finally:
             page.close()
             browser.close()

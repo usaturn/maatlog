@@ -153,6 +153,66 @@ def test_default_theme_package_data_on_disk() -> None:
     assert 'implementation = "inherits-base"' in manifest
 
 
+POST_HEADER_PROJECT = {
+    "post.md": """---
+maatlog-post: true
+maatlog-slug: claude-code-memo
+maatlog-published-at: 2025-06-28T00:00:00+09:00
+maatlog-tags: [ai, claude-code]
+maatlog-categories: [it-technology]
+maatlog-authors: [usaturn]
+---
+# 初心者が Claude Code を使い始めたメモ
+
+Body text here.
+""",
+}
+
+NUMBERED_POST_HEADER_PROJECT = {
+    **POST_HEADER_PROJECT,
+    "index.rst": """Root
+====
+
+.. toctree::
+   :numbered:
+
+   post
+""",
+}
+
+
+def test_post_page_renders_single_title_and_structured_meta(make_project: ProjectFactory) -> None:
+    result = make_project(
+        files=POST_HEADER_PROJECT,
+        config={"maatlog_timezone": "Asia/Tokyo"},
+    ).build()
+    page = result.html("post.html")
+
+    assert "初心者が Claude Code を使い始めたメモ" in page.text
+    assert page.select_one(".maatlog-post-info time[datetime='2025-06-28T00:00:00+09:00']")
+    assert "2025年6月28日" in page.text
+    assert ">2025年6月28日<" in page.text
+    assert page.select_one(".maatlog-post-meta-separator")
+    assert page.select_one(".maatlog-post-authors .maatlog-taxonomy-link[href='blog/author/usaturn.html']")
+    assert page.select_one(".maatlog-post-categories .maatlog-category-badge[href='blog/category/it-technology.html']")
+    assert page.select_one(".maatlog-post-tags .maatlog-tag-link[href='blog/tag/ai.html']")
+    assert "#ai" in page.text
+    assert "Body text here." in page.text
+    assert len(page.select("h1")) == 1
+
+
+def test_post_page_in_numbered_toctree_renders_single_title(make_project: ProjectFactory) -> None:
+    result = make_project(
+        files=NUMBERED_POST_HEADER_PROJECT,
+        config={"maatlog_timezone": "Asia/Tokyo"},
+    ).build()
+    page = result.html("post.html")
+
+    assert page.select_one(".maatlog-post-header h1") is not None
+    assert "Body text here." in page.text
+    assert len(page.select("h1")) == 1
+
+
 def test_inherits_base_third_party_theme_is_accepted(make_project: ProjectFactory) -> None:
     result = make_project(
         files=POST_PROJECT,
@@ -185,6 +245,7 @@ def test_standalone_third_party_theme_is_accepted(make_project: ProjectFactory) 
         ("missing-block", "maatlog.theme.block-missing"),
         ("base-not-inherited", "maatlog.theme.base-not-inherited"),
         ("missing-templates", "maatlog.theme.template-missing"),
+        ("missing-palette-css", "maatlog.theme.palette-stylesheet-missing"),
     ],
 )
 def test_invalid_third_party_theme_fails(
@@ -199,3 +260,88 @@ def test_invalid_third_party_theme_fails(
             extensions=_THEME_FIXTURE_EXTENSIONS,
             conf_py_prefix=_THEME_FIXTURE_PREFIX,
         ).build()
+
+
+EDITORIAL_POST_PROJECT = {
+    "post.md": """---
+maatlog-post: true
+maatlog-slug: editorial
+maatlog-published-at: 2026-07-31T09:00:00Z
+maatlog-tags: [sphinx]
+maatlog-categories: [engineering]
+maatlog-authors: [alice]
+maatlog-excerpt: A tagline that belongs above the fold.
+maatlog-image: images/cover.png
+---
+# Editorial post
+
+Body text here.
+""",
+    "images/cover.png": b"png",
+}
+
+
+@pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
+def test_post_header_carries_the_editorial_hierarchy(make_project: ProjectFactory, theme: str) -> None:
+    # category → title → tagline → meta → hero image を 1 つの <header> にまとめ、
+    # 記事ページの視覚階層を CSS だけで組めるようにする。
+    result = make_project(files=EDITORIAL_POST_PROJECT, theme=theme).build()
+    page = result.html("post.html")
+    header = page.select_one(".maatlog-post-header")
+
+    assert header is not None
+    assert page.select_one(".maatlog-post-header .maatlog-post-eyebrow .maatlog-category-badge") is not None
+    assert page.select_one(".maatlog-post-header h1") is not None
+    assert page.select_one(".maatlog-post-header .maatlog-post-tagline") is not None
+    assert page.select_one(".maatlog-post-header .maatlog-post-meta") is not None
+    assert page.select_one(".maatlog-post-header .maatlog-post-hero-image") is not None
+    assert len(page.select("h1")) == 1
+
+
+def test_post_header_orders_eyebrow_title_tagline_meta_hero(make_project: ProjectFactory) -> None:
+    # 視覚階層は DOM 順で決まる。CSS を挟まずに読める順序であること。
+    result = make_project(files=EDITORIAL_POST_PROJECT).build()
+    html = result.html("post.html").text
+
+    order = [
+        html.index('class="maatlog-post-eyebrow"'),
+        html.index("<h1>"),
+        html.index('class="maatlog-post-tagline"'),
+        html.index('class="maatlog-post-meta"'),
+        html.index('class="maatlog-post-hero-image"'),
+    ]
+    assert order == sorted(order), order
+
+
+def test_post_meta_keeps_date_author_and_tags_but_drops_categories(
+    make_project: ProjectFactory,
+) -> None:
+    # category は eyebrow に出したので meta からは外す。date / author / tag は残す。
+    result = make_project(files=EDITORIAL_POST_PROJECT).build()
+    page = result.html("post.html")
+
+    assert page.select_one(".maatlog-post-meta .maatlog-post-info time") is not None
+    assert page.select_one(".maatlog-post-meta .maatlog-post-authors .maatlog-post-author-link") is not None
+    assert page.select_one(".maatlog-post-meta .maatlog-post-tags .maatlog-tag-link") is not None
+    assert page.select_one(".maatlog-post-meta .maatlog-post-categories") is None
+
+
+def test_hero_image_is_decorative(make_project: ProjectFactory) -> None:
+    # 記事タイトルと同じ情報しか持たない。読み上げに出すと二重になる。
+    result = make_project(files=EDITORIAL_POST_PROJECT).build()
+    hero = result.html("post.html").select_one(".maatlog-post-hero-image")
+
+    assert hero is not None
+    assert hero["alt"] == ""
+
+
+def test_external_post_shows_the_excerpt_once(make_project: ProjectFactory) -> None:
+    # excerpt は header の tagline が出す。本文側にも出すと同じ文が 2 回出る。
+    result = make_project(files=EXTERNAL_POST_PROJECT, theme="maatlog-base").build()
+    page = result.html("post.html")
+
+    tagline = page.select_one(".maatlog-post-tagline")
+    assert tagline is not None
+    assert page.select_one(".maatlog-post-body .maatlog-post-excerpt") is None
+    assert page.text.count("External summary only.") == 1
+    assert page.select_one(".maatlog-external-link") is not None

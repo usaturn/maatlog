@@ -1,0 +1,19 @@
+{# MaatLog の検索フォーム。Sphinx の ``basic/searchbox.html`` の置き換え。
+
+   機能は Sphinx と同じで、``search`` ドキュメントへ ``?q=`` を GET するだけ。
+   見出し・送信ボタン・インライン script を出さないぶん、ヘッダに収まる。
+   ``pagename``/``builder`` のガードは Sphinx 版の挙動を踏襲する。 #}
+{%- if pagename != "search" and builder != "singlehtml" -%}
+<form class="maatlog-search" action="{{ pathto('search') }}" method="get" role="search">
+  <label class="maatlog-visually-hidden" for="maatlog-search-input">{{ _('Search') }}</label>
+  <input id="maatlog-search-input"
+         class="maatlog-search-input"
+         type="search"
+         name="q"
+         placeholder="{{ _('Search articles') }}"
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false" />
+</form>
+{%- endif -%}

@@ -1,7 +1,7 @@
 {# Post card component. Expects ``card`` (PostCardView mapping) in context. #}
 {%- macro taxonomy_links(links) -%}
 {%- for link in links -%}
-{%- if not loop.first -%}{{ ", " }}{%- endif -%}
+{%- if not loop.first -%}<span class="maatlog-visually-hidden">, </span>{%- endif -%}
 {%- if link.url -%}<a class="maatlog-taxonomy-link" href="{{ link.url|e }}">{{ link.label|e }}</a>
 {%- else -%}<span class="maatlog-taxonomy-link">{{ link.label|e }}</span>{%- endif -%}
 {%- endfor -%}

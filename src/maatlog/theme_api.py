@@ -13,11 +13,13 @@ from jinja2 import nodes as jinja_nodes
 from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
 from sphinx.application import Sphinx
 
+from .config import PALETTE_NAME_PATTERN, MaatlogConfig
 from .errors import Diagnostic, MaatlogBuildError
 
 MANIFEST_FILENAME: Final = "maatlog-theme.toml"
 MAATLOG_BASE_THEME: Final = "maatlog-base"
 STYLESHEET_RELATIVE: Final = "static/maatlog.css"
+PALETTES_RELATIVE: Final = "static/palettes"
 
 REQUIRED_TEMPLATES: Final[tuple[str, ...]] = (
     "maatlog/post.html",
@@ -82,7 +84,20 @@ class ThemeManifest(BaseModel):
     implementation: ThemeImplementation
 
 
-CORE_THEME_API: Final = ThemeApiVersion(major=1, minor=2)
+class PaletteDeclaration(BaseModel):
+    """A theme's ``palettes`` / ``default_palette`` manifest declaration.
+
+    Themes that declare no ``palettes`` are palette-unaware; they keep working
+    exactly as they did before Theme API 1.5.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    palettes: tuple[str, ...]
+    default_palette: str
+
+
+CORE_THEME_API: Final = ThemeApiVersion(major=1, minor=5)
 
 
 def is_compatible(core: ThemeApiVersion, theme: ThemeApiVersion) -> bool:
@@ -246,6 +261,94 @@ def parse_and_validate_manifest(
     return parsed
 
 
+def parse_palette_declaration(
+    section: Mapping[str, Any],
+    *,
+    theme_name: str | None = None,
+    inheritance_chain: Sequence[str] | None = None,
+) -> PaletteDeclaration | None:
+    """Parse the optional palette declaration from a ``[maatlog]`` table.
+
+    Returns ``None`` when the table declares no ``palettes``.
+
+    Raises:
+        MaatlogBuildError: with ``maatlog.theme.manifest-invalid``.
+    """
+    if "palettes" not in section:
+        if "default_palette" in section:
+            _invalid_manifest(
+                field="palettes",
+                value=section["default_palette"],
+                expected="a list of palette names alongside default_palette",
+                theme_name=theme_name,
+                inheritance_chain=inheritance_chain,
+            )
+        return None
+
+    raw_palettes: object = section["palettes"]
+    if not isinstance(raw_palettes, (list, tuple)) or not raw_palettes:
+        _invalid_manifest(
+            field="palettes",
+            value=cast(object, raw_palettes),
+            expected="a non-empty list of palette names",
+            theme_name=theme_name,
+            inheritance_chain=inheritance_chain,
+        )
+    names: list[str] = []
+    for name in cast(Sequence[object], raw_palettes):
+        if not isinstance(name, str) or PALETTE_NAME_PATTERN.fullmatch(name) is None or name in names:
+            _invalid_manifest(
+                field="palettes",
+                value=name,
+                expected="a unique lowercase palette name matching [a-z0-9][a-z0-9-]*",
+                theme_name=theme_name,
+                inheritance_chain=inheritance_chain,
+            )
+        names.append(name)
+
+    default: object = section.get("default_palette")
+    if not isinstance(default, str) or default not in names:
+        _invalid_manifest(
+            field="default_palette",
+            value=default,
+            expected=f"one of {', '.join(names)}",
+            theme_name=theme_name,
+            inheritance_chain=inheritance_chain,
+        )
+    return PaletteDeclaration(palettes=tuple(names), default_palette=default)
+
+
+def resolve_palette_declaration(
+    theme_dirs: Sequence[str | Path],
+    *,
+    theme_name: str | None = None,
+    inheritance_chain: Sequence[str] | None = None,
+) -> PaletteDeclaration | None:
+    """Return the first palette declaration on the theme inheritance chain.
+
+    Themes need not declare palettes themselves; ``maatlog-default`` inherits
+    the ``maatlog-base`` declaration this way. ``None`` means no theme on the
+    chain declares palettes.
+    """
+    for directory in theme_dirs:
+        manifest_path = Path(directory) / MANIFEST_FILENAME
+        if not manifest_path.is_file():
+            continue
+        section = load_maatlog_section(
+            manifest_path.read_text(encoding="utf-8"),
+            theme_name=theme_name,
+            inheritance_chain=inheritance_chain,
+        )
+        declaration = parse_palette_declaration(
+            section,
+            theme_name=theme_name,
+            inheritance_chain=inheritance_chain,
+        )
+        if declaration is not None:
+            return declaration
+    return None
+
+
 def load_maatlog_section(
     toml_text: str,
     *,
@@ -405,6 +508,96 @@ def validate_selected_theme(app: Sphinx) -> None:
         inheritance_chain=inheritance_chain,
         theme_api=manifest.api,
     )
+    declaration = resolve_palette_declaration(
+        theme_dirs,
+        theme_name=theme_name,
+        inheritance_chain=inheritance_chain,
+    )
+    if declaration is not None:
+        _validate_palette_stylesheets(
+            theme_dirs,
+            declaration,
+            theme_name=theme_name,
+            inheritance_chain=inheritance_chain,
+            theme_api=manifest.api,
+        )
+
+
+def resolve_palette(app: Sphinx) -> str | None:
+    """Return the ``_static``-relative palette stylesheet to link, or ``None``.
+
+    ``None`` when the builder is not full HTML, when the selected palette is
+    the theme's default (its values already live in ``static/maatlog.css``),
+    or when neither a palette nor a declaration is present.
+
+    Raises:
+        MaatlogBuildError: with ``maatlog.theme.palette-unsupported`` when a
+            non-default palette is requested from a theme that declares none,
+            or ``maatlog.theme.palette-unknown`` when the name is not offered
+            by the selected theme.
+    """
+    if not is_html_theme_builder(app.builder):
+        return None
+    theme = getattr(app.builder, "theme", None)
+    if theme is None:
+        return None
+    theme_dirs = theme.get_theme_dirs()
+    if not theme_dirs:
+        return None
+
+    requested = MaatlogConfig.from_sphinx(app.config).palette
+    inheritance_chain = tuple(Path(path).name for path in theme_dirs)
+    theme_name = theme.name
+    declaration = resolve_palette_declaration(
+        theme_dirs,
+        theme_name=theme_name,
+        inheritance_chain=inheritance_chain,
+    )
+
+    if declaration is None:
+        if requested is None:
+            return None
+        raise MaatlogBuildError(
+            [
+                Diagnostic(
+                    code="maatlog.theme.palette-unsupported",
+                    message=(
+                        "Selected theme offers no palettes"
+                        + _theme_context_suffix(
+                            inheritance_chain=inheritance_chain,
+                            core_api=CORE_THEME_API,
+                        )
+                    ),
+                    source=theme_name,
+                    field="maatlog_palette",
+                    value=requested,
+                    expected="no maatlog_palette, or a theme declaring palettes",
+                )
+            ]
+        )
+
+    if requested is None or requested == declaration.default_palette:
+        return None
+    if requested not in declaration.palettes:
+        raise MaatlogBuildError(
+            [
+                Diagnostic(
+                    code="maatlog.theme.palette-unknown",
+                    message=(
+                        f"Selected theme does not offer the palette {requested!r}"
+                        + _theme_context_suffix(
+                            inheritance_chain=inheritance_chain,
+                            core_api=CORE_THEME_API,
+                        )
+                    ),
+                    source=theme_name,
+                    field="maatlog_palette",
+                    value=requested,
+                    expected=", ".join(declaration.palettes),
+                )
+            ]
+        )
+    return f"palettes/{requested}.css"
 
 
 def _jinja_environment(app: Sphinx) -> Environment | None:
@@ -523,6 +716,46 @@ def _validate_stylesheet(
             )
         ]
     )
+
+
+def _validate_palette_stylesheets(
+    theme_dirs: Sequence[str | Path],
+    declaration: PaletteDeclaration,
+    *,
+    theme_name: str,
+    inheritance_chain: Sequence[str],
+    theme_api: ThemeApiVersion,
+) -> None:
+    """Every declared non-default palette needs a stylesheet on the chain.
+
+    The default palette lives in the theme's own ``static/maatlog.css``; giving
+    it a palette file too would duplicate the same values in two places.
+    """
+    for name in declaration.palettes:
+        if name == declaration.default_palette:
+            continue
+        relative = f"{PALETTES_RELATIVE}/{name}.css"
+        if any((Path(directory) / relative).is_file() for directory in theme_dirs):
+            continue
+        raise MaatlogBuildError(
+            [
+                Diagnostic(
+                    code="maatlog.theme.palette-stylesheet-missing",
+                    message=(
+                        f"Declared palette {name!r} has no stylesheet"
+                        + _theme_context_suffix(
+                            inheritance_chain=inheritance_chain,
+                            core_api=CORE_THEME_API,
+                            theme_api=theme_api,
+                        )
+                    ),
+                    source=theme_name,
+                    field="palettes",
+                    value=name,
+                    expected=f"{relative} on the theme inheritance chain",
+                )
+            ]
+        )
 
 
 def _theme_context_suffix(

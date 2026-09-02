@@ -46,6 +46,7 @@ maatlog_authors = {
     "bob": "Bob",
 }
 maatlog_archive_docname = "blog"
+maatlog_home_docname = "home"
 maatlog_page_size = 10
 maatlog_generate_feeds = True
 maatlog_feed_taxonomies = ("tag", "category", "author", "month")

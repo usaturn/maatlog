@@ -1,11 +1,31 @@
 {# MaatLog post page — implements Theme API 1.0 blocks and semantic classes. #}
 {%- extends "layout.html" -%}
 
-{%- macro taxonomy_links(links) -%}
+{%- macro taxonomy_separator() -%}
+<span class="maatlog-visually-hidden">, </span>
+{%- endmacro -%}
+
+{%- macro author_links(links) -%}
 {%- for link in links -%}
-{%- if not loop.first -%}{{ ", " }}{%- endif -%}
-{%- if link.url -%}<a class="maatlog-taxonomy-link" href="{{ link.url|e }}">{{ link.label|e }}</a>
-{%- else -%}<span class="maatlog-taxonomy-link">{{ link.label|e }}</span>{%- endif -%}
+{%- if not loop.first -%}{{ taxonomy_separator() }}{%- endif -%}
+{%- if link.url -%}<a class="maatlog-taxonomy-link maatlog-post-author-link" href="{{ link.url|e }}">{{ link.label|e }}</a>
+{%- else -%}<span class="maatlog-taxonomy-link maatlog-post-author-link">{{ link.label|e }}</span>{%- endif -%}
+{%- endfor -%}
+{%- endmacro -%}
+
+{%- macro category_badges(links) -%}
+{%- for link in links -%}
+{%- if not loop.first -%}{{ taxonomy_separator() }}{%- endif -%}
+{%- if link.url -%}<a class="maatlog-taxonomy-link maatlog-category-badge" href="{{ link.url|e }}">{{ link.label|e }}</a>
+{%- else -%}<span class="maatlog-taxonomy-link maatlog-category-badge">{{ link.label|e }}</span>{%- endif -%}
+{%- endfor -%}
+{%- endmacro -%}
+
+{%- macro tag_links(links) -%}
+{%- for link in links -%}
+{%- if not loop.first -%}{{ taxonomy_separator() }}{%- endif -%}
+{%- if link.url -%}<a class="maatlog-taxonomy-link maatlog-tag-link" href="{{ link.url|e }}">#{{ link.label|e }}</a>
+{%- else -%}<span class="maatlog-taxonomy-link maatlog-tag-link">#{{ link.label|e }}</span>{%- endif -%}
 {%- endfor -%}
 {%- endmacro -%}
 
@@ -25,38 +45,66 @@
 <article class="maatlog-post" data-maatlog-component="post">
   {%- block maatlog_post_header -%}
   <header class="maatlog-post-header">
+    {#- Category sits above the title as an eyebrow. Theme API 1.4, optional. -#}
+    {%- block maatlog_post_eyebrow -%}
+    {%- if maatlog.post and maatlog.post.categories -%}
+    <p class="maatlog-post-eyebrow">
+      <span class="maatlog-post-categories">{{ category_badges(maatlog.post.taxonomies.categories) }}</span>
+    </p>
+    {%- endif -%}
+    {%- endblock maatlog_post_eyebrow -%}
+
     <h1>{{ maatlog.post.title|e if maatlog.post else title|e }}</h1>
+
+    {#- The excerpt doubles as the tagline. Theme API 1.4, optional. -#}
+    {%- block maatlog_post_tagline -%}
+    {%- if maatlog.post and maatlog.post.excerpt -%}
+    <p class="maatlog-post-tagline">{{ maatlog.post.excerpt|e }}</p>
+    {%- endif -%}
+    {%- endblock maatlog_post_tagline -%}
+
+    {#- Required block since 1.0. It moved inside the header in 1.4; the block
+        name, the classes and the nesting below it are unchanged. -#}
+    {%- block maatlog_post_meta -%}
+    <div class="maatlog-post-meta">
+      {%- if maatlog.post -%}
+      {%- if maatlog.post.published_at or maatlog.post.authors -%}
+      <div class="maatlog-post-info">
+        {%- if maatlog.post.published_at -%}
+        <time datetime="{{ maatlog.post.published_at.isoformat() }}">{{ maatlog.post.published_at|maatlog_post_date }}</time>
+        {%- endif -%}
+        {%- if maatlog.post.published_at and maatlog.post.authors -%}
+        <span class="maatlog-post-meta-separator" aria-hidden="true">·</span>
+        {%- endif -%}
+        {%- if maatlog.post.authors -%}
+        <span class="maatlog-post-authors">{{ author_links(maatlog.post.taxonomies.authors) }}</span>
+        {%- endif -%}
+      </div>
+      {%- endif -%}
+      {%- if maatlog.post.tags -%}
+      <div class="maatlog-post-taxonomies">
+        <span class="maatlog-post-tags">{{ tag_links(maatlog.post.taxonomies.tags) }}</span>
+      </div>
+      {%- endif -%}
+      {%- if maatlog.post.external_url -%}
+      <span class="maatlog-post-external-badge">External</span>
+      {%- endif -%}
+      {%- endif -%}
+    </div>
+    {%- endblock maatlog_post_meta -%}
+
+    {#- Decorative: it repeats the title. Theme API 1.4, optional. -#}
+    {%- block maatlog_post_hero -%}
+    {%- if maatlog.post and maatlog.post.image_url -%}
+    <img class="maatlog-post-hero-image" src="{{ maatlog.post.image_url|e }}" alt="" />
+    {%- endif -%}
+    {%- endblock maatlog_post_hero -%}
   </header>
   {%- endblock maatlog_post_header -%}
-
-  {%- block maatlog_post_meta -%}
-  <div class="maatlog-post-meta">
-    {%- if maatlog.post -%}
-    {%- if maatlog.post.published_at -%}
-    <time datetime="{{ maatlog.post.published_at }}">{{ maatlog.post.published_at }}</time>
-    {%- endif -%}
-    {%- if maatlog.post.authors -%}
-    <span class="maatlog-post-authors">{{ taxonomy_links(maatlog.post.taxonomies.authors) }}</span>
-    {%- endif -%}
-    {%- if maatlog.post.categories -%}
-    <span class="maatlog-post-categories">{{ taxonomy_links(maatlog.post.taxonomies.categories) }}</span>
-    {%- endif -%}
-    {%- if maatlog.post.tags -%}
-    <span class="maatlog-post-tags">{{ taxonomy_links(maatlog.post.taxonomies.tags) }}</span>
-    {%- endif -%}
-    {%- if maatlog.post.external_url -%}
-    <span class="maatlog-post-external-badge">External</span>
-    {%- endif -%}
-    {%- endif -%}
-  </div>
-  {%- endblock maatlog_post_meta -%}
 
   {%- block maatlog_post_body -%}
   <div class="maatlog-post-body">
     {%- if maatlog.post and maatlog.post.external_url -%}
-    {%- if maatlog.post.excerpt -%}
-    <p class="maatlog-post-excerpt">{{ maatlog.post.excerpt|e }}</p>
-    {%- endif -%}
     <p>
       <a class="maatlog-external-link" href="{{ maatlog.post.external_url|e }}" rel="noopener noreferrer">
         Read on external site

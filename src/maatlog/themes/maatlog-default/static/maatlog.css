@@ -1,32 +1,130 @@
 /* MaatLog default theme — light layout on top of maatlog-base contract CSS. */
 
+/* Design tokens.
+
+   Light is the base palette. Dark is applied either by the operating system
+   (when the reader has expressed no preference) or by ``data-theme`` (when
+   they have pressed the toggle in the banner).
+
+   A custom property cannot alias another block's value, so the dark palette
+   is written twice on purpose. Keep the two dark blocks identical — the
+   contract test in tests/integration/test_theme_tokens.py enforces it. */
+
+/* Font family names are case-sensitive identifiers, not CSS keywords. */
+/* stylelint-disable value-keyword-case */
 :root {
+  /* Native widgets — search field, buttons, scrollbars — follow the palette. */
+  color-scheme: light;
+
   --maatlog-content-width: 42rem;
   --maatlog-main-width: 50rem;
   --maatlog-sidebar-width: 16rem;
-  --maatlog-nav-width: 15rem;
-  --maatlog-toc-width: 14rem;
-  --maatlog-banner-background: #fff;
-  --maatlog-banner-height: auto;
+  --maatlog-nav-width: 13rem;
+  --maatlog-toc-width: 13.5rem;
+  --maatlog-banner-height: 4rem;
+
+  /* sticky ヘッダの下端。nav / TOC の top と max-height はここから計算する。 */
+  --maatlog-sticky-top: calc(var(--maatlog-banner-height) + var(--maatlog-space-md));
   --maatlog-space-xs: 0.25rem;
   --maatlog-space-sm: 0.5rem;
   --maatlog-space-md: 1rem;
   --maatlog-space-lg: 2rem;
-  --maatlog-color-text: #1a1a1a;
-  --maatlog-color-muted: #5c5c5c;
-  --maatlog-color-link: #0b5cab;
-  --maatlog-color-border: #d0d0d0;
-  --maatlog-card-background: #fafafa;
+  --maatlog-space-xl: 3rem;
+  --maatlog-radius-sm: 0.5rem;
+  --maatlog-radius-md: 0.75rem;
+  --maatlog-radius-lg: 1rem;
+  --maatlog-radius-pill: 9999px;
+  --maatlog-motion-fast: 160ms;
+  --maatlog-font-sans: Inter, "Noto Sans JP", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --maatlog-font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --maatlog-color-background: #f7f9fc;
+  --maatlog-color-surface: #fff;
+  --maatlog-color-text: #131a2a;
+  --maatlog-color-muted: #4a5568;
+  --maatlog-color-link: #4338ca;
+  --maatlog-color-accent: #0c6b7d;
+  --maatlog-color-border: #cbd5e1;
+  --maatlog-color-control-border: #64748b;
+  --maatlog-code-background: #0f172a;
+  --maatlog-code-text: #e2e8f0;
+  --maatlog-code-border: #334155;
+  --maatlog-color-surface-hover: #eef2f8;
+  --maatlog-inline-code-background: #e0e7ff;
+  --maatlog-inline-code-text: #312e81;
+  --maatlog-badge-background: #e0e7ff;
+  --maatlog-badge-text: #312e81;
+  --maatlog-shadow-color: 15 23 42 / 8%;
+  --maatlog-color-primary: var(--maatlog-color-link);
+  --maatlog-shadow-sm: 0 1px 2px rgb(var(--maatlog-shadow-color));
+  --maatlog-shadow-md: 0 8px 24px rgb(var(--maatlog-shadow-color));
+  --maatlog-card-background: var(--maatlog-color-surface);
+  --maatlog-banner-background: var(--maatlog-color-surface);
+}
+/* stylelint-enable value-keyword-case */
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --maatlog-color-background: #070b14;
+    --maatlog-color-surface: #131b2b;
+    --maatlog-color-text: #e8ecf3;
+    --maatlog-color-muted: #a9b6c9;
+    --maatlog-color-link: #b0bdfd;
+    --maatlog-color-accent: #4dd8ee;
+    --maatlog-color-border: #2f3d55;
+    --maatlog-color-control-border: #8894ad;
+    --maatlog-code-background: #010409;
+    --maatlog-code-text: #e6edf3;
+    --maatlog-code-border: #30363d;
+    --maatlog-color-surface-hover: #1d2739;
+    --maatlog-inline-code-background: #241f52;
+    --maatlog-inline-code-text: #cdd6fe;
+    --maatlog-badge-background: #241f52;
+    --maatlog-badge-text: #cdd6fe;
+    --maatlog-shadow-color: 0 0 0 / 45%;
+  }
 }
 
-/* The sidebar now lives in the layout's left column, so the body is one column. */
-.maatlog-post,
-.maatlog-archive {
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --maatlog-color-background: #070b14;
+  --maatlog-color-surface: #131b2b;
+  --maatlog-color-text: #e8ecf3;
+  --maatlog-color-muted: #a9b6c9;
+  --maatlog-color-link: #b0bdfd;
+  --maatlog-color-accent: #4dd8ee;
+  --maatlog-color-border: #2f3d55;
+  --maatlog-color-control-border: #8894ad;
+  --maatlog-code-background: #010409;
+  --maatlog-code-text: #e6edf3;
+  --maatlog-code-border: #30363d;
+  --maatlog-color-surface-hover: #1d2739;
+  --maatlog-inline-code-background: #241f52;
+  --maatlog-inline-code-text: #cdd6fe;
+  --maatlog-badge-background: #241f52;
+  --maatlog-badge-text: #cdd6fe;
+  --maatlog-shadow-color: 0 0 0 / 45%;
+}
+
+body {
+  background: var(--maatlog-color-background, #f8fafc);
+  color: var(--maatlog-color-text, #172033);
+  font-family: var(--maatlog-font-sans, system-ui, sans-serif);
+  font-size: 1rem;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* The sidebar now lives in the layout's left column, so the body is one column.
+   要素型で絞る理由は maatlog-base 側のコメントと同じ。 */
+article.maatlog-post,
+section.maatlog-archive {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   grid-template-areas:
     "header"
-    "meta"
     "body"
     "nav"
     "pagination";
@@ -36,7 +134,7 @@
   max-width: none;
   margin: 0 auto;
   padding: var(--maatlog-space-md, 1rem);
-  color: var(--maatlog-color-text, #1a1a1a);
+  color: var(--maatlog-color-text, #1a1d23);
   overflow-wrap: anywhere;
 }
 
@@ -46,9 +144,41 @@
   margin-bottom: 0;
 }
 
+/* The post header is one editorial block: eyebrow, title, tagline, meta, hero. */
+.maatlog-post-header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--maatlog-space-sm, 0.5rem);
+  margin-bottom: var(--maatlog-space-xl, 3rem);
+}
+
+.maatlog-post-eyebrow {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.maatlog-post-header h1 {
+  margin: 0;
+  max-width: var(--maatlog-content-width, 42rem);
+  font-size: clamp(2.2rem, 5vw, 4rem);
+  line-height: 1.08;
+  letter-spacing: -0.035em;
+}
+
+.maatlog-post-tagline {
+  margin: 0;
+  max-width: var(--maatlog-content-width, 42rem);
+  color: var(--maatlog-color-muted, #586070);
+  font-size: 1.15rem;
+  line-height: 1.55;
+}
+
 .maatlog-hero {
   padding-bottom: var(--maatlog-space-md, 1rem);
-  border-bottom: 1px solid var(--maatlog-color-border, #d0d0d0);
+  border-bottom: 1px solid var(--maatlog-color-border, #d5d9e0);
 }
 
 .maatlog-hero-title {
@@ -56,7 +186,7 @@
 }
 
 .maatlog-hero-tagline {
-  color: var(--maatlog-color-muted, #5c5c5c);
+  color: var(--maatlog-color-muted, #586070);
   margin: var(--maatlog-space-xs, 0.25rem) 0 0;
 }
 
@@ -64,7 +194,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--maatlog-space-sm, 0.5rem);
-  color: var(--maatlog-color-muted, #5c5c5c);
+  color: var(--maatlog-color-muted, #586070);
   font-size: 0.9rem;
   margin: var(--maatlog-space-sm, 0.5rem) 0 0;
 }
@@ -77,10 +207,50 @@
 }
 
 .maatlog-post-meta {
-  grid-area: meta;
-  color: var(--maatlog-color-muted, #5c5c5c);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--maatlog-space-md, 1rem);
+  color: var(--maatlog-color-muted, #586070);
   font-size: 0.9rem;
   margin-bottom: 0;
+}
+
+.maatlog-post-info,
+.maatlog-post-taxonomies {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--maatlog-space-sm, 0.5rem);
+}
+
+.maatlog-post-meta-separator {
+  color: var(--maatlog-color-muted, #586070);
+}
+
+.maatlog-post-authors,
+.maatlog-post-categories,
+.maatlog-post-tags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--maatlog-space-sm, 0.5rem);
+}
+
+/* pill 本体は .maatlog-taxonomy-link が持つ。ここでは矩形の枠と半径を打ち消す。 */
+.maatlog-category-badge {
+  padding: 0.25rem 0.65rem;
+  background: var(--maatlog-badge-background);
+  border: 0;
+  border-radius: var(--maatlog-radius-pill);
+  color: var(--maatlog-badge-text);
+  font-size: 0.78rem;
+  text-decoration: none;
+}
+
+.maatlog-tag-link {
+  color: var(--maatlog-badge-text);
+  text-decoration: none;
 }
 
 .maatlog-post-body,
@@ -94,6 +264,45 @@
   width: 100%;
   max-width: none;
   margin-inline: 0;
+  font-size: 1.05rem;
+  line-height: 1.8;
+  letter-spacing: 0.01em;
+}
+
+/* 行長はテキスト要素側で抑える。図・コード・表は main 幅いっぱいを使う。 */
+.maatlog-post-body :is(p, ul, ol, dl, blockquote, h2, h3, h4, h5, h6) {
+  max-width: var(--maatlog-content-width, 42rem);
+}
+
+/* An explicit scale: basic.css leaves h2 and h3 nearly the same size. */
+.maatlog-post-body h2 {
+  margin: var(--maatlog-space-xl, 3rem) 0 0.6em;
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+}
+
+.maatlog-post-body h3 {
+  margin: 2.25rem 0 0.6em;
+  font-size: 1.35rem;
+  font-weight: 650;
+  line-height: 1.3;
+  letter-spacing: -0.015em;
+}
+
+.maatlog-post-body h4 {
+  margin: 1.75rem 0 0.6em;
+  font-size: 1.1rem;
+  font-weight: 650;
+  line-height: 1.35;
+  letter-spacing: -0.005em;
+}
+
+/* Sphinx wraps the body in a <section>; reach the first heading either way. */
+.maatlog-post-body > :first-child,
+.maatlog-post-body section:first-child > :first-child {
+  margin-top: 0;
 }
 
 /* Generic list cap; page-kind rules below lift it for home/archive/normal/post. */
@@ -107,6 +316,19 @@
   width: 100%;
   max-width: none;
   margin-inline: 0;
+}
+
+/* 記事本文と同じ方針を通常ページにも当てる。コンテナの max-width: none は
+   既存契約なので触らず、テキスト要素側で行長を抑える。table / .highlight /
+   img / figure は対象外なので main 幅いっぱいを使える。見出しも対象外
+   ——通常ページの見出しは目次的な役割が強く、幅を切ると図とくい違う。 */
+.maatlog-layout-page-normal .body :is(p, ul, ol, dl, blockquote) {
+  max-width: var(--maatlog-content-width, 42rem);
+}
+
+/* maatlog:post-list の中のカードは自分の幅を持つ。行長キャップを持ち込まない。 */
+.maatlog-layout-page-normal .body .maatlog-post-list :is(p, ul, ol, dl) {
+  max-width: none;
 }
 
 .maatlog-layout-page-home .body,
@@ -135,7 +357,7 @@
   flex-wrap: wrap;
   justify-content: space-between;
   gap: var(--maatlog-space-md, 1rem);
-  border-top: 1px solid var(--maatlog-color-border, #d0d0d0);
+  border-top: 1px solid var(--maatlog-color-border, #d5d9e0);
   padding-top: var(--maatlog-space-md, 1rem);
   margin: 0;
 }
@@ -160,6 +382,73 @@
   min-width: 0;
 }
 
+/* Sidebar の feed 一覧も Navigation UI の一部。素の黒丸を出さない。 */
+.maatlog-sidebar .maatlog-feed-links {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+/* Sidebar の分類ナビゲーション。Documentation theme 的な箇条書きにしない。 */
+.maatlog-taxonomy {
+  margin-bottom: var(--maatlog-space-lg);
+}
+
+.maatlog-taxonomy h2 {
+  margin: 0 0 var(--maatlog-space-xs);
+  color: var(--maatlog-color-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.maatlog-taxonomy-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.maatlog-taxonomy-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--maatlog-space-sm);
+  padding: 0.25rem var(--maatlog-space-sm);
+  border-radius: var(--maatlog-radius-sm);
+  color: var(--maatlog-color-muted);
+  font-size: 0.875rem;
+  text-decoration: none;
+  transition:
+    background-color var(--maatlog-motion-fast) ease,
+    color var(--maatlog-motion-fast) ease;
+}
+
+/* hover だけで状態を示さない。キーボード操作でも同じサーフェスを出す。 */
+.maatlog-taxonomy-item:hover,
+.maatlog-taxonomy-item:focus-visible {
+  background: var(--maatlog-color-surface-hover);
+  color: var(--maatlog-color-text);
+}
+
+.maatlog-taxonomy-item[aria-current="page"] {
+  background: var(--maatlog-color-surface-hover);
+  color: var(--maatlog-color-primary);
+  font-weight: 600;
+}
+
+.maatlog-taxonomy-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.maatlog-taxonomy-count {
+  flex: none;
+  color: var(--maatlog-color-muted);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+}
+
 .maatlog-taxonomy-more,
 .maatlog-taxonomy-year {
   margin-top: var(--maatlog-space-xs, 0.25rem);
@@ -168,58 +457,185 @@
 .maatlog-taxonomy-more summary,
 .maatlog-taxonomy-year summary {
   cursor: pointer;
-  color: var(--maatlog-color-muted, #5c5c5c);
+  padding: 0.25rem var(--maatlog-space-sm);
+  border-radius: var(--maatlog-radius-sm);
+  color: var(--maatlog-color-muted);
+  font-size: 0.8125rem;
+}
+
+.maatlog-taxonomy-more summary:hover,
+.maatlog-taxonomy-more summary:focus-visible,
+.maatlog-taxonomy-year summary:hover,
+.maatlog-taxonomy-year summary:focus-visible {
+  background: var(--maatlog-color-surface-hover);
 }
 
 .maatlog-post-card {
-  background: var(--maatlog-card-background, #fafafa);
-  border: 1px solid var(--maatlog-color-border, #d0d0d0);
+  display: flex;
+  flex-direction: column;
+  gap: var(--maatlog-space-sm, 0.5rem);
+  background: var(--maatlog-card-background, #f6f7f9);
+  border: 1px solid var(--maatlog-color-border, #d5d9e0);
+  border-radius: var(--maatlog-radius-lg);
+  box-shadow: var(--maatlog-shadow-sm);
   padding: var(--maatlog-space-md, 1rem);
   margin-bottom: var(--maatlog-space-md, 1rem);
+  overflow: hidden;
   overflow-wrap: anywhere;
+  transition:
+    transform var(--maatlog-motion-fast) ease,
+    box-shadow var(--maatlog-motion-fast) ease,
+    border-color var(--maatlog-motion-fast) ease;
 }
 
+.maatlog-post-card:hover,
+.maatlog-post-card:focus-within {
+  transform: translateY(-3px);
+  box-shadow: var(--maatlog-shadow-md);
+  border-color: var(--maatlog-color-link);
+}
+
+.maatlog-post-card-title {
+  margin: 0;
+  font-size: 1.15rem;
+  line-height: 1.35;
+  letter-spacing: -0.015em;
+}
+
+/* stylelint-disable-next-line no-descending-specificity -- card links opt out of the global link colour. */
+.maatlog-post-card-title a {
+  color: var(--maatlog-color-text, #1a1d23);
+  text-decoration: none;
+}
+
+/* stylelint-disable-next-line no-descending-specificity -- card links opt out of the global link colour. */
+.maatlog-post-card-title a:hover {
+  color: var(--maatlog-color-link, #0b5cab);
+}
+
+.maatlog-post-card-date {
+  color: var(--maatlog-color-muted, #586070);
+  font-size: 0.8rem;
+}
+
+.maatlog-post-card-excerpt {
+  margin: 0;
+  color: var(--maatlog-color-muted, #586070);
+  font-size: 0.92rem;
+  line-height: 1.65;
+}
+
+/* Meta sinks to the bottom so cards of different text lengths line up. */
+.maatlog-post-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--maatlog-space-sm, 0.5rem);
+  margin: auto 0 0;
+}
+
+/* 区切りは読み上げ専用の span が担うので、視覚的な間隔は gap で作る。 */
+.maatlog-post-card-categories,
+.maatlog-post-card-tags,
+.maatlog-post-card-authors {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--maatlog-space-xs, 0.25rem);
+}
+
+/* Featured: one lead card beside a stack of two. Falls back to a plain
+   asymmetric row whenever the count is not exactly three. */
 .maatlog-post-featured {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  gap: var(--maatlog-space-md, 1rem);
+  margin-bottom: var(--maatlog-space-xl, 3rem);
+}
+
+/* Latest: a plain responsive card grid. */
+.maatlog-post-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
   gap: var(--maatlog-space-md, 1rem);
   margin-bottom: var(--maatlog-space-lg, 2rem);
 }
 
-.maatlog-post-featured .maatlog-post-card {
+.maatlog-post-featured .maatlog-post-card,
+.maatlog-post-grid .maatlog-post-card {
   margin-bottom: 0;
+}
+
+/* One featured post must not leave the right column empty. */
+.maatlog-post-featured .maatlog-post-card:only-child {
+  grid-column: 1 / -1;
+}
+
+/* Exactly three: the first card owns the left column across both rows. */
+.maatlog-post-featured .maatlog-post-card:first-child:nth-last-child(3) {
+  grid-row: span 2;
 }
 
 .maatlog-post-card-featured .maatlog-post-card-title {
   font-size: 1.35rem;
 }
 
+.maatlog-post-featured .maatlog-post-card:first-child:nth-last-child(3) .maatlog-post-card-title {
+  font-size: 1.75rem;
+  letter-spacing: -0.025em;
+}
+
 .maatlog-post-list-heading {
-  grid-area: auto;
-  margin: var(--maatlog-space-lg, 2rem) 0 var(--maatlog-space-md, 1rem);
-  font-size: 1rem;
-  color: var(--maatlog-color-muted, #5c5c5c);
+  margin: var(--maatlog-space-xl, 3rem) 0 var(--maatlog-space-md, 1rem);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--maatlog-color-muted, #586070);
 }
 
 .maatlog-post-card-image {
   width: 100%;
-  height: auto;
-  object-fit: contain;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: var(--maatlog-radius-md);
 }
 
-.maatlog-post-body a,
-.maatlog-external-link,
-.maatlog-feed-link,
-.maatlog-post-card a {
+.maatlog-post-hero-image {
+  width: 100%;
+  aspect-ratio: 21 / 9;
+  object-fit: cover;
+  border-radius: var(--maatlog-radius-lg, 1rem);
+  margin-top: var(--maatlog-space-sm, 0.5rem);
+}
+
+/* Every link takes the token, Sphinx' own chrome included: the user-agent
+   blue and visited purple are unreadable on the dark background. */
+/* stylelint-disable-next-line no-descending-specificity -- card title links opt out above. */
+a {
   color: var(--maatlog-color-link, #0b5cab);
 }
 
+/* stylelint-disable-next-line no-descending-specificity -- card title hover comes before this focus ring block. */
 a:focus-visible,
 button:focus-visible,
+.maatlog-search-input:focus-visible,
+.maatlog-taxonomy-item:focus-visible,
+.maatlog-taxonomy-link:focus-visible,
+.maatlog-toc-headings a:focus-visible,
 .maatlog-pagination a:focus-visible,
-.maatlog-sidebar a:focus-visible {
+.maatlog-sidebar a:focus-visible,
+.maatlog-post-meta a:focus-visible,
+.maatlog-post-meta .maatlog-category-badge:focus-visible,
+.maatlog-post-meta .maatlog-tag-link:focus-visible {
   outline: 2px solid var(--maatlog-color-link, #0b5cab);
   outline-offset: 2px;
+}
+
+/* pill の角に沿ってアウトラインを回す。 */
+/* stylelint-disable-next-line no-descending-specificity -- focus ring follows the shared group block. */
+.maatlog-taxonomy-link:focus-visible {
+  border-radius: var(--maatlog-radius-pill);
 }
 
 img {
@@ -229,30 +645,69 @@ img {
 
 /* Narrow viewport: keep the body as a single column (no horizontal scroll). */
 @media (width <= 48rem) {
-  .maatlog-post,
-  .maatlog-archive {
+  article.maatlog-post,
+  section.maatlog-archive {
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas:
       "header"
-      "meta"
       "body"
       "nav"
       "pagination";
     max-width: 100%;
   }
 
-  .maatlog-post-featured {
+  .maatlog-post-featured,
+  .maatlog-post-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 }
 
+/* Category と tag は同じ surface を共有する。区別は tag の "#" 接頭辞が担う。 */
+/* stylelint-disable-next-line no-descending-specificity -- pill base styles follow the shared focus ring block. */
 .maatlog-taxonomy-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.65rem;
+  border-radius: var(--maatlog-radius-pill);
+  background: var(--maatlog-badge-background);
+  color: var(--maatlog-badge-text);
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.4;
+  text-decoration: none;
+  transition:
+    background var(--maatlog-motion-fast) ease,
+    color var(--maatlog-motion-fast) ease;
+}
+
+.maatlog-taxonomy-link:hover {
+  background: var(--maatlog-color-surface-hover);
   color: var(--maatlog-color-link);
   text-decoration: none;
 }
 
-.maatlog-taxonomy-link:hover {
+/* Authors are people, not buckets: keep them as text links. */
+.maatlog-post-info .maatlog-post-author-link {
+  padding: 0;
+  background: none;
+  color: var(--maatlog-color-link);
+  font-size: inherit;
+  font-weight: 600;
   text-decoration: underline;
+  text-decoration-thickness: 0.1em;
+  text-underline-offset: 0.15em;
+}
+
+/* カードの著者リンクにはクラスが付かないので、ラッパ側から打ち消す。 */
+.maatlog-post-card-authors .maatlog-taxonomy-link {
+  padding: 0;
+  background: none;
+  color: var(--maatlog-color-link);
+  font-size: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-thickness: 0.1em;
+  text-underline-offset: 0.15em;
 }
 
 .maatlog-home-intro {
@@ -277,19 +732,23 @@ img {
 .maatlog-skip-link:focus {
   left: var(--maatlog-space-md, 1rem);
   top: var(--maatlog-space-md, 1rem);
-  z-index: 1;
-  background: var(--maatlog-banner-background, #fff);
+  z-index: 11;
+  background: var(--maatlog-banner-background, #f6f7f9);
   padding: var(--maatlog-space-sm, 0.5rem);
 }
 
 .maatlog-banner-title {
   margin: 0;
-  font-size: 1.25rem;
+  font-size: 1.125rem;
+  font-weight: 700;
+  line-height: 1.3;
 }
 
 .maatlog-banner-tagline {
-  margin: var(--maatlog-space-xs, 0.25rem) 0 0;
-  color: var(--maatlog-color-muted, #5c5c5c);
+  margin: 0;
+  color: var(--maatlog-color-muted);
+  font-size: 0.8125rem;
+  line-height: 1.3;
 }
 
 .maatlog-toc-posts {
@@ -298,17 +757,30 @@ img {
   margin: 0;
 }
 
-/* Header banner */
+/* Header banner。高さ 4rem の 1 本の帯として振る舞い、上下の余白は持たない。 */
 .maatlog-banner {
+  position: sticky;
+  top: 0;
+  z-index: 10;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: space-between;
-  gap: var(--maatlog-space-md, 1rem);
-  background: var(--maatlog-banner-background, #fff);
-  min-height: var(--maatlog-banner-height, auto);
-  padding: var(--maatlog-space-md, 1rem) var(--maatlog-space-lg, 2rem);
-  border-bottom: 1px solid var(--maatlog-color-border, #d0d0d0);
+  gap: var(--maatlog-space-md);
+  min-height: var(--maatlog-banner-height);
+  padding: 0 var(--maatlog-space-lg);
+  background: var(--maatlog-banner-background);
+  border-bottom: 1px solid var(--maatlog-color-border);
+}
+
+/* 地を透かすのは blur が効くときだけ。透過だけが効くと背後の本文が
+   バナーの文字に重なって読めなくなる。非対応環境は不透明のまま。
+   currentcolor は色リテラルではないので、色トークン契約に抵触しない。 */
+@supports (backdrop-filter: blur(8px)) and (background: color-mix(in srgb, currentcolor 82%, transparent)) {
+  .maatlog-banner {
+    background: color-mix(in srgb, var(--maatlog-banner-background) 82%, transparent);
+    backdrop-filter: blur(8px);
+  }
 }
 
 .maatlog-banner-brand {
@@ -320,18 +792,50 @@ img {
 
 .maatlog-banner-logo img {
   display: block;
-  max-height: 3rem;
+  max-height: 2rem;
   width: auto;
 }
 
 /* stylelint-disable-next-line no-descending-specificity -- focus and banner-link rules have separate duties. */
 .maatlog-banner-title a {
-  color: var(--maatlog-color-text, #1a1a1a);
+  color: var(--maatlog-color-text, #1a1d23);
   text-decoration: none;
 }
 
 .maatlog-banner-search .searchformwrapper {
   margin: 0;
+}
+
+.maatlog-banner-actions {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--maatlog-space-sm);
+}
+
+.maatlog-search {
+  display: flex;
+  margin: 0;
+}
+
+/* stylelint-disable-next-line no-descending-specificity -- focus-visible and input styling have separate duties. */
+.maatlog-search-input {
+  box-sizing: border-box;
+  width: 14rem;
+  max-width: 100%;
+  padding: 0.375rem var(--maatlog-space-sm);
+  border: 1px solid var(--maatlog-color-control-border);
+  border-radius: var(--maatlog-radius-pill);
+  background: var(--maatlog-color-background);
+  color: var(--maatlog-color-text);
+  font-family: inherit;
+  font-size: 1rem;
+  transition: border-color var(--maatlog-motion-fast) ease;
+}
+
+.maatlog-search-input:hover,
+.maatlog-search-input:focus {
+  border-color: var(--maatlog-color-primary);
 }
 
 /* Wide shell: nav/TOC keep their max width; spare viewport width goes to main. */
@@ -362,6 +866,50 @@ img {
   box-sizing: border-box;
   width: 100%;
   max-width: var(--maatlog-nav-width, 15rem);
+
+  /* Sidebar は Main content より目立たせない。ページ背景を透かす。 */
+  background: none;
+}
+
+/* Sphinx の toctree も同じ Navigation 行として描く。 */
+.maatlog-nav-toctree {
+  margin-bottom: var(--maatlog-space-lg);
+}
+
+.maatlog-nav-toctree ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.maatlog-nav-toctree ul ul {
+  padding-inline-start: var(--maatlog-space-md);
+}
+
+/* stylelint-disable-next-line no-descending-specificity -- focus-visible and nav link rules have separate duties. */
+.maatlog-nav-toctree a {
+  display: block;
+  padding: 0.25rem var(--maatlog-space-sm);
+  border-radius: var(--maatlog-radius-sm);
+  color: var(--maatlog-color-muted);
+  font-size: 0.875rem;
+  text-decoration: none;
+  transition:
+    background-color var(--maatlog-motion-fast) ease,
+    color var(--maatlog-motion-fast) ease;
+}
+
+/* 平常時を muted に落としたぶん、触れたときは本文色まで戻す。 */
+.maatlog-nav-toctree a:hover,
+.maatlog-nav-toctree a:focus-visible {
+  background: var(--maatlog-color-surface-hover);
+  color: var(--maatlog-color-text);
+}
+
+/* Sphinx が現在ページの <li> に付けるクラス。 */
+.maatlog-nav-toctree li.current > a {
+  color: var(--maatlog-color-primary);
+  font-weight: 600;
 }
 
 .maatlog-layout-main {
@@ -372,10 +920,148 @@ img {
 .maatlog-layout-main pre {
   max-width: 100%;
   overflow: auto hidden;
+  background: var(--maatlog-code-background, #0f172a);
+  color: var(--maatlog-code-text, #e2e8f0);
+  border: 1px solid var(--maatlog-code-border, #1e293b);
+  border-radius: var(--maatlog-radius-md, 0.75rem);
+  padding: var(--maatlog-space-md, 1rem);
+  font-family: var(--maatlog-font-mono, monospace);
+  line-height: 1.6;
 }
 
 .maatlog-layout-main .highlight {
+  position: relative;
   overflow-x: auto;
+  border-radius: var(--maatlog-radius-md, 0.75rem);
+  background: var(--maatlog-code-background, #0f172a);
+}
+
+/* Pygments ships its own ``.highlight`` ground; the theme owns the surface. */
+.maatlog-layout-main .highlight pre {
+  border: 0;
+  padding: var(--maatlog-space-sm, 0.5rem) var(--maatlog-space-md, 1rem);
+}
+
+.maatlog-layout-main code {
+  background: var(--maatlog-inline-code-background, #eef2ff);
+  color: var(--maatlog-inline-code-text, #3730a3);
+  padding: 0.1em 0.35em;
+  border-radius: var(--maatlog-radius-sm, 0.5rem);
+  font-family: var(--maatlog-font-mono, monospace);
+  font-size: 0.9em;
+}
+
+.maatlog-layout-main .highlight code {
+  background: none;
+  color: inherit;
+  padding: 0;
+  border-radius: 0;
+  font-size: 1em;
+}
+
+/* Sphinx emits no wrapper around ``table.docutils``, so the table itself has to
+   be the scroll container. ``display: block`` is what makes overflow work here;
+   the cost is that columns no longer size themselves against each other. Not
+   breaking the mobile layout is worth that. */
+.maatlog-layout-main table.docutils {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  border: 1px solid var(--maatlog-color-border, #e2e8f0);
+  border-radius: var(--maatlog-radius-md, 0.75rem);
+  font-size: 0.92rem;
+}
+
+.maatlog-layout-main table.docutils th,
+.maatlog-layout-main table.docutils td {
+  padding: var(--maatlog-space-sm, 0.5rem) var(--maatlog-space-md, 1rem);
+  border: 0;
+  border-bottom: 1px solid var(--maatlog-color-border, #e2e8f0);
+  vertical-align: top;
+}
+
+.maatlog-layout-main table.docutils th {
+  background: var(--maatlog-color-surface-hover, #f1f5f9);
+  color: var(--maatlog-color-text, #172033);
+  font-weight: 650;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.maatlog-layout-main table.docutils tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+/* セル内の段落は行間を詰める。本文の 1.8 を持ち込むと表が間延びする。 */
+.maatlog-layout-main table.docutils :is(th, td) > p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.maatlog-layout-main blockquote {
+  margin: var(--maatlog-space-lg, 2rem) 0;
+  padding: var(--maatlog-space-md, 1rem) var(--maatlog-space-lg, 2rem);
+  border-left: 3px solid var(--maatlog-color-accent, #0e7490);
+  border-radius: 0 var(--maatlog-radius-md, 0.75rem) var(--maatlog-radius-md, 0.75rem) 0;
+  background: var(--maatlog-color-surface, #fff);
+  color: var(--maatlog-color-text, #172033);
+  font-style: normal;
+}
+
+/* docutils wraps blockquote content in a <div>; the last block is two levels down. */
+.maatlog-layout-main blockquote > :last-child,
+.maatlog-layout-main blockquote > div > :last-child {
+  margin-bottom: 0;
+}
+
+/* Two accents, not eight: informational uses the link colour, cautionary uses
+   the accent colour. Sphinx' own admonition classes map onto those two. */
+.maatlog-layout-main .admonition {
+  margin: var(--maatlog-space-lg, 2rem) 0;
+  padding: var(--maatlog-space-md, 1rem);
+  border: 1px solid var(--maatlog-color-border, #e2e8f0);
+  border-left: 3px solid var(--maatlog-color-link, #4f46e5);
+  border-radius: var(--maatlog-radius-md, 0.75rem);
+  background: var(--maatlog-color-surface, #fff);
+}
+
+/* Sphinx emits the title as a <p>, so it needs to be told to read as a label. */
+.maatlog-layout-main .admonition > .admonition-title {
+  margin: 0 0 var(--maatlog-space-sm, 0.5rem);
+  color: var(--maatlog-color-muted, #475569);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.maatlog-layout-main .admonition > :last-child {
+  margin-bottom: 0;
+}
+
+.maatlog-layout-main .admonition.warning,
+.maatlog-layout-main .admonition.caution,
+.maatlog-layout-main .admonition.danger,
+.maatlog-layout-main .admonition.attention {
+  border-left-color: var(--maatlog-color-accent, #0e7490);
+}
+
+/* The paragraph anchor is a tool, not content. Keep it in the accessibility
+   tree — ``display: none`` would take it off the keyboard path — and let it
+   surface on hover or when it takes focus. */
+.maatlog-layout-main a.headerlink {
+  padding-left: 0.3em;
+  color: var(--maatlog-color-muted, #475569);
+  text-decoration: none;
+  opacity: 0;
+  transition: opacity var(--maatlog-motion-fast) ease;
+}
+
+.maatlog-layout-main :is(h1, h2, h3, h4, h5, h6, dt, caption, figcaption):hover > a.headerlink,
+/* stylelint-disable-next-line no-descending-specificity -- hover and focus-visible share the same reveal rule. */
+.maatlog-layout-main a.headerlink:focus-visible {
+  opacity: 1;
 }
 
 .maatlog-toc {
@@ -383,20 +1069,72 @@ img {
   box-sizing: border-box;
   width: 100%;
   max-width: var(--maatlog-toc-width, 14rem);
+  background: none;
 }
 
 .maatlog-nav,
 .maatlog-toc {
   position: sticky;
-  top: var(--maatlog-space-md, 1rem);
-  max-height: calc(100vh - 2 * var(--maatlog-space-md, 1rem));
+  top: var(--maatlog-sticky-top);
+  max-height: calc(100vh - var(--maatlog-sticky-top) - var(--maatlog-space-md));
   overflow-y: auto;
   min-width: 0;
+  scrollbar-width: thin;
 }
 
 .maatlog-toc-posts li {
   margin-bottom: var(--maatlog-space-xs, 0.25rem);
 }
+
+/* 右 TOC。Main content より小さく静かに。Card にも Border 囲みにもしない。 */
+.maatlog-toc h2 {
+  margin: 0 0 var(--maatlog-space-xs);
+  color: var(--maatlog-color-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* stylelint-disable no-descending-specificity -- TOC selectors have different specificity from earlier shell and nav rules. */
+.maatlog-toc-headings ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+/* 階層は 1 段だけ字下げする。深くすると幅 13.5rem に収まらない。 */
+.maatlog-toc-headings ul ul {
+  padding-inline-start: var(--maatlog-space-md);
+}
+
+/* border-left は常に 2px 確保しておく。active 時に横へずれない。 */
+.maatlog-toc-headings a,
+.maatlog-toc-posts a {
+  display: block;
+  padding: 0.1875rem 0 0.1875rem var(--maatlog-space-sm);
+  border-left: 2px solid transparent;
+  color: var(--maatlog-color-muted);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+  transition: color var(--maatlog-motion-fast) ease;
+}
+
+.maatlog-toc-headings a:hover,
+.maatlog-toc-headings a:focus-visible,
+.maatlog-toc-posts a:hover,
+.maatlog-toc-posts a:focus-visible {
+  color: var(--maatlog-color-primary);
+}
+
+.maatlog-toc-headings a[aria-current="true"] {
+  border-left-color: var(--maatlog-color-primary);
+  color: var(--maatlog-color-primary);
+  font-weight: 600;
+}
+/* stylelint-enable no-descending-specificity */
 
 /* Medium: the page TOC moves above the content; without one, nothing changes. */
 @media (width <= 64rem) {
@@ -422,6 +1160,18 @@ img {
     width: 100%;
     max-width: none;
   }
+
+  .maatlog-post-featured {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .maatlog-post-grid {
+    grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  }
+
+  .maatlog-post-featured .maatlog-post-card:first-child:nth-last-child(3) {
+    grid-row: auto;
+  }
 }
 
 /* Narrow: one column. The page TOC comes first, site navigation last. */
@@ -445,10 +1195,101 @@ img {
     position: static;
     max-height: none;
     max-width: none;
-    border-top: 1px solid var(--maatlog-color-border, #d0d0d0);
+    border-top: 1px solid var(--maatlog-color-border, #d5d9e0);
   }
 
   .maatlog-banner {
-    padding: var(--maatlog-space-md, 1rem);
+    flex-wrap: wrap;
+    padding: var(--maatlog-space-md);
+  }
+
+  .maatlog-banner-actions {
+    flex-wrap: wrap;
+  }
+
+  .maatlog-search,
+  .maatlog-search-input {
+    width: 100%;
+  }
+}
+
+/* The banner toggle only exists when the theme runtime ran. Hiding it by
+   default keeps readers without JavaScript from seeing a dead control, and
+   flipping it on from a class set in <head> avoids a layout shift. */
+.maatlog-theme-toggle {
+  display: none;
+}
+
+.maatlog-js .maatlog-theme-toggle {
+  /* Containing block for the visually hidden label. */
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--maatlog-space-xs, 0.25rem);
+  padding: var(--maatlog-space-xs, 0.25rem);
+  border: 1px solid var(--maatlog-color-control-border, #767e8c);
+  border-radius: var(--maatlog-radius-pill);
+  background: transparent;
+  color: var(--maatlog-color-text, #1a1d23);
+  cursor: pointer;
+}
+
+.maatlog-theme-toggle-icon {
+  block-size: 1.25rem;
+  inline-size: 1.25rem;
+}
+
+/* The icon names the theme in view: sun for light, moon for dark. */
+.maatlog-theme-toggle-icon-dark {
+  display: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .maatlog-theme-toggle-icon-light {
+    display: none;
+  }
+
+  :root:not([data-theme="light"]) .maatlog-theme-toggle-icon-dark {
+    display: inline;
+  }
+}
+
+:root[data-theme="dark"] .maatlog-theme-toggle-icon-light {
+  display: none;
+}
+
+:root[data-theme="dark"] .maatlog-theme-toggle-icon-dark {
+  display: inline;
+}
+
+/* Visible text kept out of sight: the button still has a real accessible name. */
+.maatlog-theme-toggle-label {
+  position: absolute;
+  clip-path: inset(50%);
+  overflow: hidden;
+  block-size: 1px;
+  inline-size: 1px;
+  white-space: nowrap;
+}
+
+/* Screen-reader-only punctuation between taxonomy links; visual spacing uses gap. */
+.maatlog-visually-hidden {
+  position: absolute;
+  clip-path: inset(50%);
+  overflow: hidden;
+  block-size: 1px;
+  inline-size: 1px;
+  white-space: nowrap;
+}
+
+/* Motion is decoration here: every transition is a hover affordance, so the
+   reduced-motion reader loses nothing by having them all switched off. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    transform: none !important;
+    animation: none !important;
   }
 }

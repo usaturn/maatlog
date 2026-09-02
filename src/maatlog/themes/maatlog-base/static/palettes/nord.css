@@ -1,0 +1,70 @@
+/* MaatLog palette: nord — Nord (Arctic Ice Studio, MIT) から着想した派生。
+
+   17 個のカラートークンだけを差し替える。余白・角丸・フォント・モーションは
+   maatlog.css の :root が持ち続ける。
+
+   カスタムプロパティは他ブロックの値を参照できないため、ダークは 2 度書く。
+   2 つのダークブロックは同一内容に保つこと（tests/integration/test_palettes.py
+   が強制する）。 */
+
+:root {
+  --maatlog-color-background: #eceff4;
+  --maatlog-color-surface: #fff;
+  --maatlog-color-surface-hover: #e3e8f0;
+  --maatlog-color-text: #2e3440;
+  --maatlog-color-muted: #4c566a;
+  --maatlog-color-link: #3b6ea5;
+  --maatlog-color-accent: #2b7168;
+  --maatlog-color-border: #d8dee9;
+  --maatlog-color-control-border: #7b869c;
+  --maatlog-code-background: #2e3440;
+  --maatlog-code-text: #d8dee9;
+  --maatlog-code-border: #3b4252;
+  --maatlog-inline-code-background: #e0e6f0;
+  --maatlog-inline-code-text: #3b5f8a;
+  --maatlog-badge-background: #e0e6f0;
+  --maatlog-badge-text: #3b5f8a;
+  --maatlog-shadow-color: 15 23 42 / 8%;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --maatlog-color-background: #2e3440;
+    --maatlog-color-surface: #3b4252;
+    --maatlog-color-surface-hover: #434c5e;
+    --maatlog-color-text: #eceff4;
+    --maatlog-color-muted: #aeb8c9;
+    --maatlog-color-link: #88c0d0;
+    --maatlog-color-accent: #a3be8c;
+    --maatlog-color-border: #4c566a;
+    --maatlog-color-control-border: #8b95a8;
+    --maatlog-code-background: #242933;
+    --maatlog-code-text: #d8dee9;
+    --maatlog-code-border: #3b4252;
+    --maatlog-inline-code-background: #434c5e;
+    --maatlog-inline-code-text: #9fd0de;
+    --maatlog-badge-background: #434c5e;
+    --maatlog-badge-text: #9fd0de;
+    --maatlog-shadow-color: 0 0 0 / 45%;
+  }
+}
+
+:root[data-theme="dark"] {
+  --maatlog-color-background: #2e3440;
+  --maatlog-color-surface: #3b4252;
+  --maatlog-color-surface-hover: #434c5e;
+  --maatlog-color-text: #eceff4;
+  --maatlog-color-muted: #aeb8c9;
+  --maatlog-color-link: #88c0d0;
+  --maatlog-color-accent: #a3be8c;
+  --maatlog-color-border: #4c566a;
+  --maatlog-color-control-border: #8b95a8;
+  --maatlog-code-background: #242933;
+  --maatlog-code-text: #d8dee9;
+  --maatlog-code-border: #3b4252;
+  --maatlog-inline-code-background: #434c5e;
+  --maatlog-inline-code-text: #9fd0de;
+  --maatlog-badge-background: #434c5e;
+  --maatlog-badge-text: #9fd0de;
+  --maatlog-shadow-color: 0 0 0 / 45%;
+}
