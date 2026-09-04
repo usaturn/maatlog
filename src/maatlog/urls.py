@@ -34,6 +34,19 @@ def post_urls(page_url: str, canonical: str | None, external: str | None) -> Pos
     )
 
 
+def is_external_link_url(value: str) -> bool:
+    """Return True when *value* is an absolute ``http``/``https`` URL usable as a profile link.
+
+    ``validate_baseurl()`` は ``html_baseurl`` 専用の厳格な検証なので流用しない。
+    プロフィールリンクは query と fragment を持ちうるため、scheme と host だけを要求する。
+    """
+    try:
+        parts = urlsplit(value.strip())
+    except ValueError:
+        return False
+    return parts.scheme in {"http", "https"} and bool(parts.netloc)
+
+
 def validate_baseurl(url: str | None) -> str:
     """Validate and normalize Sphinx ``html_baseurl`` for feed generation.
 

@@ -15,7 +15,10 @@ from maatlog.builders import warn_partial_support_once
 from maatlog.config import CONFIG_VALUES, MaatlogConfig, TaxonomyAxis, validate_config
 from maatlog.directives import process_post_list_nodes
 from maatlog.extension import (
+    apply_pygments_style,
     collect_archive_pages,
+    collect_maattop,
+    collect_maattop_from_myst,
     collect_post_lists,
     commit_html_shell_fingerprint,
     finalize_domain,
@@ -70,8 +73,11 @@ def test_setup_registers_config_values_and_validation_handler() -> None:
         "builder-inited",  # warn_partial_support_once
         "builder-inited",  # validate_selected_theme
         "builder-inited",  # link_palette_stylesheet
+        "builder-inited",  # apply_pygments_style
         "builder-inited",  # html metadata / baseurl
         "source-read",
+        "doctree-read",
+        "doctree-read",
         "doctree-read",
         "doctree-read",
         "env-get-outdated",  # force post rewrite for body cache when feeds on
@@ -93,22 +99,28 @@ def test_setup_registers_config_values_and_validation_handler() -> None:
     assert app.connect.call_args_list[2] == (("builder-inited", warn_partial_support_once), {})
     assert app.connect.call_args_list[3] == (("builder-inited", validate_selected_theme), {})
     assert app.connect.call_args_list[4] == (("builder-inited", link_palette_stylesheet), {})
-    assert app.connect.call_args_list[6] == (("source-read", capture_source), {"priority": 999})
-    assert app.connect.call_args_list[7] == (("doctree-read", collect_post), {"priority": 100})
-    assert app.connect.call_args_list[8] == (("doctree-read", collect_post_lists), {"priority": 101})
-    assert app.connect.call_args_list[9] == (("env-get-outdated", force_post_docs_outdated_for_feeds), {})
-    assert app.connect.call_args_list[10] == (("env-purge-doc", purge_doc), {})
-    assert app.connect.call_args_list[11] == (("env-merge-info", merge_info), {})
-    assert app.connect.call_args_list[12] == (("env-updated", finalize_domain), {})
-    assert app.connect.call_args_list[13] == (("env-get-updated", force_home_doc_updated), {})
-    assert app.connect.call_args_list[14] == (("doctree-resolved", process_post_list_nodes), {})
-    assert app.connect.call_args_list[15] == (("html-collect-pages", collect_archive_pages), {})
-    assert app.connect.call_args_list[16] == (("html-page-context", inject_maatlog_page_context), {})
-    assert app.connect.call_args_list[17] == (("write-started", prepare_body_fragment_store), {})
-    assert app.connect.call_args_list[18] == (("write-started", register_representative_images), {})
-    assert app.connect.call_args_list[19] == (("build-finished", finalize_generated_outputs), {})
-    assert app.connect.call_args_list[20] == (("build-finished", cleanup_sources), {})
-    assert app.connect.call_args_list[21] == (("build-finished", commit_html_shell_fingerprint), {})
+    assert app.connect.call_args_list[5] == (("builder-inited", apply_pygments_style), {})
+    assert app.connect.call_args_list[7] == (("source-read", capture_source), {"priority": 999})
+    assert app.connect.call_args_list[8] == (
+        ("doctree-read", collect_maattop_from_myst),
+        {"priority": 99},
+    )
+    assert app.connect.call_args_list[9] == (("doctree-read", collect_post), {"priority": 100})
+    assert app.connect.call_args_list[10] == (("doctree-read", collect_post_lists), {"priority": 101})
+    assert app.connect.call_args_list[11] == (("doctree-read", collect_maattop), {"priority": 102})
+    assert app.connect.call_args_list[12] == (("env-get-outdated", force_post_docs_outdated_for_feeds), {})
+    assert app.connect.call_args_list[13] == (("env-purge-doc", purge_doc), {})
+    assert app.connect.call_args_list[14] == (("env-merge-info", merge_info), {})
+    assert app.connect.call_args_list[15] == (("env-updated", finalize_domain), {})
+    assert app.connect.call_args_list[16] == (("env-get-updated", force_home_doc_updated), {})
+    assert app.connect.call_args_list[17] == (("doctree-resolved", process_post_list_nodes), {})
+    assert app.connect.call_args_list[18] == (("html-collect-pages", collect_archive_pages), {})
+    assert app.connect.call_args_list[19] == (("html-page-context", inject_maatlog_page_context), {})
+    assert app.connect.call_args_list[20] == (("write-started", prepare_body_fragment_store), {})
+    assert app.connect.call_args_list[21] == (("write-started", register_representative_images), {})
+    assert app.connect.call_args_list[22] == (("build-finished", finalize_generated_outputs), {})
+    assert app.connect.call_args_list[23] == (("build-finished", cleanup_sources), {})
+    assert app.connect.call_args_list[24] == (("build-finished", commit_html_shell_fingerprint), {})
 
 
 def test_initialize_build_time_keeps_one_build_local_value(monkeypatch: pytest.MonkeyPatch) -> None:

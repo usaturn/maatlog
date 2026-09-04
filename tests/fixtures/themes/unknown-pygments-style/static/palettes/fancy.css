@@ -1,0 +1,4 @@
+/* palette-stylesheet-missing を先に出さないための実体。 */
+:root {
+  --maatlog-color-background: #ffffff;
+}

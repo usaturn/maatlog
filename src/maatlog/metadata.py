@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime
 from enum import StrEnum
@@ -36,11 +38,23 @@ KNOWN_KEYS = frozenset(
         "maatlog-authors",
         "maatlog-excerpt",
         "maatlog-image",
+        "maatlog-top-image",
+        "maatlog-top-image-alt",
         "maatlog-canonical-url",
         "maatlog-external-url",
     }
 )
 POST_ONLY_KEYS = KNOWN_KEYS - {"maatlog-post"}
+# Hero image keys are consumed by ``collect_maattop_from_myst``, which only reads
+# ``.md`` front matter. reStructuredText spells the same feature as the
+# ``maatlog:maattop`` directive, so these keys are unknown to the RST adapter.
+MYST_ONLY_KEYS = frozenset(
+    {
+        "maatlog-top-image",
+        "maatlog-top-image-alt",
+    }
+)
+MYST_ONLY_EXPECTED = "the maatlog:maattop directive (.. maatlog:maattop:: <uri>)"
 
 
 class MetadataAdapter(StrEnum):
@@ -225,6 +239,13 @@ def _take_source(app: Sphinx, docname: str) -> str | None:
     return source[0] if source is not None else None
 
 
+def _peek_source(app: Sphinx, docname: str) -> str | None:
+    """Return captured source without consuming it (``collect_post`` still owns the pop)."""
+    sources = cast(dict[str, list[str]], app.__dict__.get("_maatlog_sources_by_docname", {}))
+    source = sources.get(docname)
+    return source[0] if source is not None else None
+
+
 def _read_myst_frontmatter(source_text: str, source_path: str) -> dict[str, RawMetadataValue] | None:
     topmatter = read_typed_frontmatter(source_text)
     if topmatter is None:
@@ -273,17 +294,29 @@ def _read_docinfo(
 
 
 def _unknown_key_diagnostics(fields: Mapping[str, RawMetadataValue]) -> list[Diagnostic]:
-    return [
-        _field_diagnostic(
-            raw,
-            code="maatlog.metadata.unknown",
-            message="Unknown MaatLog metadata key",
-            field=name,
-            expected="a documented MaatLog metadata key",
-        )
-        for name, raw in fields.items()
-        if name not in KNOWN_KEYS
-    ]
+    diagnostics: list[Diagnostic] = []
+    for name, raw in fields.items():
+        if name not in KNOWN_KEYS:
+            diagnostics.append(
+                _field_diagnostic(
+                    raw,
+                    code="maatlog.metadata.unknown",
+                    message="Unknown MaatLog metadata key",
+                    field=name,
+                    expected="a documented MaatLog metadata key",
+                )
+            )
+        elif raw.adapter is MetadataAdapter.RST and name in MYST_ONLY_KEYS:
+            diagnostics.append(
+                _field_diagnostic(
+                    raw,
+                    code="maatlog.metadata.myst-only",
+                    message="This MaatLog metadata key is MyST front matter only",
+                    field=name,
+                    expected=MYST_ONLY_EXPECTED,
+                )
+            )
+    return diagnostics
 
 
 def _without_post_diagnostics(fields: Mapping[str, RawMetadataValue]) -> list[Diagnostic]:
@@ -606,3 +639,62 @@ def _document_diagnostic(
 def _raise_diagnostics(diagnostics: Sequence[Diagnostic]) -> None:
     if diagnostics:
         raise MaatlogBuildError(diagnostics)
+
+
+def collect_maattop_from_myst(app: Sphinx, doctree: nodes.document) -> None:
+    """Record hero image from MyST front matter ``maatlog-top-image``.
+
+    Runs at priority 99 (before ``collect_post`` at 100, which pops the
+    captured source). Later ``collect_maattop`` (priority 102) overwrites
+    this entry when an RST ``maattop`` directive is present.
+    """
+    del doctree
+    docname = app.env.current_document.docname
+    source_path = str(app.env.doc2path(docname, base=True))
+    if not source_path.endswith(".md"):
+        return
+
+    source_text = _peek_source(app, docname)
+    if source_text is None:
+        return
+
+    topmatter = read_typed_frontmatter(source_text)
+    if topmatter is None:
+        return
+
+    uri_entry = topmatter.get("maatlog-top-image")
+    if uri_entry is None:
+        return
+
+    uri_value, uri_line = uri_entry
+    uri = str(uri_value).strip() if uri_value is not None else ""
+    if not uri:
+        return
+
+    domain = cast(MaatlogDomain, app.env.get_domain("maatlog"))
+
+    alt_entry = topmatter.get("maatlog-top-image-alt")
+    alt = str(alt_entry[0]).strip() if alt_entry and alt_entry[0] is not None else ""
+
+    try:
+        candidate = validate_image_uri(
+            uri,
+            source=Path(source_path),
+            srcdir=Path(app.srcdir),
+        )
+    except ImageValidationError as error:
+        LOGGER.error(
+            "maatlog-top-image: %s (%r)",
+            error.message,
+            uri,
+            location=(source_path, uri_line),
+            type="maatlog",
+            subtype="maattop.invalid-uri",
+        )
+        return
+
+    # Sphinx image maps use paths relative to srcdir (same keys as ImageCollector).
+    relative = candidate.relative_to(Path(app.srcdir).resolve()).as_posix()
+    app.env.note_dependency(relative)
+    app.env.images.add_file(docname, relative)
+    domain.note_maattop(docname, uri=relative, alt=alt)

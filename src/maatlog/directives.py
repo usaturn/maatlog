@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict
+from pathlib import Path
 from typing import Any, cast
 
 from docutils import nodes
@@ -21,6 +22,13 @@ from sphinx.writers.text import TextTranslator
 from .archives import PostFilter, filter_posts
 from .config import TAXONOMY_KEY_PATTERN, MaatlogConfig
 from .errors import Diagnostic, MaatlogBuildError
+from .images import (
+    IMAGE_INVALID,
+    IMAGE_INVALID_EXPECTED,
+    IMAGE_MISSING_EXPECTED,
+    ImageValidationError,
+    validate_image_uri,
+)
 from .model import Post
 from .navigation import post_taxonomy_linker
 from .taxonomy import DomainIndex
@@ -424,3 +432,64 @@ def _validate_allowlists(
                     )
                 )
     return diagnostics
+
+
+# ---------------------------------------------------------------------------
+# maattop — article top hero image directive
+# ---------------------------------------------------------------------------
+
+
+class maattop_node(nodes.General, nodes.Element):
+    """Placeholder node; removed from the doctree by ``collect_maattop``."""
+
+
+class MaattopDirective(SphinxDirective):
+    """Declare a hero image for the article top.
+
+    Usage::
+
+        .. maattop:: path/to/image.jpg
+           :alt: Alternative text
+    """
+
+    has_content = False
+    required_arguments = 1
+    optional_arguments = 0
+    option_spec = {"alt": directives.unchanged}
+
+    def run(self) -> list[nodes.Node]:
+        source_path, line = self.get_source_info()
+        uri = self.arguments[0].strip()
+        alt = str(self.options.get("alt", ""))
+
+        source = Path(source_path) if source_path else Path(self.env.doc2path(self.env.docname, base=True))
+
+        try:
+            candidate = validate_image_uri(
+                uri,
+                source=source,
+                srcdir=Path(self.env.srcdir),
+            )
+        except ImageValidationError as error:
+            raise MaatlogBuildError(
+                [
+                    Diagnostic(
+                        code=error.code,
+                        message=error.message,
+                        source=source_path,
+                        line=line,
+                        field="uri",
+                        value=repr(uri),
+                        expected=IMAGE_INVALID_EXPECTED if error.code == IMAGE_INVALID else IMAGE_MISSING_EXPECTED,
+                    )
+                ]
+            ) from error
+
+        # Sphinx image maps use paths relative to srcdir (same keys as ImageCollector).
+        relative = candidate.relative_to(Path(self.env.srcdir).resolve()).as_posix()
+        self.env.note_dependency(relative)
+        self.env.images.add_file(self.env.docname, relative)
+
+        node = maattop_node("", uri=relative, alt=alt)
+        self.set_source_info(node)
+        return [node]

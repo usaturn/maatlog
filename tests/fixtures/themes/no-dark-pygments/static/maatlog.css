@@ -1,0 +1,4 @@
+/* Theme API の検証だけに使うフィクスチャ。値の中身は問わない。 */
+:root {
+  --maatlog-color-background: #ffffff;
+}

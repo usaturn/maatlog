@@ -115,6 +115,15 @@ MyST の front matter は YAML の暗黙の型付けに従います。MaatLog �
      - ソース相対の URI または ``None``
      - 任意
      - ローカルファイルのみ。フラグメント・クエリ・絶対 URL は不可。
+   * - ``maatlog-top-image``
+     - ソース相対の URI または ``None``
+     - 任意
+     - MyST front matter 専用。reStructuredText では ``.. maatlog:maattop::``
+       ディレクティブを使います。URI のルールは ``maatlog-image`` と同じ。
+   * - ``maatlog-top-image-alt``
+     - ``str``
+     - 任意
+     - ``maatlog-top-image`` の代替テキスト。こちらも MyST front matter 専用。
    * - ``maatlog-canonical-url``
      - 絶対 URL または ``None``
      - 任意
@@ -126,6 +135,8 @@ MyST の front matter は YAML の暗黙の型付けに従います。MaatLog �
 
 タクソノミー ID とスラッグは ``[a-z0-9][a-z0-9._-]*`` という同じ文字パターンを
 共有します。未知の ``maatlog-*`` キーはエラー（``maatlog.metadata.unknown``）です。
+MyST front matter 専用のキーを reStructuredText のフィールドリストに書いた場合は、
+別のエラー（``maatlog.metadata.myst-only``）になります。
 投稿でないドキュメントは、他の ``maatlog-*`` 投稿フィールドを持ってはいけません
 （``maatlog.metadata.without-post``）。
 

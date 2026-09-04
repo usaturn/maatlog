@@ -9,7 +9,7 @@ MaatLog のテーマは Sphinx の HTML テーマに小さな契約を加えた�
 API バージョン
 --------------
 
-Theme API の現在のバージョンは **1.5** です。
+Theme API の現在のバージョンは **1.9** です。
 ``api = "1.0"`` を宣言するテーマは
 引き続き受理されます
 
@@ -24,7 +24,7 @@ Theme API の現在のバージョンは **1.5** です。
 コアはメジャー ``1`` を実装するテーマを受け入れます。
 テーマがコアの提供するマイナー
 より高いバージョンを要求する場合、検証は失敗します。
-現在の 1.5 コアは 1.0 / 1.1 / 1.2 / 1.3 / 1.4 テーマを受理しますが、次の Theme API 更新が
+現在の 1.9 コアは 1.0 / 1.1 / 1.2 / 1.3 / 1.4 / 1.5 / 1.6 / 1.7 / 1.8 テーマを受理しますが、次の Theme API 更新が
 同じ約束を引き継ぐとは限りません
 
 1.0 から 1.1 で追加された任意の契約:
@@ -73,10 +73,10 @@ Theme API の現在のバージョンは **1.5** です。
   派生テンプレートが root-level で ``maatlog_has_toc`` を定義していれば、親レイアウト
   はその値を尊重します。
   未定義のときだけ標準条件を計算します。
-   ``maatlog_toc`` ブロックを上書きして標準と異なる条件で TOC を出力するときは、
+  ``maatlog_toc`` ブロックを上書きして標準と異なる条件で TOC を出力するときは、
   同じテンプレートの root-level で ``maatlog_has_toc`` を明示してください。
   手順は下記「 ``maatlog_toc`` を上書きする」を参照してください。
-   ``maatlog.page_kind`` は、同じ要素に ``maatlog-layout-page-normal``、
+  ``maatlog.page_kind`` は、同じ要素に ``maatlog-layout-page-normal``、
   ``maatlog-layout-page-home``、 ``maatlog-layout-page-archive``、
   ``maatlog-layout-page-post`` のいずれかとして出力されます。
   ページ種別クラスと
@@ -97,7 +97,7 @@ Theme API の現在のバージョンは **1.5** です。
 * **任意テンプレート** —  ``maatlog/components/search.html``
 * **任意クラス** — ``.maatlog-search``、 ``.maatlog-search-input``、
   ``.maatlog-taxonomy-list``、 ``.maatlog-taxonomy-item``、
-   ``.maatlog-taxonomy-label``、 ``.maatlog-taxonomy-count``
+  ``.maatlog-taxonomy-label``、 ``.maatlog-taxonomy-count``
 * **任意 CSS カスタムプロパティ** — ``--maatlog-sticky-top``
   （``calc(var(--maatlog-banner-height) + var(--maatlog-space-md))``。sticky なヘッダの
   下端であり、 ``.maatlog-nav`` と  ``.maatlog-toc`` の ``top`` と ``max-height``
@@ -128,7 +128,7 @@ Theme API の現在のバージョンは **1.5** です。
 * **挙動の変更** — カテゴリは  ``maatlog_post_meta`` から
   ``maatlog_post_eyebrow`` へ移りました。
   日時・著者・タグ・外部投稿バッジは
-   ``maatlog_post_meta`` に残ります
+  ``maatlog_post_meta`` に残ります
 * **挙動の変更** — 外部投稿の本文から ``<p class="maatlog-post-excerpt">`` が
   無くなりました。
   抜粋は tagline が出します
@@ -146,16 +146,45 @@ Theme API の現在のバージョンは **1.5** です。
 .. warning::
 
     ``maatlog_post_meta`` が ``<header class="maatlog-post-header">`` の
-   **内側** に移りました。ブロック名・クラス名・その下の入れ子は変わりませんが、
-   ``.maatlog-post-header + .maatlog-post-meta`` のような兄弟セレクタを書いて
-   いる CSS は当たらなくなります。
+    **内側** に移りました。ブロック名・クラス名・その下の入れ子は変わりませんが、
+    ``.maatlog-post-header + .maatlog-post-meta`` のような兄弟セレクタを書いて
+    いる CSS は当たらなくなります。
+
+1.5 から 1.6 で追加された任意の契約:
+
+* **任意マニフェストキー** — ``[maatlog.pygments]`` （後述「シンタックスハイライト」）
+
+1.6 から 1.7 で追加された任意の契約:
+
+* テーマ JavaScript の共有 enhancer レジストリ（ ``window.maatlog`` ）
+* アーカイブの Infinite Scroll と ``maatlog:content-added`` イベント
+
+1.7 から 1.8 で追加された任意の契約:
+
+* ページ Prefetch（ ``<link rel="prefetch">`` ）
+
+1.8 から 1.9 で追加された任意の契約:
+
+* **任意ブロック** — ``maatlog_post_top_image`` （ ``maatlog/post.html`` 、記事の
+  ヒーロー画像）
+* **任意キー** — ``PostView.top_image_url`` / ``PostView.top_image_alt``、
+  ``SiteView.top_image_title_font``
+* **任意クラス** — ``maatlog-post-top-image`` とその子
+  ``maatlog-post-top-image-img`` / ``-overlay`` / ``-title``
+* **任意 CSS カスタムプロパティ** — ``--maatlog-top-image-title-color``、
+  ``--maatlog-top-image-title-font``
+
+``maatlog_post_top_image`` を上書きするテーマは、``maatlog_post_header`` の
+``<h1>`` の可視性も併せて調整してください。標準実装は
+``maatlog.post.top_image_url`` があるとき ``<h1>`` に
+``maatlog-visually-hidden`` を付け、タイトルをオーバーレイ側で描画します
 
 必須テンプレートと必須ブロックは 1.0 から変わっていません。
 ``api = "1.0"``、
-``api = "1.1"``、 ``api = "1.2"``、 ``api = "1.3"``、 ``api = "1.4"`` を宣言するテーマは引き続き検証を通ります。
+``api = "1.1"``、 ``api = "1.2"``、 ``api = "1.3"``、 ``api = "1.4"``、 ``api = "1.5"``、 ``api = "1.6"``、 ``api = "1.7"``、 ``api = "1.8"``、 ``api = "1.9"`` を宣言するテーマは引き続き検証を通ります。
 ただし
 ``implementation = "inherits-base"`` のテーマは、宣言する API に関わらず
- ``maatlog-base`` の新しいページ外枠・配色トークン・テーマ JavaScript を継承します。
+``maatlog-base`` の新しいページ外枠・配色トークン・テーマ JavaScript を継承します。
 描画結果は以前のマイナーと同じにはならず、下記「``maatlog_sidebar`` ブロックの位置」の
 移行が必要な場合があります
 
@@ -168,14 +197,14 @@ Theme API の現在のバージョンは **1.5** です。
     api = "1.0"
     implementation = "inherits-base"
 
- ``implementation`` の値:
+``implementation`` の値:
 
 * ``inherits-base`` — Sphinx の継承チェーンに  ``maatlog-base`` を含む
-*  ``standalone`` —  ``maatlog-base`` を継承せず、必須テンプレートをすべてテーマ自身が
+* ``standalone`` —  ``maatlog-base`` を継承せず、必須テンプレートをすべてテーマ自身が
   同梱する
 
- ``[maatlog]`` 配下の未知のキーは、前方互換性のために無視されます。
- ``[maatlog]``、
+``[maatlog]`` 配下の未知のキーは、前方互換性のために無視されます。
+``[maatlog]``、
 ``api``、 ``implementation`` は必須です。
 親テーマだけがマニフェストを持っていても
 不十分で、最終的に選択されたテーマ自身が API 対応を宣言しなければなりません
@@ -183,7 +212,7 @@ Theme API の現在のバージョンは **1.5** です。
 公式テーマ
 ----------
 
-*  ``maatlog-base`` — 契約の実装（Sphinx の ``basic`` を継承）
+* ``maatlog-base`` — 契約の実装（Sphinx の ``basic`` を継承）
 * ``maatlog-default`` — すぐに使えるテーマ（ ``maatlog-base`` を継承）
 
 デフォルトテーマは次のように有効化します::
@@ -206,7 +235,7 @@ Theme API
 ページ外枠
 ----------
 
- ``maatlog-base`` は ``layout.html`` を同梱し、Sphinx ``basic`` テーマの
+``maatlog-base`` は ``layout.html`` を同梱し、Sphinx ``basic`` テーマの
 ``header``、 ``content``、 ``relbar1``、 ``relbar2`` を上書きします。
 可視出力は
 次の順序です
@@ -217,7 +246,7 @@ Theme API
    右目次 ( ``maatlog_toc``) を出力するページだけ、右目次を加えた
    3 カラム
 
- ``relbar1`` と  ``relbar2`` はどちらも空にしてあり、Sphinx の関連リンク帯は
+``relbar1`` と  ``relbar2`` はどちらも空にしてあり、Sphinx の関連リンク帯は
 出力しません。
 可視ナビゲーションは MaatLog のバナー、サイドバー、投稿前後ナビ、
 アーカイブページャが提供します
@@ -229,8 +258,14 @@ Theme API
 
 ``--maatlog-content-width`` と ``--maatlog-main-width`` は派生テーマが行長や中央列の
 上限を置くための任意プロパティです。
+公式テーマは両方を ``clamp()`` で定義し、viewport が広がるにつれて
+下限（従来の固定値）から上限まで fluid に伸ばします。
+``content-width`` は prose（段落・見出し・リスト等）の最大行長、
+``main-width`` は派生テーマが中央列の望ましい幅を示すためのトークンです。
 公式 default の wide layout は中央列を ``1fr``
 にし、余剰の viewport 幅を main へ渡します。
+常に ``main-width`` の計算値は ``content-width`` より大きく、
+コード・表・図は prose より広い main を使えます。
 投稿・アーカイブ外枠、カード一覧、
 通常ページ本文、投稿本文はいずれも main 幅を使います。
 左右 nav/TOC の最大幅は
@@ -259,7 +294,7 @@ Theme API 1.2 から、 ``maatlog/components/sidebar.html`` の出力はレイ�
 既定の ``localtoc.html`` が右
 サイドバーと目次を二重に表示してしまう為です。
 左ナビを拡張するときは
- ``maatlog_nav`` ブロックを上書きしてください::
+``maatlog_nav`` ブロックを上書きしてください::
 
     {%- extends "maatlog-base/layout.html" -%}
 
@@ -273,7 +308,7 @@ Theme API 1.2 から、 ``maatlog/components/sidebar.html`` の出力はレイ�
 可視 toctree に明示した文書は MaatLog の公開状態では再フィルター
 しないため、draft / scheduled 投稿を可視 toctree に入れるとタイトルも表示されます
 
- ``maatlog_toc`` を上書きする
+``maatlog_toc`` を上書きする
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 右目次を標準と異なる条件で出すときは、同じ ``layout.html`` の root-level で
@@ -305,11 +340,11 @@ Theme API 1.2 から、 ``maatlog/components/sidebar.html`` の出力はレイ�
 必須テンプレート
 ----------------
 
-*  ``maatlog/post.html``
+* ``maatlog/post.html``
 * ``maatlog/archive.html``
 * ``maatlog/components/post-card.html``
 * ``maatlog/components/pagination.html``
-*  ``maatlog/components/sidebar.html``
+* ``maatlog/components/sidebar.html``
 * ``maatlog/components/feed-links.html``
 
 ``post.html`` と ``archive.html`` は完全なページテンプレートです（``layout.html``
@@ -331,12 +366,12 @@ Theme API 1.2 から、 ``maatlog/components/sidebar.html`` の出力はレイ�
   アーカイブルートの 1 ページ目が引き受け、その  ``is_home`` が真になります
 * ``maatlog/components/post-grid.html`` — featured グリッドと通常カード一覧。
   ``cards`` と任意の ``featured_count`` を受け取り、 ``maatlog`` 名前空間は読みません
-*  ``maatlog/components/search.html`` — 検索フォーム。
-   ``banner.html`` から
+* ``maatlog/components/search.html`` — 検索フォーム。
+  ``banner.html`` から
   ``include`` されます
 * ``maatlog/components/theme-toggle.html`` — バナーのテーマ切替ボタン。
-   ``banner.html`` から ``include`` されます。
-   差し替えるテーマは、自身の
+  ``banner.html`` から ``include`` されます。
+  差し替えるテーマは、自身の
   テンプレートディレクトリに同名ファイルを置いてください
 
 必須の Jinja ブロック
@@ -395,7 +430,7 @@ MaatLog のすべてのテンプレートは、トップレベルの  ``maatlog`
 
 ::
 
-    maatlog.api_version   # "1.5"
+    maatlog.api_version   # "1.9"
     maatlog.version       # MaatLog ディストリビューションのバージョン（例 "0.1.0"）
     maatlog.page_kind     # "post" | "archive" | "home" | "normal"
     maatlog.post          # PostView | None
@@ -407,17 +442,22 @@ MaatLog のすべてのテンプレートは、トップレベルの  ``maatlog`
     maatlog.taxonomies    # TaxonomyNavigationView
     maatlog.site          # SiteView
 
-**SiteView** のフィールド: ``title``、 ``tagline``、 ``archive_url``。
- ``archive_url`` はそのページからアーカイブルート 1 ページ目への相対 URL です
+**SiteView** のフィールド: ``title``、 ``tagline``、 ``archive_url``、
+``top_image_title_font``。
+``archive_url`` はそのページからアーカイブルート 1 ページ目への相対 URL です。
+``top_image_title_font`` は ``maatlog_top_image_title_font`` の値で、未設定なら
+``None`` です
 
 **PostView** のフィールド: ``title``、 ``slug``、 ``docname``、 ``page_url``、
 ``canonical_url``、 ``external_url``、 ``published_at``、 ``expires_at``、
 ``excerpt``、 ``image_url``、 ``tags``、 ``categories``、 ``authors``、
-``body_html``、 ``taxonomies`` （``PostTaxonomiesView``）
+``body_html``、 ``taxonomies`` （``PostTaxonomiesView``）、 ``top_image_url``、
+``top_image_alt``。
+``top_image_url`` はヒーロー画像への相対 URL で、指定がなければ ``None`` です
 
 **PostCardView** のフィールド: ``title``、 ``page_url``、 ``published_at``、
 ``excerpt``、 ``image_url``、 ``tags``、 ``categories``、 ``authors``、
- ``external_url``、 ``slug``、 ``taxonomies`` （``PostTaxonomiesView``）
+``external_url``、 ``slug``、 ``taxonomies`` （``PostTaxonomiesView``）
 
 **PostTaxonomiesView** のフィールドは  ``tags``、 ``categories``、 ``authors``
 で、各要素は **TaxonomyLinkView** （ ``id``、 ``label``、 ``url``）です。
@@ -483,18 +523,18 @@ MaatLog のコアは必須の JavaScript を同梱しません。
 * ``.maatlog-post-featured`` — トップで先頭 3 件を並べるグリッド
 * ``.maatlog-post-card-featured`` — featured として描画された投稿カード
 * ``.maatlog-post-list-heading`` — featured の下に続く一覧の見出し
-*  ``.maatlog-post-grid`` — featured 以外のカードを並べるグリッド
+* ``.maatlog-post-grid`` — featured 以外のカードを並べるグリッド
 * ``.maatlog-post-eyebrow`` — タイトルの上に出るカテゴリ
-*  ``.maatlog-post-tagline`` — タイトルの下に出る抜粋
+* ``.maatlog-post-tagline`` — タイトルの下に出る抜粋
 * ``.maatlog-post-hero-image`` — 記事ヘッダ末尾の装飾画像（``alt=""``）
 * ``.maatlog-pagination-more`` — 次ページへの文章による導線
 * ``.maatlog-taxonomy-more``、 ``.maatlog-taxonomy-year`` — サイドバーの折り畳み
 * ``.maatlog-taxonomy-list``、 ``.maatlog-taxonomy-item``、 ``.maatlog-taxonomy-label``、
-   ``.maatlog-taxonomy-count`` — サイドバーのタクソノミー一覧と項目
+  ``.maatlog-taxonomy-count`` — サイドバーのタクソノミー一覧と項目
 * ``.maatlog-taxonomy-link`` — 投稿・カードのタクソノミーリンク（または URL が
   空のときの ``span``）
 * ``.maatlog-search``、 ``.maatlog-search-input`` — 検索フォームと検索入力欄
-*  ``.maatlog-home-intro`` — ホームのユーザ本文
+* ``.maatlog-home-intro`` — ホームのユーザ本文
 * ``.maatlog-home-archive-link`` — ホーム末尾からアーカイブルートへの導線
 * ``.maatlog-banner-actions`` — バナー右側の操作領域（検索欄とテーマ切替）
 * ``.maatlog-theme-toggle`` — テーマ切替ボタン。
@@ -503,6 +543,64 @@ MaatLog のコアは必須の JavaScript を同梱しません。
 * ``.maatlog-theme-toggle-icon-light`` / ``.maatlog-theme-toggle-icon-dark`` —
   現在のテーマを示す装飾アイコン（``aria-hidden="true"``）
 * ``.maatlog-theme-toggle-label`` — 支援技術向けの可視テキスト（視覚的には隠されます）
+* ``.maatlog-author-links``、 ``.maatlog-author-link-item``、 ``.maatlog-author-link``、
+  ``.maatlog-author-link-icon`` — 著者の外部リンクとその内蔵アイコン
+
+著者リンク
+~~~~~~~~~~
+
+``maatlog-base`` は著者の外部リンクを描画する ``maatlog/components/author-links.html`` を提供します。
+これは必須テンプレートではありません。
+``REQUIRED_TEMPLATES`` には含まれず、Theme API のバージョンも変わりません
+
+コンポーネントは変数 ``maatlog_author_links`` を受け取ります。
+各要素は **AuthorLinkView** （ ``type``、 ``url``、 ``label``、 ``icon``）です。
+``maatlog_author_links`` が空または未定義のときは何も出力しません
+
+出力の契約は次のとおりです
+
+* ルート要素は ``<ul class="maatlog-author-links" data-maatlog-component="author-links">`` です
+* 各リンクは ``rel="noopener"`` と ``data-maatlog-link-type`` を持ちます
+* アイコンはインライン ``<svg>`` で出力し、 ``aria-hidden="true"`` と ``focusable="false"`` を持ちます
+* アクセシブルな名前は ``.maatlog-visually-hidden`` のテキストで与えます
+* 色は ``currentColor`` に追従するため、ライトとダークの双方で成立します
+
+``icon`` は ``github``、 ``x``、 ``bluesky``、 ``rss``、 ``website``、 ``link`` のいずれかです。
+``link`` は既知でない種別と ``linkedin`` の双方が使う汎用アイコンです
+
+投稿カードのクリック領域
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+公式テーマは、投稿カードの主要領域全体をクリックすると記事ページへ遷移するように
+しています。
+実装は CSS だけで、JavaScript には依存しません
+
+* ``.maatlog-post-card`` は ``position: relative`` を持ちます
+* ``.maatlog-post-card-title`` の ``<a>`` は ``::after`` を
+  ``position: absolute; inset: 0`` で敷き、カード全体をその ``<a>`` の
+  クリック領域にします（記事リンクは 1 本のままなので、タブストップは増えません）
+* ``.maatlog-post-card-meta`` の ``<a>`` は ``position: relative; z-index: 1`` で
+  この面より前に出し、タグ・カテゴリ・著者ページへのリンクを保ちます
+
+この ``::after`` は投稿カードのクリック領域を広げるための実装です。
+外部リンクアイコンなどの目的で、タイトルの ``<a>`` に独自の ``::after`` を
+追加してはいけません。
+上書きすると、クリック領域を広げる仕組みそのものが
+失われます
+
+``maatlog.css`` の実装を継承・保持するテーマがカード内に独自のリンクや
+ボタンを追加する場合は、同じく ``position: relative; z-index: 1`` を
+与えてください。
+与えないと、その要素は記事リンクの面に覆われて記事ページへ
+遷移します。
+スタイルシートを丸ごと置き換え、この挙動自体を提供しないテーマ
+にはこの指示は適用されません。
+また、タイトルの ``<a>`` 自身に ``position`` を与えてはいけません。
+``inset: 0`` の基準がカードではなくタイトル文字の矩形になり、
+クリック領域が広がらなくなります
+
+この方式の代償として、カード上のテキストはドラッグ選択できなくなります。
+記事本文ページの文章は通常どおり選択できます
 
 テーマ JavaScript
 ~~~~~~~~~~~~~~~~~
@@ -514,7 +612,7 @@ Theme API 1.3 から、 ``maatlog-base`` は ``static/maatlog.js`` を同梱し�
 このスクリプトは次を行います
 
 * ``<html>`` に ``class="maatlog-js"`` を付ける（JavaScript が動いている目印）
-*  ``localStorage`` の ``maatlog-theme`` （``"light"`` / ``"dark"``）を読み、
+* ``localStorage`` の ``maatlog-theme`` （``"light"`` / ``"dark"``）を読み、
   値があれば ``<html data-theme=...>`` を設定する
 * Sphinx が出力する ``<link id="pygments_dark_css">`` の ``media`` を、
   明示選択に合わせて ``"all"`` / ``"not all"`` に書き換える
@@ -527,15 +625,71 @@ Theme API 1.3 から、 ``maatlog-base`` は ``static/maatlog.js`` を同梱し�
   ``aria-pressed``  の同期を行う（ページの再読み込みは発生しません）
 * 保存済みの選択が無い間だけ、OS 設定の変更に追従して ``aria-pressed``  を更新する
 
- ``localStorage`` が利用できない環境（プライベートウィンドウ等）では未設定として扱い、
- ``prefers-color-scheme`` による表示にフォールバックします。
- 書き込みに失敗した場合も
+``localStorage`` が利用できない環境（プライベートウィンドウ等）では未設定として扱い、
+``prefers-color-scheme`` による表示にフォールバックします。
+書き込みに失敗した場合も
 そのページ内での切替は動作し、選択が次のページへ引き継がれないだけです
+
+共有 enhancer レジストリ
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+Theme API 1.7 から、 ``maatlog.js`` は機能を 1 つの仕組みに登録します。
+``window.maatlog`` に次の 2 つを公開します
+
+* ``registerEnhancer(name, { selector, apply })`` —
+  ``selector`` に一致する要素へ ``apply(element)`` を適用する機能を登録する
+* ``enhance(root)`` — ``root`` （既定は ``document`` ）とその子孫のうち、
+  まだ適用されていない要素へ登録済みの機能をすべて適用する
+
+``enhance`` は冪等です。
+同じ要素へ二度適用されることはないため、
+Infinite Scroll が追加した DOM に対して繰り返し呼べます。
+機能が例外を投げても、その機能だけが止まり、ページと他の機能は動き続けます
+
+アーカイブの Infinite Scroll
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Theme API 1.7 から、 ``maatlog-base`` はアーカイブ系ページで次ページを
+自動的に読み込みます。
+``[data-maatlog-component="archive"]`` の中に
+``.maatlog-post-list`` と ``.maatlog-pagination-next`` の両方がある場合だけ働きます
+
+* JavaScript が ``.maatlog-infinite-sentinel`` （ ``aria-hidden="true"`` ）と
+  ``.maatlog-infinite-status`` （ ``role="status"`` ・ ``aria-live="polite"`` ）を生成する
+* sentinel が近づくと次ページを取得し、投稿カードを既存の
+  ``.maatlog-post-grid`` へ追加して、 ``.maatlog-pagination`` の中身を
+  取得先のものへ差し替える
+* 追加したカードごとに ``enhance()`` を呼び、pagination を差し替えたあと
+  ``maatlog:content-added`` （ ``detail`` は ``{ cards, url }`` 、bubbles）を発火する
+* 取得に失敗した場合と最終ページに達した場合は監視を終了する。
+  ``.maatlog-pagination`` は削除も改変もされないため、
+  読者はいつでも通常のページ送りで進めます
+
+JavaScript を無効にした場合、sentinel も通知領域も生成されず、
+Sphinx が出力した通常の pagination がそのまま機能します
+
+ページ Prefetch
+^^^^^^^^^^^^^^^
+
+Theme API 1.8 から、 ``maatlog-base`` は次に開きそうな同一 origin のページを
+``<link rel="prefetch">`` で事前取得します。 URL の決定（Planner）と
+取得（Fetcher）は分離しており、取得方式は将来 Speculation Rules へ差し替えられます
+
+* 自動対象: 記事の ``.maatlog-nav-newer`` / ``.maatlog-nav-older``、
+  アーカイブの ``.maatlog-pagination-next``
+* 意図ベース: 同一 origin の内部リンクへの ``mouseenter`` / ``focusin``
+* 除外: 外部 origin、 ``mailto:`` / ``tel:`` / ``javascript:``、
+  ``download`` 付き、現在ページ自身、 hash だけが異なる同一ページ
+* ``navigator.connection.saveData`` または ``effectiveType`` が
+  ``slow-2g`` / ``2g`` のときは抑制する（ API 非対応環境では抑制しない）
+* 同じ URL は一度だけ Prefetch する。失敗しても通常の ``<a href>`` 遷移は維持する
+* Infinite Scroll が ``maatlog:content-added`` を発火したあとは、
+  更新後の ``.maatlog-pagination-next`` を改めて Prefetch 対象にする
 
 CSS カスタムプロパティ
 ----------------------
 
- ``maatlog-base`` は少なくとも次を定義します:
+``maatlog-base`` は少なくとも次を定義します:
 
 * ``--maatlog-content-width``
 * ``--maatlog-sidebar-width``
@@ -579,8 +733,8 @@ JavaScript が
 常にライトのまま残ります
 
 リンク色はセマンティッククラスの付いた要素だけでなく ``a`` 全体に
- ``--maatlog-color-link`` を適用します。
- Sphinx 自身が出力する toctree・サイドバー・
+``--maatlog-color-link`` を適用します。
+Sphinx 自身が出力する toctree・サイドバー・
 本文リンクにユーザーエージェント既定の青／訪問済み紫が残ると、ダーク地では
 コントラスト比を満たせないためです
 
@@ -600,10 +754,17 @@ Theme API 1.5 から、テーマは複数の配色を提供できます。
 テーマは提供するパレットと既定を ``maatlog-theme.toml`` で宣言します::
 
     [maatlog]
-    api = "1.5"
+    api = "1.6"
     implementation = "standalone"
     default_palette = "indigo"
     palettes = ["indigo", "github", "solarized", "nord", "neon"]
+
+    [maatlog.pygments]
+    indigo = "github-dark"
+    github = "github-dark"
+    solarized = "solarized-dark"
+    nord = "nord-darker"
+    neon = "dracula"
 
 * ``palettes`` は提供するパレット名の一覧、 ``default_palette`` はそのうちの 1 つ
   でなければなりません。
@@ -651,7 +812,14 @@ Theme API 1.5 から、テーマは複数の配色を提供できます。
 テーマの既定値にフォールバックし、2 つのパレットが混ざった配色になります
 
 文字とその背景の組み合わせには WCAG 2.2 の AA（4.5:1）を、操作できる部品の境界である
- ``--maatlog-color-control-border`` には 3:1 を課します
+``--maatlog-color-control-border`` には 3:1 を課します
+
+リテラルブロックの地色 ``--maatlog-code-background`` はモードごとに向きが違います。
+ライトではページ地色より暗い「沈んだ面」を保ち、ダークでは
+``--maatlog-color-surface`` と同じ値にしてカードと同じ「浮いた面」にします。
+ダークでページ地色へ沈めると面として判別できないためです。
+第三者テーマがパレットを追加するときも、ダーク 2 ブロックでは
+``--maatlog-code-background`` を ``--maatlog-color-surface`` に揃えてください
 
 装飾トークンには最低コントラスト比を課しません。
 対象は ``--maatlog-color-border``、
@@ -661,6 +829,28 @@ Theme API 1.5 から、テーマは複数の配色を提供できます。
 3:1 を課すと、すべてのパレットが
 強いグレー線の外観に固定されてしまいます
 
+Pygments のシンタックストークン色にも最低コントラスト比を課しません。
+理由は 3 つです
+
+1. 情報が色に依存していません。
+   コードの全文字は ``--maatlog-code-text`` ×
+   ``--maatlog-code-background`` で描かれる地の色を持ち、この組には AA を課してあります。
+   ハイライトはその上に載る冗長な符号化であり、色を失っても内容は読めます。
+   WCAG
+   1.4.1（色の使用）に抵触しません
+2. 装飾トークンと同じ線引きです。
+   ``--maatlog-color-border`` などを最低比の対象外に
+   したのと同じ論法が当てはまります
+3. 課すと成立しません。
+   パレットの同一性を保つスタイル（ ``solarized`` に
+   ``solarized-dark`` など）はいずれも AA を満たしません。
+   課す場合は 5 パレット分の
+   ``.highlight`` CSS を自前で調色することになります
+
+既定 ``indigo`` × ``github-dark`` のライト側最小比は 3.89:1 です。
+この線引きは現状の
+追認であり、新たな後退ではありません
+
 公式テーマのパレット
 ^^^^^^^^^^^^^^^^^^^^
 
@@ -668,29 +858,69 @@ Theme API 1.5 から、テーマは複数の配色を提供できます。
 
 .. list-table::
    :header-rows: 1
-   :widths: 20 80
+   :widths: 15 20 65
 
    * - 名前
+     - Pygments
      - 説明
    * - ``indigo``
+     - ``github-dark``
      - 既定。青紫のリンクに青緑のアクセント
    * - ``github``
+     - ``github-dark``
      - GitHub Primer から着想した派生。青のリンクに紫のアクセント
    * - ``solarized``
+     - ``solarized-dark``
      - Solarized（Ethan Schoonover, MIT）から着想した派生。ベージュの地に低彩度の青と黄
    * - ``nord``
+     - ``nord-darker``
      - Nord（Arctic Ice Studio, MIT）から着想した派生。寒色の灰青に落ち着いた青緑
    * - ``neon``
+     - ``dracula``
      - MaatLog 独自。黒地にビビッドなピンク
 
 ``github`` / ``solarized`` / ``nord`` は既存の配色から着想を得た派生であり、公式配色
 そのものではありません。
 ``neon`` は MaatLog 独自の配色で、出典を持ちません
 
-シンタックスハイライトはパレットに追従しません。
-コードブロックの枠（背景・境界・
-文字色）はパレットのトークンに従いますが、Pygments のスタイルは ``theme.conf`` の
- ``pygments_style`` / ``pygments_dark_style`` が決めます
+Pygments のスタイルは Pygments 同梱のものを名前で参照するだけで、色の定義を MaatLog に
+取り込んではいません
+
+シンタックスハイライト
+^^^^^^^^^^^^^^^^^^^^^^
+
+Theme API 1.6 から、パレットは当てる Pygments スタイルを宣言できます。
+``[maatlog.pygments]`` はパレット名から Pygments のスタイル名への対応表です
+
+* 任意の契約です。
+  テーブルを持たないテーマは ``theme.conf`` の ``pygments_style`` /
+  ``pygments_dark_style`` で従来どおり動きます
+* 部分宣言を許します。
+  テーブルに現れないパレットは ``theme.conf`` にフォールバックします
+* キーは ``palettes`` に宣言済みの名前でなければなりません。
+  ``palettes`` を宣言せずに
+  ``[maatlog.pygments]`` だけを置くこともできません。
+  いずれも
+  ``maatlog.theme.manifest-invalid`` で失敗します
+* 値は Pygments が解決できるスタイル名でなければなりません。
+  解決できない名前は
+  ``maatlog.theme.pygments-style-unknown`` で失敗します。
+  検証は宣言された
+  すべてのパレットに対して行います
+* パレット宣言と同じく、継承チェーンを辿って最初に見つかった宣言を使います
+
+ライトとダークで同じスタイルを当てます。
+MaatLog はライトモードでもコードブロックの
+地色を暗色にしており、両モードで必要なものが同じダーク系スタイルだからです
+
+``conf.py`` で ``pygments_style`` を明示したサイトでは、MaatLog はハイライタに一切
+触れません。
+ライトだけを作者の指定にしてダークをパレット由来にすると、対にならない
+2 枚のスタイルシートが出るためです
+
+出力ファイル名は ``_static/pygments.css`` / ``_static/pygments_dark.css`` のまま変わり
+ません。
+Light / Dark トグルの ``media`` 切り替えも従来どおりです
 
 検証
 ----
@@ -709,3 +939,8 @@ Jinja ブロック、そして ``static/maatlog.css`` が解決できること�
 ``maatlog_palette`` を指定した場合は ``maatlog.theme.palette-unsupported``、テーマが
 提供しない名前を指定した場合は ``maatlog.theme.palette-unknown`` で失敗し、いずれも
 そのテーマで利用できるパレット名を示します
+
+``[maatlog.pygments]`` が宣言する Pygments スタイル名も同じ経路で検証します。
+解決できない
+名前は ``maatlog.theme.pygments-style-unknown`` で失敗し、選択中のパレットに限らず宣言
+されたすべてのパレットを検査します

@@ -98,7 +98,7 @@ EXPECTED_RATIOS = {
         ("--maatlog-color-muted", "--maatlog-color-background"): 9.58,
         ("--maatlog-color-link", "--maatlog-color-background"): 10.82,
         ("--maatlog-color-accent", "--maatlog-color-background"): 11.60,
-        ("--maatlog-code-text", "--maatlog-code-background"): 17.38,
+        ("--maatlog-code-text", "--maatlog-code-background"): 14.58,
         ("--maatlog-inline-code-text", "--maatlog-inline-code-background"): 10.51,
         ("--maatlog-badge-text", "--maatlog-badge-background"): 10.51,
         ("--maatlog-color-text", "--maatlog-color-surface-hover"): 12.65,

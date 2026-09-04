@@ -1,0 +1,8 @@
+[maatlog]
+api = "1.6"
+implementation = "standalone"
+default_palette = "plain"
+palettes = ["plain", "fancy"]
+
+[maatlog.pygments]
+fancy = "dracula"

@@ -38,11 +38,30 @@
   {%- for feed in maatlog.feeds -%}
   <link rel="alternate" type="application/atom+xml" title="{{ feed.title|e }}" href="{{ feed.url|e }}" />
   {%- endfor -%}
+  {%- if maatlog.site and maatlog.site.top_image_title_font -%}
+  {#- <style> is a raw text element: HTML escaping here would corrupt valid CSS.
+      maatlog_top_image_title_font is validated in config.py instead. -#}
+  <style>:root { --maatlog-top-image-title-font: {{ maatlog.site.top_image_title_font }}; }</style>
+  {%- endif -%}
   {%- endblock maatlog_head -%}
 {%- endblock extrahead -%}
 
 {%- block body -%}
 <article class="maatlog-post" data-maatlog-component="post">
+  {#- Hero image from maattop directive. Theme API 1.9, optional. -#}
+  {%- block maatlog_post_top_image -%}
+  {%- if maatlog.post and maatlog.post.top_image_url -%}
+  <div class="maatlog-post-top-image" data-maatlog-component="post-top-image">
+    <img class="maatlog-post-top-image-img"
+         src="{{ maatlog.post.top_image_url|e }}"
+         alt="{{ maatlog.post.top_image_alt|e }}" />
+    <div class="maatlog-post-top-image-overlay" aria-hidden="true"></div>
+    <div class="maatlog-post-top-image-title">
+      <span aria-hidden="true">{{ maatlog.post.title|e }}</span>
+    </div>
+  </div>
+  {%- endif -%}
+  {%- endblock maatlog_post_top_image -%}
   {%- block maatlog_post_header -%}
   <header class="maatlog-post-header">
     {#- Category sits above the title as an eyebrow. Theme API 1.4, optional. -#}
@@ -54,7 +73,7 @@
     {%- endif -%}
     {%- endblock maatlog_post_eyebrow -%}
 
-    <h1>{{ maatlog.post.title|e if maatlog.post else title|e }}</h1>
+    <h1{% if maatlog.post and maatlog.post.top_image_url %} class="maatlog-visually-hidden"{% endif %}>{{ maatlog.post.title|e if maatlog.post else title|e }}</h1>
 
     {#- The excerpt doubles as the tagline. Theme API 1.4, optional. -#}
     {%- block maatlog_post_tagline -%}

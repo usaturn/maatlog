@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 import pickle
 from collections.abc import Collection, Iterator
@@ -10,6 +12,7 @@ from sphinx import addnodes
 from sphinx.application import Sphinx
 from sphinx.config import Config
 from sphinx.environment import BuildEnvironment
+from sphinx.highlighting import PygmentsBridge
 from sphinx.util import logging
 from sphinx.util.typing import ExtensionMetadata
 
@@ -26,6 +29,7 @@ from .directives import (
     html_depart_post_list,
     html_visit_post_list,
     latex_visit_post_list,
+    maattop_node,
     post_list,
     process_post_list_nodes,
     text_visit_post_list,
@@ -46,12 +50,12 @@ from .html_metadata import (
     prepare_body_fragment_store,
     resolved_baseurl,
 )
-from .metadata import capture_source, cleanup_sources, collect_post
+from .metadata import capture_source, cleanup_sources, collect_maattop_from_myst, collect_post
 from .model import Post
 from .navigation import PostTaxonomyLinker, neighbors, post_taxonomy_linker, taxonomy_navigation
 from .outputs import commit_page_outputs
 from .taxonomy import DomainIndex
-from .theme_api import resolve_palette, validate_selected_theme
+from .theme_api import resolve_palette, resolve_pygments_style, validate_selected_theme
 from .version import PACKAGE_VERSION
 from .views import (
     FeedLinkView,
@@ -99,6 +103,30 @@ def link_palette_stylesheet(app: Sphinx) -> None:
     if stylesheet is None:
         return
     app.add_css_file(stylesheet, priority=500)
+
+
+def apply_pygments_style(app: Sphinx) -> None:
+    """Swap the builder's highlighters for the palette's Pygments style.
+
+    ``StandaloneHTMLBuilder.init_highlighter`` runs inside ``builder.init()``,
+    before ``builder-inited``, and takes the dark style from the theme only.
+    Replacing the bridges here still lands: ``create_pygments_style_file`` reads
+    them in the finish phase.
+
+    ``dark_highlighter`` is swapped only when the builder already has one.
+    ``init_css_files`` registers the ``pygments_dark.css`` link during
+    ``init()``; creating a dark highlighter now would write a stylesheet that
+    no page links, and clearing one would leave a link with nothing behind it.
+    """
+    style = resolve_pygments_style(app)
+    if style is None:
+        return
+    builder: Any = app.builder
+    if getattr(builder, "highlighter", None) is None:
+        return
+    builder.highlighter = PygmentsBridge("html", style)
+    if getattr(builder, "dark_highlighter", None) is not None:
+        builder.dark_highlighter = PygmentsBridge("html", style)
 
 
 def initialize_build_time(app: Sphinx, config: Config) -> None:
@@ -269,6 +297,9 @@ def inject_maatlog_page_context(
     )
     feeds = _post_discovery_feeds(app, post, config=config, index=index)
     page_url = absolute_doc_url(app, pagename)
+    maattop_data = domain.maattop_for(pagename)
+    top_image_url = image_url_for(app.builder, pagename, maattop_data["uri"]) if maattop_data else None
+    top_image_alt = maattop_data["alt"] if maattop_data else ""
     maatlog_context = build_post_context(
         post,
         body_html=body_html,
@@ -279,6 +310,8 @@ def inject_maatlog_page_context(
         taxonomies=taxonomies,
         site=site,
         post_taxonomies=linker.for_post(post),
+        top_image_url=top_image_url,
+        top_image_alt=top_image_alt,
     )
     context["maatlog"] = as_template_mapping(maatlog_context)
     # Suppress Sphinx basic-theme ``pageurl`` canonical; ``maatlog_head`` owns it
@@ -409,6 +442,7 @@ def _site_view(app: Sphinx, pagename: str, config: MaatlogConfig) -> SiteView:
         title=str(getattr(app.config, "project", "") or ""),
         tagline=config.tagline,
         archive_url=relative_page_url_for(app.builder, pagename, config.archive_docname),
+        top_image_title_font=config.top_image_title_font,
     )
 
 
@@ -444,6 +478,44 @@ def collect_post_lists(app: Sphinx, doctree: nodes.document) -> None:
     docname = app.env.current_document.docname
     domain = cast(MaatlogDomain, app.env.get_domain("maatlog"))
     domain.note_post_list(docname)
+
+
+def collect_maattop(app: Sphinx, doctree: nodes.document) -> None:
+    """Remove ``maattop_node`` from doctree; store the first in the Domain.
+
+    Runs on ``doctree-read`` at priority 102 (after collect_post_lists at 101).
+    The first ``maattop_node`` is recorded in the domain; subsequent ones
+    produce a warning and are discarded. All nodes are removed from the tree.
+    """
+    maattop_nodes = list(doctree.findall(maattop_node))
+    if not maattop_nodes:
+        return
+
+    docname = app.env.current_document.docname
+    domain = cast(MaatlogDomain, app.env.get_domain("maatlog"))
+
+    first, *rest = maattop_nodes
+    existing = domain.maattop_for(docname)
+    if existing is not None:
+        logger.warning(
+            "Both maattop directive and maatlog-top-image front matter found in %r; the directive takes precedence.",
+            docname,
+            type="maatlog",
+            subtype="maattop.duplicate",
+        )
+    domain.note_maattop(docname, uri=str(first["uri"]), alt=str(first.get("alt", "")))
+
+    for duplicate in rest:
+        logger.warning(
+            "Multiple maattop directives found in %r; only the first is used.",
+            docname,
+            location=(duplicate.source, duplicate.line),
+            type="maatlog",
+            subtype="maattop.duplicate",
+        )
+
+    for node in maattop_nodes:
+        node.parent.remove(node)
 
 
 type ToctreeShape = tuple[tuple[tuple[str, str], ...], bool, int | None, str, bool]
@@ -616,6 +688,10 @@ def finalize_generated_outputs(app: Sphinx, exception: Exception | None) -> None
                 raise
 
 
+def _visit_maattop(self: Any, node: maattop_node) -> None:  # type: ignore[type-arg]
+    raise nodes.SkipNode
+
+
 def setup(app: Sphinx) -> ExtensionMetadata:
     app.require_sphinx("9.1")
     app.setup_extension("myst_parser")
@@ -628,16 +704,27 @@ def setup(app: Sphinx) -> ExtensionMetadata:
         man=(text_visit_post_list, None),
         texinfo=(text_visit_post_list, None),
     )
+    app.add_node(
+        maattop_node,
+        html=(_visit_maattop, None),
+        latex=(_visit_maattop, None),
+        text=(_visit_maattop, None),
+        man=(_visit_maattop, None),
+        texinfo=(_visit_maattop, None),
+    )
     register_config(app)
     _register_bundled_themes(app)
     app.connect("config-inited", initialize_build_time)
     app.connect("builder-inited", warn_partial_support_once)
     app.connect("builder-inited", validate_selected_theme)
     app.connect("builder-inited", link_palette_stylesheet)
+    app.connect("builder-inited", apply_pygments_style)
     app.connect("builder-inited", _initialize_html_metadata)
     app.connect("source-read", capture_source, priority=999)
+    app.connect("doctree-read", collect_maattop_from_myst, priority=99)
     app.connect("doctree-read", collect_post, priority=100)
     app.connect("doctree-read", collect_post_lists, priority=101)
+    app.connect("doctree-read", collect_maattop, priority=102)
     app.connect("env-get-outdated", force_post_docs_outdated_for_feeds)
     app.connect("env-purge-doc", purge_doc)
     app.connect("env-merge-info", merge_info)
@@ -655,10 +742,10 @@ def setup(app: Sphinx) -> ExtensionMetadata:
     app.connect("build-finished", commit_html_shell_fingerprint)
     return {
         "version": PACKAGE_VERSION,
-        # 2: the domain now tracks ``post_list_docnames``. Environments
-        # pickled before the key existed would leave post-list pages stale,
+        # 3: the domain now tracks ``maattop_by_docname``. Environments
+        # pickled before the key existed would leave maattop pages stale,
         # so force one full rebuild to repopulate the tracking set.
-        "env_version": 2,
+        "env_version": 3,
         "parallel_read_safe": True,
         # parallel_write_safe: archive HTML is produced only via main-process
         # html-collect-pages (Sphinx write/finish), not worker writers.

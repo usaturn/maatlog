@@ -52,6 +52,7 @@ FATAL_CODE_INVENTORY: frozenset[str] = frozenset(
         "maatlog.metadata.value",
         "maatlog.metadata.without-post",
         "maatlog.metadata.combination",
+        "maatlog.metadata.myst-only",
         "maatlog.slug.invalid",
         "maatlog.slug.duplicate",
         "maatlog.taxonomy.undefined",
@@ -62,6 +63,7 @@ FATAL_CODE_INVENTORY: frozenset[str] = frozenset(
         "maatlog.datetime.invalid",
         "maatlog.datetime.order",
         "maatlog.config.invalid",
+        "maatlog.author.link-invalid",
         "maatlog.feed.baseurl-required",
         "maatlog.feed.output-unsafe",
         "maatlog.feed.render-failed",
@@ -75,6 +77,7 @@ FATAL_CODE_INVENTORY: frozenset[str] = frozenset(
         "maatlog.theme.palette-stylesheet-missing",
         "maatlog.theme.palette-unknown",
         "maatlog.theme.palette-unsupported",
+        "maatlog.theme.pygments-style-unknown",
         "maatlog.theme.base-not-inherited",
         "maatlog.archive.option-invalid",
         "maatlog.archive.filter-undefined",
@@ -208,6 +211,14 @@ DIAGNOSTIC_CASES: dict[str, dict[str, Any]] = {
         "code": "maatlog.metadata.without-post",
         "field": "maatlog-slug",
     },
+    "myst-only-key-in-rst": {
+        "files": {
+            "post.rst": _post_rst(extra_fields=":maatlog-top-image: hero.png"),
+            "hero.png": b"png",
+        },
+        "code": "maatlog.metadata.myst-only",
+        "field": "maatlog-top-image",
+    },
     "external-without-excerpt": {
         "files": {
             "post.md": _post_md(extra_frontmatter="maatlog-external-url: https://example.com/article"),
@@ -254,6 +265,12 @@ DIAGNOSTIC_CASES: dict[str, dict[str, Any]] = {
         "code": "maatlog.config.invalid",
         "field": "maatlog_page_size",
     },
+    "author-link-invalid": {
+        "files": {"index.rst": "Root\n====\n"},
+        "config": {"maatlog_author_profiles": {"alice": {"links": [{"type": "github", "url": "/alice"}]}}},
+        "code": "maatlog.author.link-invalid",
+        "field": "maatlog_author_profiles.alice.links[0].url",
+    },
     "theme-manifest-missing": {
         "files": {"post.rst": _post_rst()},
         "theme": "missing-manifest",
@@ -285,6 +302,14 @@ DIAGNOSTIC_CASES: dict[str, dict[str, Any]] = {
         "conf_py_prefix": _THEME_FIXTURE_PREFIX,
         "code": "maatlog.theme.palette-stylesheet-missing",
         "field": "palettes",
+    },
+    "theme-pygments-style-unknown": {
+        "files": {"post.rst": _post_rst()},
+        "theme": "unknown-pygments-style",
+        "extensions": _THEME_FIXTURE_EXTENSIONS,
+        "conf_py_prefix": _THEME_FIXTURE_PREFIX,
+        "code": "maatlog.theme.pygments-style-unknown",
+        "field": "pygments",
     },
     "theme-palette-unknown": {
         "files": {"post.rst": _post_rst()},
@@ -379,6 +404,7 @@ def test_fatal_diagnostic_has_location_field_and_expected(
         in {
             "html_baseurl",
             "maatlog_page_size",
+            "maatlog_author_profiles.alice.links[0].url",
             "SOURCE_DATE_EPOCH",
             "docname",
         }

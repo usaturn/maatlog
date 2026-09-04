@@ -81,3 +81,122 @@ def test_toc_scrollspy_is_progressive_enhancement(make_project: ProjectFactory, 
     script = result.asset("_static/maatlog.js").read_text(encoding="utf-8")
 
     assert 'typeof IntersectionObserver !== "function"' in script
+
+
+@pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
+def test_theme_javascript_exposes_one_enhancer_registry(make_project: ProjectFactory, theme: str) -> None:
+    # 機能ごとに独自の初期化機構を作らせないための共有 registry（tmp/FRONTEND.md）。
+    result = make_project(files=RUNTIME_PROJECT, theme=theme).build()
+    script = result.asset("_static/maatlog.js").read_text(encoding="utf-8")
+
+    assert "function registerEnhancer(" in script
+    assert "function enhance(" in script
+    assert "window.maatlog" in script
+    assert 'registerEnhancer("toc-scrollspy"' in script
+    assert 'registerEnhancer("theme-toggle"' in script
+
+
+@pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
+def test_enhancers_are_applied_at_most_once_per_element(make_project: ProjectFactory, theme: str) -> None:
+    # WeakSet で適用済みを覚える。data-* マーカーは取得 HTML に残留しうるので使わない。
+    result = make_project(files=RUNTIME_PROJECT, theme=theme).build()
+    script = result.asset("_static/maatlog.js").read_text(encoding="utf-8")
+
+    assert "new WeakSet()" in script
+
+
+@pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
+def test_the_theme_ships_exactly_one_runtime_script(make_project: ProjectFactory, theme: str) -> None:
+    # tmp/FRONTEND.md: 機能別 script を独立ロードしない。runtime は maatlog.js 一本。
+    result = make_project(files=RUNTIME_PROJECT, theme=theme).build()
+    text = result.html("about.html").text
+
+    assert len(re.findall(r"<script[^>]*maatlog[^>]*\.js", text)) == 1
+
+
+@pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
+def test_the_theme_ships_no_other_javascript(make_project: ProjectFactory, theme: str) -> None:
+    result = make_project(files=RUNTIME_PROJECT, theme=theme).build()
+    static = result.asset("_static")
+
+    assert sorted(path.name for path in static.glob("maatlog*.js")) == ["maatlog.js"]
+
+
+def test_theme_conf_does_not_add_script_files() -> None:
+    # theme.conf の script_files で追加ロードすると同じ runtime が二重に走る。
+    from pathlib import Path
+
+    import maatlog
+
+    theme_root = Path(maatlog.__file__).resolve().parent / "themes" / "maatlog-base"
+
+    assert "script_files" not in (theme_root / "theme.conf").read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
+def test_theme_javascript_loads_the_next_archive_page(make_project: ProjectFactory, theme: str) -> None:
+    result = make_project(files=RUNTIME_PROJECT, theme=theme).build()
+    script = result.asset("_static/maatlog.js").read_text(encoding="utf-8")
+
+    assert 'registerEnhancer("infinite-scroll"' in script
+    assert '[data-maatlog-component="archive"]' in script
+    # rel="next" は .maatlog-pagination-more にも付く。クラスで引く。
+    assert ".maatlog-pagination-next" in script
+    assert "DOMParser" in script
+    assert "maatlog-infinite-sentinel" in script
+
+
+@pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
+def test_loaded_posts_are_announced_politely(make_project: ProjectFactory, theme: str) -> None:
+    # 自動追加はフォーカスを動かさない。読み上げは aria-live に任せる。
+    result = make_project(files=RUNTIME_PROJECT, theme=theme).build()
+    script = result.asset("_static/maatlog.js").read_text(encoding="utf-8")
+
+    assert "maatlog-infinite-status" in script
+    assert '"aria-live", "polite"' in script
+    assert '"role", "status"' in script
+    assert ".focus()" not in script
+
+
+@pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
+def test_appended_cards_go_through_the_same_registry(make_project: ProjectFactory, theme: str) -> None:
+    # 追加カードにも登録済み enhancer が当たり、他機能が購読できるイベントが出る。
+    result = make_project(files=RUNTIME_PROJECT, theme=theme).build()
+    script = result.asset("_static/maatlog.js").read_text(encoding="utf-8")
+
+    assert "enhance(card)" in script
+    assert "maatlog:content-added" in script
+
+
+@pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
+def test_theme_javascript_prefetches_likely_next_pages(make_project: ProjectFactory, theme: str) -> None:
+    # Issue #66: Prefetch は単一 runtime 内の enhancer。機能別 script は増やさない。
+    result = make_project(files=RUNTIME_PROJECT, theme=theme).build()
+    script = result.asset("_static/maatlog.js").read_text(encoding="utf-8")
+
+    assert 'registerEnhancer("prefetch"' in script
+    assert ".maatlog-nav-newer" in script
+    assert ".maatlog-nav-older" in script
+    assert ".maatlog-pagination-next" in script
+    assert 'rel", "prefetch"' in script or 'rel = "prefetch"' in script or 'rel="prefetch"' in script
+    assert "saveData" in script
+    assert "mouseenter" in script
+    assert "focusin" in script
+    assert "maatlog:content-added" in script
+
+
+@pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
+def test_theme_javascript_marks_new_posts(make_project: ProjectFactory, theme: str) -> None:
+    # Issue #62: NEW 表示は単一 runtime の enhancer。機能別 script は増やさない。
+    result = make_project(files=RUNTIME_PROJECT, theme=theme).build()
+    script = result.asset("_static/maatlog.js").read_text(encoding="utf-8")
+
+    assert 'registerEnhancer("new-posts"' in script
+    # 機械可読属性から公開日時を読む
+    assert "maatlog-published-at" in script
+    # localStorage に前回訪問を保存する
+    assert "maatlog:last-visit" in script
+    # localStorage が使えなくても壊れない（session baseline のキャッシュキーで containment を確認）
+    assert "maatlog:session-baseline" in script
+    # NEW バッジのクラス
+    assert "maatlog-new-badge" in script

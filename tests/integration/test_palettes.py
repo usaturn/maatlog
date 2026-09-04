@@ -157,6 +157,16 @@ def test_both_dark_blocks_declare_the_same_values(palette: str) -> None:
 
 
 @pytest.mark.parametrize("palette", PALETTES)
+@pytest.mark.parametrize("selector", [DARK_MEDIA_SELECTOR, DARK_ATTRIBUTE_SELECTOR])
+def test_dark_code_background_matches_surface(palette: str, selector: str) -> None:
+    # ダークではリテラルブロックをページ地色へ沈めず、surface と同じ浮いた面にする
+    # （Issue #107）。ライトの「暗いコード面」は維持し、ここでは触らない。
+    tokens = block_tokens(palette_css(palette), selector)
+
+    assert tokens["--maatlog-code-background"] == tokens["--maatlog-color-surface"]
+
+
+@pytest.mark.parametrize("palette", PALETTES)
 @pytest.mark.parametrize("selector", [LIGHT_SELECTOR, DARK_ATTRIBUTE_SELECTOR])
 @pytest.mark.parametrize(("foreground", "background", "minimum"), CONTRAST_PAIRS)
 def test_palette_meets_wcag_aa(palette: str, selector: str, foreground: str, background: str, minimum: float) -> None:

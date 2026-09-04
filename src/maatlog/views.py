@@ -13,6 +13,7 @@ from sphinx.builders import Builder
 from sphinx.util.osutil import relative_uri
 
 from .archives import ArchivePage
+from .authors import AuthorProfile
 from .model import Post
 from .theme_api import CORE_THEME_API
 from .urls import post_urls
@@ -28,10 +29,21 @@ class FeedLinkView:
 
 
 @dataclass(frozen=True, slots=True)
+class AuthorLinkView:
+    """One external author link. ``icon`` names a built-in MaatLog SVG icon."""
+
+    type: str
+    url: str
+    label: str
+    icon: str
+
+
+@dataclass(frozen=True, slots=True)
 class SiteView:
     title: str
     tagline: str | None
     archive_url: str
+    top_image_title_font: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,6 +119,8 @@ class PostView:
     categories: tuple[str, ...]
     authors: tuple[str, ...]
     body_html: str | None
+    top_image_url: str | None = None
+    top_image_alt: str = ""
     taxonomies: PostTaxonomiesView = PostTaxonomiesView.empty()
 
 
@@ -149,6 +163,15 @@ class MaatlogTemplateContext:
     feeds: tuple[FeedLinkView, ...] = ()
     taxonomies: TaxonomyNavigationView = TaxonomyNavigationView.empty()
     site: SiteView = SiteView("", None, "")
+
+
+def author_link_views(profile: AuthorProfile | None) -> tuple[AuthorLinkView, ...]:
+    """Return the template-facing links of *profile* in configuration order."""
+    if profile is None:
+        return ()
+    return tuple(
+        AuthorLinkView(type=link.type, url=link.url, label=link.label, icon=link.icon) for link in profile.links
+    )
 
 
 def empty_context(site: SiteView | None = None) -> MaatlogTemplateContext:
@@ -212,6 +235,8 @@ def post_view(
     body_html: str | None = None,
     page_url: str = "",
     image_url: str | None = None,
+    top_image_url: str | None = None,
+    top_image_alt: str = "",
     taxonomies: PostTaxonomiesView | None = None,
 ) -> PostView:
     """Project a domain :class:`Post` into a full post page view.
@@ -241,6 +266,8 @@ def post_view(
         categories=post.categories,
         authors=post.authors,
         body_html=resolved_body,
+        top_image_url=top_image_url,
+        top_image_alt=top_image_alt,
         taxonomies=taxonomies if taxonomies is not None else PostTaxonomiesView.empty(),
     )
 
@@ -251,6 +278,8 @@ def build_post_context(
     body_html: str | None = None,
     page_url: str = "",
     image_url: str | None = None,
+    top_image_url: str | None = None,
+    top_image_alt: str = "",
     navigation: NavigationView | None = None,
     feeds: tuple[FeedLinkView, ...] = (),
     taxonomies: TaxonomyNavigationView | None = None,
@@ -265,6 +294,8 @@ def build_post_context(
             body_html=body_html,
             page_url=page_url,
             image_url=image_url,
+            top_image_url=top_image_url,
+            top_image_alt=top_image_alt,
             taxonomies=post_taxonomies,
         ),
         navigation=navigation if navigation is not None else NavigationView(None, None),
@@ -462,7 +493,15 @@ def image_url_for(builder: Builder, from_docname: str, image_uri: str | None) ->
 
 
 def register_representative_images(app: Sphinx, builder: Builder) -> None:
-    """Promote every MaatLog representative image on the master writer."""
+    """Promote every MaatLog representative and hero image on the master writer.
+
+    Both kinds live outside the doctree by the time Sphinx runs
+    ``post_process_images``: representative images never enter it, and
+    ``maattop_node`` is removed during ``doctree-read``. ``image_url_for`` would
+    promote them, but it runs on ``html-page-context`` — a worker process under
+    ``-j`` — so its ``builder.images`` writes never reach the master that copies
+    files. Promoting here keeps ``_images`` complete for parallel writes.
+    """
     from .builders import is_full_html_builder
 
     if not is_full_html_builder(builder):
@@ -472,6 +511,9 @@ def register_representative_images(app: Sphinx, builder: Builder) -> None:
     for post in posts.values():
         if post.image_uri is not None:
             _ensure_builder_image(builder, post.image_uri)
+    maattop = cast(dict[str, dict[str, str]], domain.data.get("maattop_by_docname", {}))
+    for entry in maattop.values():
+        _ensure_builder_image(builder, entry["uri"])
 
 
 def _ensure_builder_image(builder: Builder, image_uri: str) -> str | None:

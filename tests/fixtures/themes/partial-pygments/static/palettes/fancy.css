@@ -1,0 +1,4 @@
+/* 宣言したパレットには実体が要る（palette-stylesheet-missing 対策）。 */
+:root {
+  --maatlog-color-background: #ffffff;
+}

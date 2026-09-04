@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 import pytest
 from conftest import ProjectFactory
 
@@ -54,6 +56,26 @@ def _css_rules(css: str, selector: str) -> list[str]:
         end = css.index("}", start)
         rules.append(css[start : end + 1])
         position = end
+
+
+def _css_rules_by_selector_prefix(css: str, prefix: str) -> list[str]:
+    """selector が ``prefix`` から始まるすべてのルール本体。
+
+    ``::after`` / ``::before`` などの pseudo-element は生成コンテンツの契約が
+    別にあるため対象外とし、``:hover`` 等の pseudo-class は対象に含める。
+    """
+    rules: list[str] = []
+    position = 0
+    while True:
+        start = css.find(prefix, position)
+        if start == -1:
+            return rules
+        open_brace = css.index("{", start)
+        selector = css[start:open_brace].strip()
+        if not selector[len(prefix) :].startswith("::"):
+            end = css.index("}", open_brace)
+            rules.append(css[start : end + 1])
+        position = open_brace
 
 
 def _media_block(css: str, query: str) -> str:
@@ -127,6 +149,18 @@ def test_default_keeps_required_shell_component_styles(make_project: ProjectFact
 @pytest.mark.parametrize("prop", NEW_CUSTOM_PROPERTIES)
 def test_new_custom_properties_are_declared(make_project: ProjectFactory, theme: str, prop: str) -> None:
     assert prop in _stylesheet(make_project, theme)
+
+
+@pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
+def test_width_tokens_use_fluid_clamp(make_project: ProjectFactory, theme: str) -> None:
+    # Issue #110: 固定 rem ではなく clamp(floor, preferred, ceiling) で wide viewport に追従する。
+    css = _stylesheet(make_project, theme)
+    root = _css_rule(css, ":root")
+
+    assert re.search(r"--maatlog-content-width:\s*clamp\(", root)
+    assert re.search(r"--maatlog-main-width:\s*clamp\(", root)
+    assert "42rem" in root and "60rem" in root
+    assert "50rem" in root and "72rem" in root
 
 
 def test_base_neutralises_the_basic_theme_float(make_project: ProjectFactory) -> None:
@@ -626,6 +660,48 @@ def test_card_taxonomy_groups_use_flex_gap(make_project: ProjectFactory, theme: 
     assert any("inline-flex" in rule and "gap:" in rule for rule in rules)
 
 
+@pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
+def test_post_card_is_the_positioning_context(make_project: ProjectFactory, theme: str) -> None:
+    # overlay の inset: 0 はカードを基準に解決させる。
+    css = _stylesheet(make_project, theme)
+    rule = _css_rule(css, ".maatlog-post-card")
+
+    assert "position: relative" in rule
+
+
+@pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
+def test_post_card_title_link_stretches_across_the_card(make_project: ProjectFactory, theme: str) -> None:
+    # 記事リンクを増やさずにクリック領域だけを広げる（stretched link）。
+    css = _stylesheet(make_project, theme)
+    rule = _css_rule(css, ".maatlog-post-card-title a::after")
+
+    assert 'content: ""' in rule
+    assert "position: absolute" in rule
+    assert "inset: 0" in rule
+
+
+@pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
+def test_post_card_meta_links_stay_above_the_stretched_link(make_project: ProjectFactory, theme: str) -> None:
+    # taxonomy リンクが overlay に飲まれると記事ページへ吸い込まれる。
+    css = _stylesheet(make_project, theme)
+    rule = _css_rule(css, ".maatlog-post-card-meta a")
+
+    assert "position: relative" in rule
+    assert "z-index: 1" in rule
+
+
+@pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
+def test_post_card_title_link_itself_stays_unpositioned(make_project: ProjectFactory, theme: str) -> None:
+    # アンカー自身（:hover 等の pseudo-class を含む）を配置すると overlay の基準が
+    # タイトル文字幅に縮む。overlay 本体の ::after は別契約なので対象外とする。
+    # maatlog-base は現時点でこのセレクタ配下に pseudo-class ルールを持たないため、
+    # 空リストも許容する。
+    css = _stylesheet(make_project, theme)
+    rules = _css_rules_by_selector_prefix(css, ".maatlog-post-card-title a")
+
+    assert all("position:" not in rule for rule in rules)
+
+
 def test_default_taxonomy_links_are_pills(make_project: ProjectFactory) -> None:
     css = _stylesheet(make_project, "maatlog-default")
     rule = _css_rule(css, ".maatlog-taxonomy-link")
@@ -957,3 +1033,130 @@ def test_default_normal_page_headings_stay_full_width(make_project: ProjectFacto
 
     assert "h1" not in rule
     assert "h2" not in rule
+
+
+def _top_level_css_before_reduced_motion(css: str) -> str:
+    """Return stylesheet text before the reduced-motion media query."""
+    marker = "@media (prefers-reduced-motion: reduce)"
+    assert marker in css, "maatlog-default must keep a single reduced-motion block"
+    return css.split(marker, 1)[0]
+
+
+def test_default_enables_cross_document_view_transition(
+    make_project: ProjectFactory,
+) -> None:
+    # Issue #67: same-origin MPA navigations get a short root transition.
+    css = _stylesheet(make_project, "maatlog-default")
+    head = _top_level_css_before_reduced_motion(css)
+
+    assert "@view-transition" in head
+    assert "navigation: auto" in head
+    assert "::view-transition-old(root)" in head
+    assert "::view-transition-new(root)" in head
+    assert "animation-duration: var(--maatlog-motion-fast)" in head
+    assert "animation-timing-function: ease-out" in head
+
+
+def test_default_disables_view_transition_under_reduced_motion(
+    make_project: ProjectFactory,
+) -> None:
+    # Prefer turning navigation off over relying only on animation: none.
+    css = _stylesheet(make_project, "maatlog-default")
+    block = _media_block_containing(
+        css,
+        "prefers-reduced-motion: reduce",
+        "animation: none",
+    )
+
+    assert "@view-transition" in block
+    assert "navigation: none" in block
+    # Keep the existing hover-motion kill switch.
+    assert "transition: none" in block
+    assert "transform: none" in block
+
+
+def test_base_does_not_declare_view_transition(
+    make_project: ProjectFactory,
+) -> None:
+    # Page transition is visual chrome, not Theme API contract CSS.
+    css = _stylesheet(make_project, "maatlog-base")
+
+    assert "@view-transition" not in css
+    assert "::view-transition-old" not in css
+    assert "::view-transition-new" not in css
+
+
+def test_default_view_transition_does_not_require_extra_scripts(
+    make_project: ProjectFactory,
+) -> None:
+    # Spec: CSS only — keep the single theme runtime; add no VT/SPA script.
+    result = make_project(files=LAYOUT_PROJECT, theme="maatlog-default").build()
+    html = result.html("about.html").text
+    maatlog_scripts = re.findall(
+        r"<script\b[^>]*maatlog[^>]*>",
+        html,
+        flags=re.IGNORECASE,
+    )
+
+    assert len(maatlog_scripts) == 1
+    assert "maatlog.js" in maatlog_scripts[0]
+    assert "startViewTransition" not in html
+    assert "maatlog-view" not in html.lower()
+
+
+def test_base_gives_the_infinite_scroll_sentinel_a_measurable_box(make_project: ProjectFactory) -> None:
+    # 高さ 0 の要素は IntersectionObserver から見えないことがある。
+    css = _stylesheet(make_project, "maatlog-base")
+    rule = _css_rule(css, ".maatlog-infinite-sentinel")
+
+    assert "block-size: 1px" in rule
+
+
+# ``maatlog-default`` ships its own ``static/maatlog.css`` under the same name as
+# ``maatlog-base``, so Sphinx's theme static copy makes the child file replace the
+# parent's entirely. Every visual class base defines must therefore be mirrored.
+BASE_ONLY_CLASSES = frozenset(
+    {
+        # A 1px IntersectionObserver sentinel with no visual presentation; the
+        # default theme needs no rule of its own for it.
+        "maatlog-infinite-sentinel",
+    }
+)
+
+HERO_CLASSES = (
+    "maatlog-post-top-image",
+    "maatlog-post-top-image-img",
+    "maatlog-post-top-image-overlay",
+    "maatlog-post-top-image-title",
+)
+
+
+def _class_selectors(css: str) -> set[str]:
+    without_comments = re.sub(r"/\*.*?\*/", "", css, flags=re.DOTALL)
+    return set(re.findall(r"\.(maatlog[A-Za-z0-9_-]*)", without_comments))
+
+
+def test_default_stylesheet_mirrors_every_base_class(make_project: ProjectFactory) -> None:
+    """The default theme replaces base's stylesheet, so it must cover its classes."""
+    base = _class_selectors(_stylesheet(make_project, "maatlog-base"))
+    default = _class_selectors(_stylesheet(make_project, "maatlog-default"))
+
+    assert sorted(base - BASE_ONLY_CLASSES - default) == []
+
+
+@pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
+@pytest.mark.parametrize("selector", HERO_CLASSES)
+def test_hero_styles_are_declared(make_project: ProjectFactory, theme: str, selector: str) -> None:
+    assert f".{selector} {{" in _stylesheet(make_project, theme)
+
+
+@pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
+def test_hero_title_overlaps_the_image(make_project: ProjectFactory, theme: str) -> None:
+    """The acceptance criterion is an overlay, which needs a positioned ancestor."""
+    css = _stylesheet(make_project, theme)
+
+    container = _css_rule(css, ".maatlog-post-top-image")
+    assert "position: relative" in container
+    title = _css_rule(css, ".maatlog-post-top-image-title")
+    assert "position: absolute" in title
+    assert "--maatlog-top-image-title-color" in css

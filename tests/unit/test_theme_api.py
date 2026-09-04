@@ -110,7 +110,7 @@ def test_core_is_compatible_with_equal_or_lower_minor() -> None:
 
 
 def test_core_theme_api_is_the_current_contract_version() -> None:
-    assert CORE_THEME_API == ThemeApiVersion(major=1, minor=5)
+    assert CORE_THEME_API == ThemeApiVersion(major=1, minor=9)
 
 
 def test_load_maatlog_section_reads_toml() -> None:
@@ -160,14 +160,14 @@ def test_theme_models_are_frozen_pydantic() -> None:
 
 
 @pytest.mark.parametrize("theme_name", ["maatlog-base", "maatlog-default"])
-def test_bundled_theme_manifest_requires_api_1_5(theme_name: str) -> None:
+def test_bundled_theme_manifest_requires_api_1_8(theme_name: str) -> None:
     manifest_path = (
         Path(__file__).resolve().parents[2] / "src" / "maatlog" / "themes" / theme_name / "maatlog-theme.toml"
     )
     section = load_maatlog_section(manifest_path.read_text(encoding="utf-8"))
     manifest = parse_and_validate_manifest(section, core_api=CORE_THEME_API)
 
-    assert manifest.api == ThemeApiVersion(major=1, minor=5)
+    assert manifest.api == ThemeApiVersion(major=1, minor=8)  # manifest pins to 1.8
 
 
 def test_required_contract_constants() -> None:
@@ -179,7 +179,7 @@ def test_required_contract_constants() -> None:
 
 
 def test_core_theme_api_renders_as_a_dotted_string() -> None:
-    assert str(CORE_THEME_API) == "1.5"
+    assert str(CORE_THEME_API) == "1.9"
 
 
 def test_older_theme_api_versions_stay_compatible() -> None:
@@ -189,7 +189,10 @@ def test_older_theme_api_versions_stay_compatible() -> None:
     assert is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=3))
     assert is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=4))
     assert is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=5))
-    assert is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=6)) is False
+    assert is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=6))
+    assert is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=7))
+    assert is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=8))
+    assert is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=9))
     assert not is_compatible(CORE_THEME_API, ThemeApiVersion(major=2, minor=0))
 
 
@@ -316,3 +319,99 @@ def test_bundled_default_theme_inherits_the_base_palette_declaration() -> None:
 
     assert declaration is not None
     assert declaration.default_palette == "indigo"
+
+
+def test_palette_declaration_reads_the_pygments_table() -> None:
+    section = load_maatlog_section(
+        "[maatlog]\n"
+        'api = "1.6"\n'
+        'implementation = "standalone"\n'
+        'default_palette = "indigo"\n'
+        'palettes = ["indigo", "solarized"]\n'
+        "\n"
+        "[maatlog.pygments]\n"
+        'indigo = "github-dark"\n'
+        'solarized = "solarized-dark"\n'
+    )
+
+    declaration = parse_palette_declaration(section)
+
+    assert declaration is not None
+    assert declaration.pygments == (("indigo", "github-dark"), ("solarized", "solarized-dark"))
+    assert declaration.pygments_style_for("solarized") == "solarized-dark"
+    assert declaration.pygments_style_for("indigo") == "github-dark"
+
+
+def test_palette_declaration_allows_a_partial_pygments_table() -> None:
+    # 宣言のないパレットは theme.conf にフォールバックする。
+    section = load_maatlog_section(
+        "[maatlog]\n"
+        'api = "1.6"\n'
+        'implementation = "standalone"\n'
+        'default_palette = "indigo"\n'
+        'palettes = ["indigo", "solarized"]\n'
+        "\n"
+        "[maatlog.pygments]\n"
+        'solarized = "solarized-dark"\n'
+    )
+
+    declaration = parse_palette_declaration(section)
+
+    assert declaration is not None
+    assert declaration.pygments_style_for("indigo") is None
+    assert declaration.pygments_style_for("solarized") == "solarized-dark"
+
+
+def test_palette_declaration_without_a_pygments_table_holds_none() -> None:
+    section = load_maatlog_section(
+        '[maatlog]\napi = "1.5"\nimplementation = "standalone"\ndefault_palette = "indigo"\npalettes = ["indigo"]\n'
+    )
+
+    declaration = parse_palette_declaration(section)
+
+    assert declaration is not None
+    assert declaration.pygments == ()
+    assert declaration.pygments_style_for("indigo") is None
+
+
+@pytest.mark.parametrize(
+    "table",
+    [
+        # palettes に無い名前をキーにしている。
+        '[maatlog.pygments]\nsunset = "github-dark"\n',
+        # 値が文字列でない。
+        "[maatlog.pygments]\nindigo = 1\n",
+        # 値が空文字列。
+        '[maatlog.pygments]\nindigo = ""\n',
+        # テーブルではなく文字列。
+        'pygments = "github-dark"\n',
+    ],
+)
+def test_invalid_pygments_table_fails_the_manifest(table: str) -> None:
+    section = load_maatlog_section(
+        "[maatlog]\n"
+        'api = "1.6"\n'
+        'implementation = "standalone"\n'
+        'default_palette = "indigo"\n'
+        'palettes = ["indigo"]\n'
+        "\n" + table
+    )
+
+    with pytest.raises(MaatlogBuildError) as error:
+        parse_palette_declaration(section)
+
+    assert error.value.diagnostics[0].code == "maatlog.theme.manifest-invalid"
+    assert error.value.diagnostics[0].field == "pygments"
+
+
+def test_a_pygments_table_without_palettes_fails_the_manifest() -> None:
+    # palettes 無しの単独宣言は default_palette 単独と同じく不正。
+    section = load_maatlog_section(
+        '[maatlog]\napi = "1.6"\nimplementation = "standalone"\n\n[maatlog.pygments]\nindigo = "github-dark"\n'
+    )
+
+    with pytest.raises(MaatlogBuildError) as error:
+        parse_palette_declaration(section)
+
+    assert error.value.diagnostics[0].code == "maatlog.theme.manifest-invalid"
+    assert error.value.diagnostics[0].field == "pygments"

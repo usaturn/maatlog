@@ -275,3 +275,12 @@ def test_shadows_are_built_from_the_shadow_colour_token(make_project: ProjectFac
 
     assert "var(--maatlog-shadow-color)" in tokens["--maatlog-shadow-sm"]
     assert "var(--maatlog-shadow-color)" in tokens["--maatlog-shadow-md"]
+
+
+@pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
+def test_new_badge_selector_uses_the_badge_tokens(make_project: ProjectFactory, theme: str) -> None:
+    # Issue #62: NEW バッジは両テーマで同じ badge トークンを使ってスタイルされる。
+    css = _stylesheet(make_project, theme)
+
+    assert block_declaration(css, ".maatlog-new-badge", "background") == "var(--maatlog-badge-background)"
+    assert block_declaration(css, ".maatlog-new-badge", "color") == "var(--maatlog-badge-text)"
