@@ -9,6 +9,7 @@ from maatlog.urls import (
     absolute_page_url,
     absolutize_fragment_urls,
     absolutize_url,
+    is_external_link_url,
     post_urls,
     redact_url,
     validate_baseurl,
@@ -184,3 +185,37 @@ def test_redact_url_strips_userinfo() -> None:
     assert redact_url("https://user:pass@example.com/path") == "https://example.com/path"
     assert redact_url("https://example.com/path") == "https://example.com/path"
     assert redact_url("https://secret:token@example.com:99999/") == "https://example.com:99999/"
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://example.com",
+        "http://example.com/alice",
+        "https://example.com/alice?tab=repositories#pinned",
+        "  https://example.com/alice  ",
+        "https://user:pass@example.com/alice",
+    ],
+)
+def test_is_external_link_url_accepts_absolute_http_urls(url: str) -> None:
+    assert is_external_link_url(url) is True
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "javascript:alert(1)",
+        "JavaScript:alert(1)",
+        "data:text/html,<script>",
+        "mailto:alice@example.com",
+        "ftp://example.com/alice",
+        "//example.com/alice",
+        "/alice",
+        "alice",
+        "https://",
+        "",
+        "   ",
+    ],
+)
+def test_is_external_link_url_rejects_non_http_urls(url: str) -> None:
+    assert is_external_link_url(url) is False

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from collections.abc import Mapping, Sequence
 from enum import StrEnum
 from re import compile as re_compile
@@ -8,6 +10,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from pydantic import BaseModel, ConfigDict, field_validator
 from sphinx.config import Config
 
+from .authors import AuthorProfile, validate_author_profile
 from .errors import Diagnostic, MaatlogBuildError
 
 
@@ -23,6 +26,7 @@ CONFIG_VALUES = {
     "maatlog_tags": (None, "env"),
     "maatlog_categories": (None, "env"),
     "maatlog_authors": (None, "env"),
+    "maatlog_author_profiles": (None, "env"),
     "maatlog_archive_docname": ("blog", "env"),
     "maatlog_page_size": (10, "env"),
     "maatlog_tagline": (None, "html"),
@@ -31,12 +35,18 @@ CONFIG_VALUES = {
     "maatlog_feed_taxonomies": (("tag", "category", "author", "month"), "html"),
     "maatlog_feed_limit": (20, "html"),
     "maatlog_palette": (None, "html"),
+    "maatlog_top_image_title_font": (None, "html"),
 }
 
 TAXONOMY_KEY_PATTERN = re_compile(r"[a-z0-9][a-z0-9._-]*\Z")
 
 # パレット名はテーマの static/palettes/<name>.css というパス片になる。
 PALETTE_NAME_PATTERN = re_compile(r"[a-z0-9][a-z0-9-]*\Z")
+
+# ``<style>`` に素通しする宣言値から、宣言・ルール・要素の外へ出られる字を禁じる。
+# ``/*`` はコメントで、``\`` は CSS エスケープシーケンスの開始になる。
+CSS_VALUE_FORBIDDEN_PATTERN = re_compile(r"[<>{};\\]|/\*")
+CSS_VALUE_EXPECTED = "a CSS declaration value without <, >, {, }, ;, \\, or /*"
 
 
 class MaatlogConfig(BaseModel):
@@ -50,6 +60,7 @@ class MaatlogConfig(BaseModel):
     tags: Mapping[str, str] | None
     categories: Mapping[str, str] | None
     authors: Mapping[str, str] | None
+    author_profiles: Mapping[str, AuthorProfile] | None
     archive_docname: str
     page_size: int
     tagline: str | None
@@ -58,10 +69,18 @@ class MaatlogConfig(BaseModel):
     feed_taxonomies: tuple[TaxonomyAxis, ...]
     feed_limit: int
     palette: str | None
+    top_image_title_font: str | None
 
     @field_validator("tags", "categories", "authors")
     @classmethod
     def _freeze_taxonomy_mapping(cls, value: Mapping[str, str] | None) -> Mapping[str, str] | None:
+        if value is None:
+            return None
+        return MappingProxyType(dict(value))
+
+    @field_validator("author_profiles")
+    @classmethod
+    def _freeze_author_profiles(cls, value: Mapping[str, AuthorProfile] | None) -> Mapping[str, AuthorProfile] | None:
         if value is None:
             return None
         return MappingProxyType(dict(value))
@@ -79,6 +98,7 @@ class MaatlogConfig(BaseModel):
         tags = _validate_taxonomy_mapping("maatlog_tags", resolved["maatlog_tags"], diagnostics)
         categories = _validate_taxonomy_mapping("maatlog_categories", resolved["maatlog_categories"], diagnostics)
         authors = _validate_taxonomy_mapping("maatlog_authors", resolved["maatlog_authors"], diagnostics)
+        author_profiles = _validate_author_profiles(resolved["maatlog_author_profiles"], diagnostics)
         archive_docname = _validate_docname(
             "maatlog_archive_docname", resolved["maatlog_archive_docname"], diagnostics
         )
@@ -91,6 +111,9 @@ class MaatlogConfig(BaseModel):
         feed_taxonomies = _validate_feed_taxonomies(resolved["maatlog_feed_taxonomies"], diagnostics)
         feed_limit = _validate_positive_int("maatlog_feed_limit", resolved["maatlog_feed_limit"], diagnostics)
         palette = _validate_palette(resolved["maatlog_palette"], diagnostics)
+        top_image_title_font = _validate_optional_css_value(
+            "maatlog_top_image_title_font", resolved["maatlog_top_image_title_font"], diagnostics
+        )
 
         if diagnostics:
             raise MaatlogBuildError(diagnostics)
@@ -106,6 +129,7 @@ class MaatlogConfig(BaseModel):
             tags=tags,
             categories=categories,
             authors=authors,
+            author_profiles=author_profiles,
             archive_docname=archive_docname,
             page_size=page_size,
             tagline=tagline,
@@ -114,6 +138,7 @@ class MaatlogConfig(BaseModel):
             feed_taxonomies=feed_taxonomies,
             feed_limit=feed_limit,
             palette=palette,
+            top_image_title_font=top_image_title_font,
         )
 
 
@@ -165,6 +190,38 @@ def _validate_taxonomy_mapping(field: str, value: Any, diagnostics: list[Diagnos
     return MappingProxyType(validated)
 
 
+def _validate_author_profiles(value: Any, diagnostics: list[Diagnostic]) -> Mapping[str, AuthorProfile] | None:
+    """Validate ``maatlog_author_profiles``.
+
+    著者 slug の形式はここで検査し、プロフィールの中身は ``authors`` へ委譲する。
+    ``maatlog_authors`` との相互参照は検証しない。``maatlog_authors`` が ``None``
+    のとき slug は投稿から自動登録されるため、対応する表示名が無くても不正ではない。
+    """
+    field = "maatlog_author_profiles"
+    if value is None:
+        return None
+    if not isinstance(value, Mapping):
+        _invalid(diagnostics, field, value, "a mapping of author ids to profiles")
+        return None
+
+    is_valid = True
+    validated: dict[str, AuthorProfile] = {}
+    mapping = cast(Mapping[object, object], value)
+    for key, item in mapping.items():
+        if not isinstance(key, str) or TAXONOMY_KEY_PATTERN.fullmatch(key) is None:
+            _invalid(diagnostics, field, key, "a lowercase author id")
+            is_valid = False
+            continue
+        profile = validate_author_profile(f"{field}.{key}", item, diagnostics)
+        if profile is None:
+            is_valid = False
+            continue
+        validated[key] = profile
+    if not is_valid:
+        return None
+    return MappingProxyType(validated)
+
+
 def _validate_docname(field: str, value: Any, diagnostics: list[Diagnostic]) -> str | None:
     if not isinstance(value, str) or not value:
         _invalid(diagnostics, field, value, "a relative Sphinx document name")
@@ -187,6 +244,26 @@ def _validate_optional_text(field: str, value: Any, diagnostics: list[Diagnostic
         return None
     if not isinstance(value, str) or not value.strip():
         _invalid(diagnostics, field, value, "a non-empty string")
+        return None
+    return value
+
+
+def _validate_optional_css_value(field: str, value: Any, diagnostics: list[Diagnostic]) -> str | None:
+    """A declaration value that a theme template inlines into ``<style>`` unescaped.
+
+    ``<style>`` is a raw text element, so HTML escaping would corrupt legitimate
+    CSS (``"Noto Sans JP", serif`` becomes ``&#34;Noto Sans JP&#34;, serif``, whose
+    ``;`` truncates the declaration). The value is therefore emitted verbatim and
+    validated here instead: anything that could end the declaration, open a new
+    rule, escape the element, or start a CSS escape sequence is rejected.
+    """
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        _invalid(diagnostics, field, value, CSS_VALUE_EXPECTED)
+        return None
+    if CSS_VALUE_FORBIDDEN_PATTERN.search(value):
+        _invalid(diagnostics, field, value, CSS_VALUE_EXPECTED)
         return None
     return value
 

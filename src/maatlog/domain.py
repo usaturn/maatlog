@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from collections.abc import Collection, Iterable, Mapping, Set
 from datetime import datetime
 from typing import Any, cast
@@ -12,7 +14,7 @@ from sphinx.util.nodes import make_refnode
 
 from .archives import check_generated_docnames, project_archives
 from .config import MaatlogConfig
-from .directives import PostListDirective
+from .directives import MaattopDirective, PostListDirective
 from .errors import Diagnostic, MaatlogBuildError
 from .model import Post, publication_status
 from .references import (
@@ -39,10 +41,12 @@ class MaatlogDomain(Domain):
     roles = {name: MaatlogXRefRole() for name in ROLE_TYPES}
     directives = {
         "post-list": PostListDirective,
+        "maattop": MaattopDirective,
     }
     initial_data = {
         "posts_by_docname": {},
         "post_list_docnames": set(),
+        "maattop_by_docname": {},
         "index": None,
         "generated_docnames": set(),
         # Independent ownership manifests; page cleanup must never touch feeds.
@@ -63,6 +67,16 @@ class MaatlogDomain(Domain):
         """
         cast(set[str], self.data.setdefault("post_list_docnames", set())).add(docname)
 
+    def note_maattop(self, docname: str, uri: str, alt: str) -> None:
+        """Record the hero image URI and alt text for *docname*."""
+        cast(dict[str, dict[str, str]], self.data.setdefault("maattop_by_docname", {})).update(
+            {docname: {"uri": uri, "alt": alt}}
+        )
+
+    def maattop_for(self, docname: str) -> dict[str, str] | None:
+        """Return ``{"uri": ..., "alt": ...}`` for *docname*, or ``None``."""
+        return cast(dict[str, dict[str, str]], self.data.setdefault("maattop_by_docname", {})).get(docname)
+
     def post_list_docnames(self) -> set[str]:
         """Docnames embedding ``post_list`` nodes (tolerates old pickles)."""
         return cast(set[str], self.data.setdefault("post_list_docnames", set()))
@@ -71,6 +85,7 @@ class MaatlogDomain(Domain):
         posts = cast(dict[str, Post], self.data["posts_by_docname"])
         posts.pop(docname, None)
         cast(set[str], self.data.setdefault("post_list_docnames", set())).discard(docname)
+        cast(dict[str, dict[str, str]], self.data.setdefault("maattop_by_docname", {})).pop(docname, None)
         self._invalidate_index()
 
     def merge(self, other_data: Mapping[str, Any], docnames: Collection[str]) -> None:
@@ -109,6 +124,14 @@ class MaatlogDomain(Domain):
                 post_lists.add(docname)
             else:
                 post_lists.discard(docname)
+
+        maattop = cast(dict[str, dict[str, str]], self.data.setdefault("maattop_by_docname", {}))
+        other_maattop = cast(dict[str, dict[str, str]], other_data.get("maattop_by_docname", {}))
+        for docname in docnames:
+            if docname in other_maattop:
+                maattop[docname] = other_maattop[docname]
+            else:
+                maattop.pop(docname, None)
 
         self._invalidate_index()
 

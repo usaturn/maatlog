@@ -1,5 +1,12 @@
 [maatlog]
-api = "1.5"
+api = "1.8"
 implementation = "standalone"
 default_palette = "indigo"
 palettes = ["indigo", "github", "solarized", "nord", "neon"]
+
+[maatlog.pygments]
+indigo = "github-dark"
+github = "github-dark"
+solarized = "solarized-dark"
+nord = "nord-darker"
+neon = "dracula"

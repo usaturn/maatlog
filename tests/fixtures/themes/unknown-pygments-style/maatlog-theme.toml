@@ -1,0 +1,8 @@
+[maatlog]
+api = "1.6"
+implementation = "inherits-base"
+default_palette = "plain"
+palettes = ["plain", "fancy"]
+
+[maatlog.pygments]
+plain = "no-such-pygments-style"

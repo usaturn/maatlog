@@ -345,3 +345,17 @@ def test_external_post_shows_the_excerpt_once(make_project: ProjectFactory) -> N
     assert page.select_one(".maatlog-post-body .maatlog-post-excerpt") is None
     assert page.text.count("External summary only.") == 1
     assert page.select_one(".maatlog-external-link") is not None
+
+
+@pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
+def test_post_card_exposes_machine_readable_published_at(make_project: ProjectFactory, theme: str) -> None:
+    # Issue #62: NEW 判定のために post-card が data-maatlog-published-at 属性を持つ。
+    result = make_project(files=POST_PROJECT, theme=theme).build()
+    archive = result.html("blog.html")
+
+    card = archive.select_one(".maatlog-post-card")
+    assert card is not None
+    assert "data-maatlog-published-at" in card, "post-card に data-maatlog-published-at 属性がない"
+    # 値が ISO 8601 で始まる（機械可読な形式）
+    val = card["data-maatlog-published-at"]
+    assert isinstance(val, str) and val.startswith("2026-"), f"予期しない値: {val!r}"

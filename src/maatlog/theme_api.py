@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import tomllib
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from enum import StrEnum
 from pathlib import Path
 from typing import Any, Final, Never, cast
@@ -11,10 +11,14 @@ from typing import Any, Final, Never, cast
 from jinja2 import Environment, TemplateNotFound
 from jinja2 import nodes as jinja_nodes
 from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
+from pygments.styles import get_style_by_name  # pyright: ignore[reportUnknownVariableType]
+from pygments.util import ClassNotFound
 from sphinx.application import Sphinx
 
 from .config import PALETTE_NAME_PATTERN, MaatlogConfig
 from .errors import Diagnostic, MaatlogBuildError
+
+_get_style_by_name = cast(Callable[[str], object], get_style_by_name)
 
 MANIFEST_FILENAME: Final = "maatlog-theme.toml"
 MAATLOG_BASE_THEME: Final = "maatlog-base"
@@ -95,9 +99,20 @@ class PaletteDeclaration(BaseModel):
 
     palettes: tuple[str, ...]
     default_palette: str
+    # Palette name to Pygments style name (Theme API 1.6, optional). Held as
+    # pairs rather than a mapping so the frozen model stays hashable. Palettes
+    # absent here fall back to ``theme.conf``.
+    pygments: tuple[tuple[str, str], ...] = ()
+
+    def pygments_style_for(self, palette: str) -> str | None:
+        """Return the declared Pygments style for *palette*, if any."""
+        for name, style in self.pygments:
+            if name == palette:
+                return style
+        return None
 
 
-CORE_THEME_API: Final = ThemeApiVersion(major=1, minor=5)
+CORE_THEME_API: Final = ThemeApiVersion(major=1, minor=9)
 
 
 def is_compatible(core: ThemeApiVersion, theme: ThemeApiVersion) -> bool:
@@ -283,6 +298,14 @@ def parse_palette_declaration(
                 theme_name=theme_name,
                 inheritance_chain=inheritance_chain,
             )
+        if "pygments" in section:
+            _invalid_manifest(
+                field="pygments",
+                value=section["pygments"],
+                expected="a list of palette names alongside the pygments table",
+                theme_name=theme_name,
+                inheritance_chain=inheritance_chain,
+            )
         return None
 
     raw_palettes: object = section["palettes"]
@@ -315,7 +338,62 @@ def parse_palette_declaration(
             theme_name=theme_name,
             inheritance_chain=inheritance_chain,
         )
-    return PaletteDeclaration(palettes=tuple(names), default_palette=default)
+    pygments = _parse_pygments_table(
+        section,
+        names,
+        theme_name=theme_name,
+        inheritance_chain=inheritance_chain,
+    )
+    return PaletteDeclaration(
+        palettes=tuple(names),
+        default_palette=default,
+        pygments=pygments,
+    )
+
+
+def _parse_pygments_table(
+    section: Mapping[str, Any],
+    names: Sequence[str],
+    *,
+    theme_name: str | None = None,
+    inheritance_chain: Sequence[str] | None = None,
+) -> tuple[tuple[str, str], ...]:
+    """Parse the optional ``[maatlog.pygments]`` table (Theme API 1.6).
+
+    Keys must name declared palettes; values are Pygments style names. The
+    table may cover only some palettes: the rest fall back to ``theme.conf``.
+    """
+    if "pygments" not in section:
+        return ()
+    raw: object = section["pygments"]
+    if not isinstance(raw, Mapping):
+        _invalid_manifest(
+            field="pygments",
+            value=raw,
+            expected="a table of palette name to Pygments style name",
+            theme_name=theme_name,
+            inheritance_chain=inheritance_chain,
+        )
+    pairs: list[tuple[str, str]] = []
+    for palette, style in cast(Mapping[str, Any], raw).items():
+        if palette not in names:
+            _invalid_manifest(
+                field="pygments",
+                value=palette,
+                expected=f"one of {', '.join(names)}",
+                theme_name=theme_name,
+                inheritance_chain=inheritance_chain,
+            )
+        if not isinstance(style, str) or not style:
+            _invalid_manifest(
+                field="pygments",
+                value=style,
+                expected="a non-empty Pygments style name",
+                theme_name=theme_name,
+                inheritance_chain=inheritance_chain,
+            )
+        pairs.append((palette, style))
+    return tuple(pairs)
 
 
 def resolve_palette_declaration(
@@ -521,6 +599,12 @@ def validate_selected_theme(app: Sphinx) -> None:
             inheritance_chain=inheritance_chain,
             theme_api=manifest.api,
         )
+        _validate_pygments_styles(
+            declaration,
+            theme_name=theme_name,
+            inheritance_chain=inheritance_chain,
+            theme_api=manifest.api,
+        )
 
 
 def resolve_palette(app: Sphinx) -> str | None:
@@ -598,6 +682,40 @@ def resolve_palette(app: Sphinx) -> str | None:
             ]
         )
     return f"palettes/{requested}.css"
+
+
+def resolve_pygments_style(app: Sphinx) -> str | None:
+    """Return the Pygments style the selected palette declares, or ``None``.
+
+    ``None`` means MaatLog leaves both highlighters alone: the builder is not
+    full HTML, the site author set ``pygments_style`` in ``conf.py``, the theme
+    declares no palettes, or the selected palette has no ``[maatlog.pygments]``
+    entry. Palette-name validity is not re-checked here; ``resolve_palette``
+    runs first on the same event and reports it.
+    """
+    if not is_html_theme_builder(app.builder):
+        return None
+    # An explicit conf.py choice wins whole: overriding only the light side
+    # would emit a light/dark pair that does not belong together.
+    if app.config.pygments_style is not None:
+        return None
+    theme = getattr(app.builder, "theme", None)
+    if theme is None:
+        return None
+    theme_dirs = theme.get_theme_dirs()
+    if not theme_dirs:
+        return None
+
+    inheritance_chain = tuple(Path(path).name for path in theme_dirs)
+    declaration = resolve_palette_declaration(
+        theme_dirs,
+        theme_name=theme.name,
+        inheritance_chain=inheritance_chain,
+    )
+    if declaration is None:
+        return None
+    requested = MaatlogConfig.from_sphinx(app.config).palette or declaration.default_palette
+    return declaration.pygments_style_for(requested)
 
 
 def _jinja_environment(app: Sphinx) -> Environment | None:
@@ -756,6 +874,43 @@ def _validate_palette_stylesheets(
                 )
             ]
         )
+
+
+def _validate_pygments_styles(
+    declaration: PaletteDeclaration,
+    *,
+    theme_name: str,
+    inheritance_chain: Sequence[str],
+    theme_api: ThemeApiVersion,
+) -> None:
+    """Every declared Pygments style must resolve (Theme API 1.6).
+
+    All declared palettes are checked, not just the selected one: a theme
+    author's typo should surface on their own build, not on a reader's.
+    """
+    for palette, style in declaration.pygments:
+        try:
+            _get_style_by_name(style)
+        except ClassNotFound:
+            raise MaatlogBuildError(
+                [
+                    Diagnostic(
+                        code="maatlog.theme.pygments-style-unknown",
+                        message=(
+                            f"Palette {palette!r} declares an unknown Pygments style"
+                            + _theme_context_suffix(
+                                inheritance_chain=inheritance_chain,
+                                core_api=CORE_THEME_API,
+                                theme_api=theme_api,
+                            )
+                        ),
+                        source=theme_name,
+                        field="pygments",
+                        value=style,
+                        expected="a name resolvable by pygments.styles.get_style_by_name",
+                    )
+                ]
+            ) from None
 
 
 def _theme_context_suffix(

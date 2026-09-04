@@ -32,6 +32,10 @@
      - ``dict[str, str] | None``
      - ``None``
      - ``env``
+   * - ``maatlog_author_profiles``
+     - ``dict[str, dict] | None``
+     - ``None``
+     - ``env``
    * - ``maatlog_archive_docname``
      - 相対 docname の ``str``
      - ``"blog"``
@@ -100,6 +104,11 @@
 
     maatlog_palette = "neon"
 
+``conf.py`` で Sphinx の ``pygments_style`` を明示した場合、シンタックスハイライトは
+そちらが勝ち、MaatLog はパレット由来のスタイルを当てません。
+コードブロックの背景・境界・
+地の文字色はこの場合もパレットに従います
+
 ``None`` （未設定）はそのテーマの既定パレットを意味します。
 ``"indigo"`` のような
 リテラルを既定にしないのは、既定名の異なる第三者テーマと食い違うためです
@@ -127,6 +136,36 @@
 なければなりません。
 設定済みでも公開済み投稿に使われていない ID は、アーカイブページも
 インベントリオブジェクトも生成しません
+
+著者プロフィール
+----------------
+
+``maatlog_author_profiles`` は著者の外部リンクを保持する設定です。
+キーは著者 ID で、 ``maatlog_authors`` と同じ ``[a-z0-9][a-z0-9._-]*`` に一致する必要があります。
+値は ``links`` キーだけを持つ辞書です。
+表示名は ``maatlog_authors`` を唯一の情報源とするため、こちらには置きません
+
+``links`` の各要素は次のキーを持ちます
+
+:``type``: 必須。
+    リンク種別。
+    受け取り時に小文字へ正規化されます
+:``url``: 必須。
+    ``http`` または ``https`` の絶対 URL
+:``label``: 任意。
+    省略した場合は ``type`` から既定ラベルを生成します
+
+``type`` は ``github``、 ``x``、 ``bluesky``、 ``linkedin``、 ``website``、 ``rss`` を標準で扱います。
+これ以外の値はエラーにせず、汎用アイコンへフォールバックします
+
+アイコンは MaatLog がインライン SVG として出力します。
+外部 CDN も追加の静的アセットも必要としません。
+``linkedin`` はブランドロゴを同梱せず、汎用アイコンとテキストラベルで表示します（理由はリポジトリの ``NOTICE`` を参照してください）
+
+``type`` または ``url`` の欠落、および ``http`` / ``https`` 以外の URL は ``maatlog.author.link-invalid`` としてビルドを失敗させます
+
+``maatlog_authors`` との相互参照は検証しません。
+``maatlog_authors`` が ``None`` のとき ID は投稿から自動登録されるため、対応する表示名が無くても不正ではありません
 
 アーカイブのルート
 ------------------
@@ -205,6 +244,14 @@ Sphinx ドキュメント名でなければなりません
     }
     maatlog_authors = {
         "alice": "Alice",
+    }
+    maatlog_author_profiles = {
+        "alice": {
+            "links": [
+                {"type": "github", "url": "https://github.com/alice"},
+                {"type": "x", "url": "https://x.com/alice", "label": "@alice"},
+            ],
+        },
     }
     maatlog_archive_docname = "blog"
     maatlog_page_size = 10

@@ -1,0 +1,52 @@
+MaatLog
+Copyright (c) usaturn
+
+This product includes software developed by usaturn.
+MaatLog itself is distributed under the MIT License; see LICENSE.
+
+--------------------------------------------------------------------------------
+Bundled SVG icons
+--------------------------------------------------------------------------------
+
+MaatLog inlines a small set of SVG icons in its Jinja templates
+(src/maatlog/themes/maatlog-base/maatlog/components/author-links.html) so that
+generated sites need no external icon library and no CDN request.
+
+Brand icons
+-----------
+
+The following icons are derived from Simple Icons v16.29.0:
+
+  github    GitHub
+  x         X
+  bluesky   Bluesky
+  rss       RSS (the standard feed icon)
+
+Simple Icons is released under the CC0 1.0 Universal license.
+
+  Project: https://github.com/simple-icons/simple-icons
+  License: https://creativecommons.org/publicdomain/zero/1.0/
+
+The CC0 license covers the icon artwork as distributed by Simple Icons. It does
+not grant any right in the trademarks, logos, or brand names those icons depict.
+Those rights remain with their respective owners. Anyone publishing a site built
+with MaatLog is responsible for using these marks in accordance with each
+brand's own guidelines:
+
+  GitHub    https://github.com/logos
+  X         https://about.x.com/en/who-we-are/brand-toolkit
+  Bluesky   https://bsky.social/about/blog/press-faq
+
+LinkedIn
+--------
+
+MaatLog ships no LinkedIn logo. Simple Icons removed the LinkedIn icon from its
+set, so a bundled LinkedIn mark could not rest on the same CC0 basis as the
+icons above. A link whose type is "linkedin" is rendered with MaatLog's own
+generic link icon plus the text label "LinkedIn".
+
+Generic icons
+-------------
+
+The "website" (globe) and "link" (external link) icons are original MaatLog
+artwork and are distributed under the same MIT License as MaatLog itself.

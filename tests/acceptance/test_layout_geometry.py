@@ -9,6 +9,14 @@ if TYPE_CHECKING:
     from acceptance.conftest import AcceptanceSite, ProjectFactory
 
 WIDE_VIEWPORTS = ((1280, 720), (1920, 1080), (2560, 1440))
+# Issue #110: prose / main width policy across Wide → 4K viewports.
+WIDTH_POLICY_VIEWPORTS = (
+    (1280, 720),
+    (1920, 1080),
+    (2560, 1440),
+    (2880, 1620),
+    (3840, 2160),
+)
 REPRESENTATIVE_PAGES = (
     "index.html",
     "guide.html",
@@ -18,6 +26,11 @@ REPRESENTATIVE_PAGES = (
 # body margin (~8px) + layout padding (1rem). Must stay padding-sized as
 # viewport grows; the old 1fr rails produced 300px+ gutters at 1920.
 MAX_OUTER_GUTTER_PX = 64
+# Fluid content-width floor / ceiling (16px root): clamp(42rem, …, 60rem).
+PROSE_MIN_PX = 660  # ~42rem with rounding slack
+PROSE_MAX_PX = 970  # ~60rem with rounding slack
+# At 2560px the previous 42rem fixed line must already have widened.
+PROSE_WIDE_MIN_PX = 740
 
 
 class LayoutMetrics(TypedDict):
@@ -316,11 +329,59 @@ def test_normal_page_prose_is_narrower_than_its_container(site: AcceptanceSite) 
                 }"""
             )
             assert paragraph_width is not None, "guide.html renders no top-level paragraph"
-            # 42rem = 672px。コンテナは main いっぱいなので明確に広い。
-            assert paragraph_width <= 680, paragraph_width
+            assert paragraph_width <= PROSE_MAX_PX, paragraph_width
             assert body_width > paragraph_width, (body_width, paragraph_width)
         finally:
             page.close()
+            browser.close()
+
+
+@pytest.mark.browser
+def test_prose_grows_with_wide_viewports_but_stays_below_main(site: AcceptanceSite) -> None:
+    # Issue #110: content-width / main-width を fluid にし、1280 では現行相当、
+    # 2560 以上では 42rem 固定より明確に広げ、4K でも上限を超えない。
+    result = site.build("html", theme="maatlog-default")
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        try:
+            prose_by_width: dict[int, int] = {}
+            for width, height in WIDTH_POLICY_VIEWPORTS:
+                page = browser.new_page(viewport={"width": width, "height": height})
+                try:
+                    page.goto(result.path("posts/rst-post.html").resolve().as_uri(), wait_until="load")
+                    metrics = page.evaluate(
+                        """() => {
+                          const main = document.querySelector('.maatlog-layout-main');
+                          const prose = document.querySelector('.maatlog-post-body p');
+                          const highlight = document.querySelector('.maatlog-post-body .highlight');
+                          if (!main || !prose) return null;
+                          return {
+                            overflow: document.documentElement.scrollWidth
+                              - document.documentElement.clientWidth,
+                            main: Math.round(main.getBoundingClientRect().width),
+                            prose: Math.round(prose.getBoundingClientRect().width),
+                            code: highlight
+                              ? Math.round(highlight.getBoundingClientRect().width)
+                              : null,
+                          };
+                        }"""
+                    )
+                    assert metrics is not None, f"missing main/prose @{width}"
+                    assert metrics["overflow"] == 0, f"overflow @{width}"
+                    assert PROSE_MIN_PX <= metrics["prose"] <= PROSE_MAX_PX, metrics
+                    assert metrics["main"] > metrics["prose"], metrics
+                    if metrics["code"] is not None:
+                        assert metrics["code"] > metrics["prose"], metrics
+                    prose_by_width[width] = metrics["prose"]
+                finally:
+                    page.close()
+
+            assert prose_by_width[1280] <= 690, prose_by_width
+            assert prose_by_width[1920] >= prose_by_width[1280], prose_by_width
+            assert prose_by_width[2560] >= PROSE_WIDE_MIN_PX, prose_by_width
+            assert prose_by_width[3840] > prose_by_width[2560], prose_by_width
+            assert prose_by_width[3840] <= PROSE_MAX_PX, prose_by_width
+        finally:
             browser.close()
 
 

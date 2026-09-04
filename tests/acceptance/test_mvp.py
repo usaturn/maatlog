@@ -347,6 +347,55 @@ def test_default_post_taxonomy_styles_apply_in_browser(site: AcceptanceSite) -> 
             browser.close()
 
 
+def test_maattop_hero_is_rendered_and_its_image_ships(site: AcceptanceSite) -> None:
+    """The maattop hero markup must reference an image that actually reaches outdir."""
+    result = site.build("html", theme="maatlog-default")
+    page = result.html("posts/hero-post.html")
+
+    image = page.select_one(".maatlog-post-top-image-img")
+    assert image is not None
+    assert image["alt"] == "Hero image for acceptance testing"
+    assert page.select_one(".maatlog-post-top-image-overlay")
+    assert page.select_one(".maatlog-post-top-image-title")
+
+    src = image["src"]
+    assert src.startswith("../_images/")
+    assert result.path(f"posts/{src}").resolve().is_file()
+
+
+@pytest.mark.browser
+def test_maattop_hero_title_overlaps_the_image_in_browser(site: AcceptanceSite) -> None:
+    """H-1: the bundled default theme must serve the hero rules, not just the markup."""
+    result = site.build("html", theme="maatlog-default")
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        try:
+            page = browser.new_page()
+            page.goto(result.path("posts/hero-post.html").resolve().as_uri(), wait_until="load")
+            geometry = page.evaluate(
+                """() => {
+                  const container = document.querySelector('.maatlog-post-top-image');
+                  const title = document.querySelector('.maatlog-post-top-image-title');
+                  const image = document.querySelector('.maatlog-post-top-image-img');
+                  return {
+                    containerPosition: getComputedStyle(container).position,
+                    titlePosition: getComputedStyle(title).position,
+                    imageFit: getComputedStyle(image).objectFit,
+                    container: container.getBoundingClientRect().toJSON(),
+                    title: title.getBoundingClientRect().toJSON(),
+                  };
+                }"""
+            )
+            assert geometry["containerPosition"] == "relative"
+            assert geometry["titlePosition"] == "absolute"
+            assert geometry["imageFit"] == "cover"
+            # The title box must sit inside the image box, not stack below it.
+            assert geometry["title"]["bottom"] <= geometry["container"]["bottom"] + 1
+            assert geometry["title"]["top"] >= geometry["container"]["top"] - 1
+        finally:
+            browser.close()
+
+
 def test_a10_third_party_theme(site: AcceptanceSite) -> None:
     """A10: registered maatlog-base child can override templates/CSS markers."""
     result = site.build("html", theme="contract_theme")
@@ -370,7 +419,7 @@ def test_a11_theme_contract_errors(site: AcceptanceSite) -> None:
         text,
     )
     assert "field=api" in text
-    assert "core_api=1.5" in text
+    assert "core_api=1.9" in text
     assert "theme_api=2.0" in text
     assert "value=2.0" in text
 
@@ -381,7 +430,7 @@ def test_a11_theme_contract_errors(site: AcceptanceSite) -> None:
         manifest_text,
     )
     assert "field=manifest" in manifest_text
-    assert "core_api=1.5" in manifest_text
+    assert "core_api=1.9" in manifest_text
     assert "expected=maatlog-theme.toml" in manifest_text
 
     missing_block = site.build_invalid("missing-block")
@@ -391,7 +440,7 @@ def test_a11_theme_contract_errors(site: AcceptanceSite) -> None:
         block_text,
     )
     assert "field=block" in block_text
-    assert "core_api=1.5" in block_text
+    assert "core_api=1.9" in block_text
     assert "theme_api=1.0" in block_text
 
     missing_templates = site.build_invalid("missing-templates")
@@ -401,7 +450,7 @@ def test_a11_theme_contract_errors(site: AcceptanceSite) -> None:
         templates_text,
     )
     assert "field=template" in templates_text
-    assert "core_api=1.5" in templates_text
+    assert "core_api=1.9" in templates_text
     assert "theme_api=1.0" in templates_text
 
 

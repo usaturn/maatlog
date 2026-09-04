@@ -16,8 +16,10 @@
   /* Native widgets — search field, buttons, scrollbars — follow the palette. */
   color-scheme: light;
 
-  --maatlog-content-width: 42rem;
-  --maatlog-main-width: 50rem;
+  /* Fluid width policy (Issue 110): floor matches the previous fixed rem values,
+     preferred term grows with viewport, ceiling keeps 4K readable. */
+  --maatlog-content-width: clamp(42rem, 24rem + 16vw, 60rem);
+  --maatlog-main-width: clamp(50rem, 30rem + 18vw, 72rem);
   --maatlog-sidebar-width: 16rem;
   --maatlog-nav-width: 13rem;
   --maatlog-toc-width: 13.5rem;
@@ -53,6 +55,7 @@
   --maatlog-inline-code-text: #312e81;
   --maatlog-badge-background: #e0e7ff;
   --maatlog-badge-text: #312e81;
+  --maatlog-top-image-title-color: #fff;
   --maatlog-shadow-color: 15 23 42 / 8%;
   --maatlog-color-primary: var(--maatlog-color-link);
   --maatlog-shadow-sm: 0 1px 2px rgb(var(--maatlog-shadow-color));
@@ -74,7 +77,7 @@
     --maatlog-color-accent: #4dd8ee;
     --maatlog-color-border: #2f3d55;
     --maatlog-color-control-border: #8894ad;
-    --maatlog-code-background: #010409;
+    --maatlog-code-background: #131b2b;
     --maatlog-code-text: #e6edf3;
     --maatlog-code-border: #30363d;
     --maatlog-color-surface-hover: #1d2739;
@@ -82,6 +85,7 @@
     --maatlog-inline-code-text: #cdd6fe;
     --maatlog-badge-background: #241f52;
     --maatlog-badge-text: #cdd6fe;
+    --maatlog-top-image-title-color: #fff;
     --maatlog-shadow-color: 0 0 0 / 45%;
   }
 }
@@ -97,7 +101,7 @@
   --maatlog-color-accent: #4dd8ee;
   --maatlog-color-border: #2f3d55;
   --maatlog-color-control-border: #8894ad;
-  --maatlog-code-background: #010409;
+  --maatlog-code-background: #131b2b;
   --maatlog-code-text: #e6edf3;
   --maatlog-code-border: #30363d;
   --maatlog-color-surface-hover: #1d2739;
@@ -105,6 +109,7 @@
   --maatlog-inline-code-text: #cdd6fe;
   --maatlog-badge-background: #241f52;
   --maatlog-badge-text: #cdd6fe;
+  --maatlog-top-image-title-color: #fff;
   --maatlog-shadow-color: 0 0 0 / 45%;
 }
 
@@ -389,6 +394,33 @@ section.maatlog-archive {
   margin: 0;
 }
 
+/* 著者の外部リンク。アイコンは currentColor 追従なので色は周囲から受け継ぐ。 */
+.maatlog-author-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--maatlog-space-sm);
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.maatlog-author-link {
+  display: inline-flex;
+  align-items: center;
+  color: var(--maatlog-color-muted);
+}
+
+.maatlog-author-link:hover {
+  color: var(--maatlog-color-link);
+}
+
+.maatlog-author-link-icon {
+  display: block;
+  width: 1.25em;
+  height: 1.25em;
+}
+
 /* Sidebar の分類ナビゲーション。Documentation theme 的な箇条書きにしない。 */
 .maatlog-taxonomy {
   margin-bottom: var(--maatlog-space-lg);
@@ -471,6 +503,7 @@ section.maatlog-archive {
 }
 
 .maatlog-post-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--maatlog-space-sm, 0.5rem);
@@ -486,6 +519,22 @@ section.maatlog-archive {
     transform var(--maatlog-motion-fast) ease,
     box-shadow var(--maatlog-motion-fast) ease,
     border-color var(--maatlog-motion-fast) ease;
+}
+
+/* NEW バッジ — Issue #62 「新着」表示 */
+.maatlog-new-badge {
+  display: inline-block;
+  padding: 0.15em 0.55em;
+  border-radius: var(--maatlog-radius-pill, 9999px);
+  background: var(--maatlog-badge-background);
+  color: var(--maatlog-badge-text);
+  font-size: 0.7em;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  line-height: 1.4;
+  text-transform: uppercase;
+  vertical-align: middle;
+  margin-bottom: var(--maatlog-space-xs, 0.25rem);
 }
 
 .maatlog-post-card:hover,
@@ -513,6 +562,14 @@ section.maatlog-archive {
   color: var(--maatlog-color-link, #0b5cab);
 }
 
+/* カード全体をタイトルリンクのクリック領域にする（stretched link）。
+   基準はカードなので、タイトルの <a> 自身は配置しない。 */
+.maatlog-post-card-title a::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
 .maatlog-post-card-date {
   color: var(--maatlog-color-muted, #586070);
   font-size: 0.8rem;
@@ -532,6 +589,13 @@ section.maatlog-archive {
   align-items: center;
   gap: var(--maatlog-space-sm, 0.5rem);
   margin: auto 0 0;
+}
+
+/* taxonomy リンクは overlay より前面に置き、本来のリンク先を保つ。 */
+/* stylelint-disable-next-line no-descending-specificity -- meta links must sit above the title stretched-link overlay. */
+.maatlog-post-card-meta a {
+  position: relative;
+  z-index: 1;
 }
 
 /* 区切りは読み上げ専用の span が担うので、視覚的な間隔は gap で作る。 */
@@ -1282,14 +1346,78 @@ img {
   white-space: nowrap;
 }
 
+/* Cross-document View Transition: same-origin navigations only.
+   Unsupported browsers ignore the at-rule and navigate normally. */
+@view-transition {
+  navigation: auto;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: var(--maatlog-motion-fast);
+  animation-timing-function: ease-out;
+  animation-fill-mode: both;
+}
+
 /* Motion is decoration here: every transition is a hover affordance, so the
    reduced-motion reader loses nothing by having them all switched off. */
 @media (prefers-reduced-motion: reduce) {
+  @view-transition {
+    navigation: none;
+  }
+
   *,
   *::before,
   *::after {
     transition: none !important;
     transform: none !important;
     animation: none !important;
+  }
+}
+
+/* ---- maattop hero image (Theme API 1.9) ---- */
+.maatlog-post-top-image {
+  position: relative;
+  width: 100%;
+  max-width: var(--maatlog-main-width, 100%);
+  overflow: hidden;
+  aspect-ratio: 16 / 9;
+}
+
+.maatlog-post-top-image-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.maatlog-post-top-image-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, transparent 40%, rgb(0 0 0 / 60%));
+}
+
+.maatlog-post-top-image-title {
+  position: absolute;
+  bottom: 1.5rem;
+  left: 1.5rem;
+  right: 1.5rem;
+  color: var(--maatlog-top-image-title-color);
+  font-size: clamp(1.5rem, 4vw, 3rem);
+  font-family: var(--maatlog-top-image-title-font, inherit);
+  line-height: 1.2;
+  text-shadow: 0 1px 4px rgb(0 0 0 / 60%);
+}
+
+@media (width <= 640px) {
+  .maatlog-post-top-image {
+    aspect-ratio: 4 / 3;
+  }
+
+  .maatlog-post-top-image-title {
+    bottom: 1rem;
+    left: 1rem;
+    right: 1rem;
+    font-size: clamp(1.2rem, 5vw, 2rem);
   }
 }

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from collections.abc import MutableMapping
 from typing import cast
 
@@ -139,3 +141,110 @@ def test_invalid_palette_is_rejected(value: object) -> None:
         MaatlogConfig.from_values({"maatlog_palette": value})
 
     assert error.value.diagnostics[0].field == "maatlog_palette"
+
+
+def test_author_profiles_default_to_none() -> None:
+    assert CONFIG_VALUES["maatlog_author_profiles"] == (None, "env")
+    assert MaatlogConfig.from_values({}).author_profiles is None
+
+
+def test_author_profiles_are_accepted() -> None:
+    config = MaatlogConfig.from_values(
+        {
+            "maatlog_authors": {"alice": "Alice"},
+            "maatlog_author_profiles": {
+                "alice": {"links": [{"type": "GitHub", "url": "https://github.com/alice"}]},
+            },
+        }
+    )
+
+    assert config.author_profiles is not None
+    link = config.author_profiles["alice"].links[0]
+    assert (link.type, link.label, link.icon) == ("github", "GitHub", "github")
+
+
+def test_author_profiles_do_not_require_a_matching_display_name() -> None:
+    """maatlog_authors は None を許すため、slug の相互参照は検証しない。"""
+    config = MaatlogConfig.from_values({"maatlog_author_profiles": {"alice": {"links": []}}})
+
+    assert config.author_profiles is not None
+    assert config.author_profiles["alice"].links == ()
+
+
+def test_author_profiles_mapping_is_frozen() -> None:
+    config = MaatlogConfig.from_values({"maatlog_author_profiles": {"alice": {"links": []}}})
+
+    assert config.author_profiles is not None
+    with pytest.raises(TypeError):
+        cast(MutableMapping[str, object], config.author_profiles)["bob"] = {}
+
+
+@pytest.mark.parametrize("value", ["alice", 1, ["alice"]])
+def test_non_mapping_author_profiles_are_rejected(value: object) -> None:
+    with pytest.raises(MaatlogBuildError, match="maatlog.config.invalid") as error:
+        MaatlogConfig.from_values({"maatlog_author_profiles": value})
+
+    assert error.value.diagnostics[0].field == "maatlog_author_profiles"
+
+
+@pytest.mark.parametrize("slug", ["Alice", "", "-alice", "alice/bob"])
+def test_invalid_author_profile_slugs_are_rejected(slug: str) -> None:
+    with pytest.raises(MaatlogBuildError, match="maatlog.config.invalid") as error:
+        MaatlogConfig.from_values({"maatlog_author_profiles": {slug: {"links": []}}})
+
+    assert error.value.diagnostics[0].field == "maatlog_author_profiles"
+
+
+def test_invalid_author_link_is_rejected() -> None:
+    with pytest.raises(MaatlogBuildError, match="maatlog.author.link-invalid") as error:
+        MaatlogConfig.from_values(
+            {"maatlog_author_profiles": {"alice": {"links": [{"type": "github", "url": "/alice"}]}}}
+        )
+
+    assert error.value.diagnostics[0].field == "maatlog_author_profiles.alice.links[0].url"
+
+
+def test_unknown_author_profile_key_is_rejected() -> None:
+    with pytest.raises(MaatlogBuildError, match="maatlog.config.invalid") as error:
+        MaatlogConfig.from_values({"maatlog_author_profiles": {"alice": {"bio": "Alice"}}})
+
+    assert error.value.diagnostics[0].field == "maatlog_author_profiles.alice"
+
+
+def test_top_image_title_font_defaults_to_none() -> None:
+    config = MaatlogConfig.from_values({})
+    assert config.top_image_title_font is None
+
+
+def test_top_image_title_font_accepts_font_family_string() -> None:
+    config = MaatlogConfig.from_values({"maatlog_top_image_title_font": "Georgia, serif"})
+    assert config.top_image_title_font == "Georgia, serif"
+
+
+def test_top_image_title_font_accepts_none_explicitly() -> None:
+    config = MaatlogConfig.from_values({"maatlog_top_image_title_font": None})
+    assert config.top_image_title_font is None
+
+
+def test_top_image_title_font_accepts_quoted_font_family() -> None:
+    """引用符付きのフォントスタックは CSS として正当なので受理する。"""
+    config = MaatlogConfig.from_values({"maatlog_top_image_title_font": '"Noto Sans JP", serif'})
+    assert config.top_image_title_font == '"Noto Sans JP", serif'
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        'X; } body { display: none; } .y { font-family: "z"',
+        "Georgia</style><script>alert(1)</script>",
+        "Georgia; --injected: 1",
+        "Georgia /* comment */, serif",
+        "Georgia\\26 , serif",
+    ],
+)
+def test_top_image_title_font_rejects_css_control_characters(value: str) -> None:
+    """``<style>`` へ素通しするため、宣言や要素から抜け出せる値は拒否する。"""
+    with pytest.raises(MaatlogBuildError) as error:
+        MaatlogConfig.from_values({"maatlog_top_image_title_font": value})
+
+    assert error.value.diagnostics[0].field == "maatlog_top_image_title_font"

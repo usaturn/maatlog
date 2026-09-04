@@ -9,8 +9,10 @@ from unittest.mock import MagicMock
 import pytest
 
 from maatlog.archives import ArchiveKey, ArchivePage
+from maatlog.authors import AuthorLink, AuthorProfile
 from maatlog.model import Post, PublicationStatus
 from maatlog.views import (
+    AuthorLinkView,
     FeedLinkView,
     MaatlogTemplateContext,
     PostTaxonomiesView,
@@ -20,6 +22,7 @@ from maatlog.views import (
     TaxonomyNavigationView,
     archive_view,
     as_template_mapping,
+    author_link_views,
     build_post_context,
     empty_context,
     home_context,
@@ -71,7 +74,7 @@ def test_empty_context_has_all_public_keys() -> None:
         "taxonomies",
         "site",
     )
-    assert context.api_version == "1.5"
+    assert context.api_version == "1.9"
     assert context.site == SiteView(title="", tagline=None, archive_url="")
 
 
@@ -86,7 +89,7 @@ def test_context_exposes_the_maatlog_distribution_version() -> None:
 
 def test_empty_context_defaults() -> None:
     context = empty_context()
-    assert context.api_version == "1.5"
+    assert context.api_version == "1.9"
     assert context.page_kind == "normal"
     assert context.post is None
     assert context.posts == ()
@@ -124,7 +127,7 @@ def test_build_post_context_sets_page_kind(post: PostFactory) -> None:
     assert context.post.page_url == "hello.html"
     assert context.post.body_html == "<p>x</p>"
     mapping = as_template_mapping(context)
-    assert mapping["api_version"] == "1.5"
+    assert mapping["api_version"] == "1.9"
     assert mapping["page_kind"] == "post"
     assert mapping["post"]["body_html"] == "<p>x</p>"
 
@@ -274,7 +277,7 @@ def test_normal_page_context_keeps_page_kind_normal() -> None:
     context = normal_page_context(site=site, taxonomies=taxonomies, feeds=feeds)
 
     assert context.page_kind == "normal"
-    assert context.api_version == "1.5"
+    assert context.api_version == "1.9"
     assert context.post is None
     assert context.posts == ()
     assert context.archive is None
@@ -299,3 +302,44 @@ def test_empty_context_stays_empty() -> None:
 
     assert context.taxonomies == TaxonomyNavigationView.empty()
     assert context.feeds == ()
+
+
+def test_author_link_views_maps_profile_links() -> None:
+    profile = AuthorProfile(
+        links=(
+            AuthorLink(type="github", url="https://github.com/alice", label="GitHub", icon="github"),
+            AuthorLink(type="mastodon", url="https://example.social/@alice", label="mastodon", icon="link"),
+        )
+    )
+
+    assert author_link_views(profile) == (
+        AuthorLinkView(type="github", url="https://github.com/alice", label="GitHub", icon="github"),
+        AuthorLinkView(type="mastodon", url="https://example.social/@alice", label="mastodon", icon="link"),
+    )
+
+
+def test_author_link_views_returns_empty_without_a_profile() -> None:
+    assert author_link_views(None) == ()
+    assert author_link_views(AuthorProfile(links=())) == ()
+
+
+def test_post_view_has_top_image_fields(post: PostFactory) -> None:
+    """PostView must carry top_image_url and top_image_alt."""
+    view = post_view(
+        post(),
+        top_image_url="/_images/hero.png",
+        top_image_alt="Hero",
+    )
+    assert view.top_image_url == "/_images/hero.png"
+    assert view.top_image_alt == "Hero"
+
+
+def test_post_view_top_image_defaults(post: PostFactory) -> None:
+    view = post_view(post())
+    assert view.top_image_url is None
+    assert view.top_image_alt == ""
+
+
+def test_site_view_top_image_title_font_default() -> None:
+    site = SiteView(title="Blog", tagline=None, archive_url="/blog/")
+    assert site.top_image_title_font is None

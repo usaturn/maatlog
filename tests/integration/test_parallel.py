@@ -98,3 +98,43 @@ def test_parallel_archive_cards_match_serial(make_project: ProjectFactory) -> No
         parallel_slugs = [attrs.get("data-slug") for attrs in parallel_page.select(".maatlog-post-card")]
         assert parallel_slugs == serial_slugs
         assert serial_slugs  # published posts must appear
+
+
+MAATTOP_PARALLEL_FILES: dict[str, str | bytes] = {
+    **PARALLEL_FILES,
+    "hero-post.rst": """:maatlog-post: true
+:maatlog-slug: hero-parallel
+:maatlog-published-at: 2026-07-20T00:00:00Z
+
+Hero Parallel
+=============
+
+.. maatlog:maattop:: images/hero.png
+   :alt: Hero for the parallel build
+
+Body.
+""",
+    "images/hero.png": b"png",
+}
+
+
+def test_parallel_write_copies_maattop_image(make_project: ProjectFactory) -> None:
+    """maattop_node is stripped before post_process_images, so the master writer
+    must promote the hero image itself or ``-j`` leaves a dangling ``_images`` src."""
+    result = make_project(files=MAATTOP_PARALLEL_FILES, config=PARALLEL_CONFIG).build(parallel=4)
+
+    page = result.html("hero-post.html")
+    src = next(attrs["src"] for attrs in page.select(".maatlog-post-top-image-img"))
+    assert src.startswith("_images/")
+    assert result.path(src).is_file()
+
+
+def test_parallel_maattop_image_matches_serial(make_project: ProjectFactory) -> None:
+    """Separate projects: a shared outdir would keep the serial copy and hide the gap."""
+    serial = make_project(files=MAATTOP_PARALLEL_FILES, config=PARALLEL_CONFIG).build(parallel=1)
+    parallel = make_project(files=MAATTOP_PARALLEL_FILES, config=PARALLEL_CONFIG).build(parallel=4)
+
+    serial_images = sorted(path.name for path in serial.path("_images").iterdir())
+    parallel_images = sorted(path.name for path in parallel.path("_images").iterdir())
+    assert parallel_images == serial_images
+    assert "hero.png" in serial_images
