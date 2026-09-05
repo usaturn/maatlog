@@ -16,10 +16,10 @@ from .archives import ArchivePage
 from .authors import AuthorProfile
 from .model import Post
 from .theme_api import CORE_THEME_API
-from .urls import post_urls
+from .urls import is_absolute_http_url, post_urls
 from .version import PACKAGE_VERSION
 
-PageKind = Literal["normal", "post", "archive", "home"]
+PageKind = Literal["normal", "post", "archive", "home", "profile"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,11 +39,21 @@ class AuthorLinkView:
 
 
 @dataclass(frozen=True, slots=True)
+class AuthorStatsView:
+    """Build-time statistics of one author. Published posts only."""
+
+    post_count: int
+    writing_since: int | None
+    latest_post: datetime | None
+
+
+@dataclass(frozen=True, slots=True)
 class SiteView:
     title: str
     tagline: str | None
     archive_url: str
     top_image_title_font: str | None = None
+    content_width: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -101,6 +111,49 @@ class PostCardView:
     external_url: str | None
     slug: str | None = None
     taxonomies: PostTaxonomiesView = PostTaxonomiesView.empty()
+
+
+@dataclass(frozen=True, slots=True)
+class AuthorSummaryView:
+    """One author as the right rail draws them.
+
+    Deliberately lighter than :class:`AuthorProfileView`: the About body, the
+    featured cards and the statistics are profile-page data and would cost a
+    doctree re-render on every page of the site.
+
+    ``profile_url`` is empty when the author has no published post, because no
+    author archive page is generated for them.
+    """
+
+    slug: str
+    display_name: str
+    avatar_url: str | None
+    initials: str
+    bio_short: str | None
+    links: tuple[AuthorLinkView, ...]
+    profile_url: str
+
+
+@dataclass(frozen=True, slots=True)
+class AuthorProfileView:
+    """Everything a profile page renders for one author.
+
+    ``about_html`` is the About document rendered for the profile page's own
+    location, so its relative URIs are already correct. ``initials`` is filled
+    even when ``avatar_url`` is set, so a theme can choose either.
+    """
+
+    slug: str
+    display_name: str
+    role: str | None
+    avatar_url: str | None
+    initials: str
+    bio_short: str | None
+    interests: tuple[str, ...]
+    links: tuple[AuthorLinkView, ...]
+    about_html: str | None
+    featured: tuple[PostCardView, ...]
+    stats: AuthorStatsView
 
 
 @dataclass(frozen=True, slots=True)
@@ -163,6 +216,8 @@ class MaatlogTemplateContext:
     feeds: tuple[FeedLinkView, ...] = ()
     taxonomies: TaxonomyNavigationView = TaxonomyNavigationView.empty()
     site: SiteView = SiteView("", None, "")
+    profile: AuthorProfileView | None = None
+    author_summaries: tuple[AuthorSummaryView, ...] = ()
 
 
 def author_link_views(profile: AuthorProfile | None) -> tuple[AuthorLinkView, ...]:
@@ -186,6 +241,7 @@ def normal_page_context(
     site: SiteView | None = None,
     taxonomies: TaxonomyNavigationView | None = None,
     feeds: tuple[FeedLinkView, ...] = (),
+    author_summaries: tuple[AuthorSummaryView, ...] = (),
 ) -> MaatlogTemplateContext:
     """Return the context for a page that is neither a post, archive, nor home.
 
@@ -197,6 +253,7 @@ def normal_page_context(
         site=site if site is not None else SiteView("", None, ""),
         taxonomies=taxonomies if taxonomies is not None else TaxonomyNavigationView.empty(),
         feeds=feeds,
+        author_summaries=author_summaries,
     )
 
 
@@ -247,10 +304,15 @@ def post_view(
     *page_url* should be the absolute page URL when ``html_baseurl`` is known
     (Builder URI joined with the base). ``canonical_url`` falls back to that
     page URL when metadata does not set an explicit canonical.
+
+    ``canonical_url`` stays ``None`` unless the resolved value is an absolute
+    URL. Without ``html_baseurl`` the fallback is the builder target URI, and a
+    relative canonical is invalid: browsers resolve it against the document, so
+    a post below the root would advertise — and share — an unreachable URL.
     """
     resolved_body = None if post.external_url is not None else body_html
     urls = post_urls(page_url=page_url, canonical=post.canonical_url, external=post.external_url)
-    canonical = urls.canonical_url if (page_url or post.canonical_url) else None
+    canonical = urls.canonical_url if is_absolute_http_url(urls.canonical_url) else None
     return PostView(
         title=post.title,
         slug=post.slug,
@@ -285,6 +347,7 @@ def build_post_context(
     taxonomies: TaxonomyNavigationView | None = None,
     site: SiteView | None = None,
     post_taxonomies: PostTaxonomiesView | None = None,
+    author_summaries: tuple[AuthorSummaryView, ...] = (),
 ) -> MaatlogTemplateContext:
     """Build a ``page_kind="post"`` template context for *post*."""
     return MaatlogTemplateContext(
@@ -302,6 +365,7 @@ def build_post_context(
         feeds=feeds,
         taxonomies=taxonomies if taxonomies is not None else TaxonomyNavigationView.empty(),
         site=site if site is not None else SiteView("", None, ""),
+        author_summaries=author_summaries,
     )
 
 
@@ -362,11 +426,21 @@ def archive_context(
     site: SiteView | None = None,
     linker: Callable[[Post], PostTaxonomiesView] | None = None,
     is_home: bool = False,
+    profile: AuthorProfileView | None = None,
+    author_summaries: tuple[AuthorSummaryView, ...] = (),
 ) -> MaatlogTemplateContext:
     """Build a ``page_kind="archive"`` template context for *page*.
 
     Card and pagination URLs are relative to *page.docname* via
     :meth:`Builder.get_relative_uri`. Domain data is not modified.
+
+    Passing *profile* turns the page into ``page_kind="profile"``. Everything
+    else (cards, pagination, feeds, taxonomies) stays identical, so a profile
+    page is an author archive with a profile header on top.
+
+    ``author_summaries`` は呼び出し側が決める。``profile`` が渡ったページ
+    （``page_kind="profile"``）では空タプルを渡すこと。プロフィールページは
+    右ペインを出さない。
     """
     pages = all_pages if all_pages is not None else (page,)
     cards = tuple(
@@ -379,13 +453,15 @@ def archive_context(
         for post in page.posts
     )
     return MaatlogTemplateContext(
-        page_kind="archive",
+        page_kind="profile" if profile is not None else "archive",
         posts=cards,
         archive=archive_view(page, is_home=is_home),
         pagination=pagination_view(page, builder, all_pages=pages),
         feeds=feeds,
         taxonomies=taxonomies if taxonomies is not None else TaxonomyNavigationView.empty(),
         site=site if site is not None else SiteView("", None, ""),
+        profile=profile,
+        author_summaries=author_summaries,
     )
 
 
@@ -400,6 +476,7 @@ def home_context(
     linker: Callable[[Post], PostTaxonomiesView] | None = None,
     taxonomies: TaxonomyNavigationView | None = None,
     feeds: tuple[FeedLinkView, ...] = (),
+    author_summaries: tuple[AuthorSummaryView, ...] = (),
 ) -> MaatlogTemplateContext:
     """Build a ``page_kind="home"`` context for the blog home page.
 
@@ -433,6 +510,7 @@ def home_context(
         feeds=feeds,
         taxonomies=taxonomies if taxonomies is not None else TaxonomyNavigationView.empty(),
         site=site,
+        author_summaries=author_summaries,
     )
 
 
@@ -501,6 +579,10 @@ def register_representative_images(app: Sphinx, builder: Builder) -> None:
     promote them, but it runs on ``html-page-context`` — a worker process under
     ``-j`` — so its ``builder.images`` writes never reach the master that copies
     files. Promoting here keeps ``_images`` complete for parallel writes.
+
+    Author avatars are promoted for a stronger reason: they are configured, never
+    appear in any doctree, and are drawn only by generated profile pages, so no
+    ``post_process_images`` pass would ever register them on the builder.
     """
     from .builders import is_full_html_builder
 
@@ -514,6 +596,21 @@ def register_representative_images(app: Sphinx, builder: Builder) -> None:
     maattop = cast(dict[str, dict[str, str]], domain.data.get("maattop_by_docname", {}))
     for entry in maattop.values():
         _ensure_builder_image(builder, entry["uri"])
+    for relative in _resolved_avatar_paths(app):
+        _ensure_builder_image(builder, relative)
+
+
+def _resolved_avatar_paths(app: Sphinx) -> tuple[str, ...]:
+    """Srcdir-relative avatar paths resolved during ``env-updated``.
+
+    Read through ``getattr`` because :mod:`maatlog.extension` imports this module;
+    importing it back would be circular.
+    """
+    profiles = getattr(app, "_maatlog_resolved_profiles", None)
+    avatars = getattr(profiles, "avatars", None)
+    if not isinstance(avatars, Mapping):
+        return ()
+    return tuple(cast(Mapping[str, str], avatars).values())
 
 
 def _ensure_builder_image(builder: Builder, image_uri: str) -> str | None:

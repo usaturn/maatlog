@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import json
 import os
 import pickle
-from collections.abc import Collection, Iterator
+from collections.abc import Collection, Iterable, Iterator, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
@@ -16,7 +17,7 @@ from sphinx.highlighting import PygmentsBridge
 from sphinx.util import logging
 from sphinx.util.typing import ExtensionMetadata
 
-from .archives import check_generated_docnames, project_archives
+from .archives import ArchivePage, check_generated_docnames, project_archives
 from .builders import (
     BuilderCapability,
     builder_capability,
@@ -54,14 +55,26 @@ from .metadata import capture_source, cleanup_sources, collect_maattop_from_myst
 from .model import Post
 from .navigation import PostTaxonomyLinker, neighbors, post_taxonomy_linker, taxonomy_navigation
 from .outputs import commit_page_outputs
+from .profiles import (
+    ResolvedProfiles,
+    author_summary_views,
+    build_profile_view,
+    mark_about_documents_orphan,
+    profile_docname,
+    register_avatars,
+    resolve_profiles,
+)
 from .taxonomy import DomainIndex
 from .theme_api import resolve_palette, resolve_pygments_style, validate_selected_theme
 from .version import PACKAGE_VERSION
 from .views import (
+    AuthorProfileView,
+    AuthorSummaryView,
     FeedLinkView,
     NavigationView,
     PostCardView,
     SiteView,
+    TaxonomyLinkView,
     archive_context,
     as_template_mapping,
     build_post_context,
@@ -80,6 +93,7 @@ logger = logging.getLogger(__name__)
 POST_TEMPLATE = "maatlog/post.html"
 ARCHIVE_TEMPLATE = "maatlog/archive.html"
 HOME_TEMPLATE = "maatlog/home.html"
+PROFILE_TEMPLATE = "maatlog/profile.html"
 _THEMES_DIR = Path(__file__).resolve().parent / "themes"
 
 
@@ -156,11 +170,25 @@ def finalize_domain(app: Sphinx, env: BuildEnvironment) -> None:
     domain = cast(MaatlogDomain, env.get_domain("maatlog"))
     build_time = cast(datetime, app.__dict__["_maatlog_build_time"])
     config = MaatlogConfig.from_sphinx(app.config)
-    domain.finalize(
+    index = domain.finalize(
         config,
         build_time=build_time,
         known_docnames=set(env.found_docs),
     )
+    # env.found_docs, the published index, and srcdir are all available only here,
+    # so author profile cross-references are resolved once, at this point.
+    resolved = ResolvedProfiles(avatars={})
+    if config.author_profiles:
+        resolved = resolve_profiles(
+            config.author_profiles,
+            authors=config.authors,
+            index=index,
+            known_docnames=set(env.found_docs),
+            srcdir=Path(app.srcdir),
+        )
+        register_avatars(env, resolved.avatars, root=config.archive_docname)
+        mark_about_documents_orphan(env, config.author_profiles)
+    app.__dict__["_maatlog_resolved_profiles"] = resolved
     if config.home_docname is not None and config.home_docname not in env.found_docs:
         logger.warning(
             "maatlog_home_docname %r does not match any document; the blog home is disabled",
@@ -234,6 +262,7 @@ def inject_maatlog_page_context(
                     else None
                 ),
                 feeds=_archive_discovery_feeds(app, page_axis=None, taxonomy_id=None, label="Posts"),
+                author_summaries=_author_summaries(app, from_docname=pagename, config=config, linker=linker),
             )
         )
         return HOME_TEMPLATE
@@ -253,10 +282,13 @@ def inject_maatlog_page_context(
             once=True,
         )
 
+    _apply_about_canonical(app, pagename, config, context)
+
     post = posts.get(pagename)
 
     if post is None:
         index = cast(DomainIndex | None, domain.data.get("index"))
+        linker = post_taxonomy_linker(index, builder=app.builder, from_docname=pagename, root=config.archive_docname)
         if "maatlog" not in context:
             context["maatlog"] = as_template_mapping(
                 normal_page_context(
@@ -272,6 +304,7 @@ def inject_maatlog_page_context(
                         else None
                     ),
                     feeds=_archive_discovery_feeds(app, page_axis=None, taxonomy_id=None, label="Posts"),
+                    author_summaries=_author_summaries(app, from_docname=pagename, config=config, linker=linker),
                 )
             )
         return None
@@ -312,6 +345,9 @@ def inject_maatlog_page_context(
         post_taxonomies=linker.for_post(post),
         top_image_url=top_image_url,
         top_image_alt=top_image_alt,
+        author_summaries=_author_summaries(
+            app, from_docname=pagename, config=config, linker=linker, author_ids=post.authors
+        ),
     )
     context["maatlog"] = as_template_mapping(maatlog_context)
     # Suppress Sphinx basic-theme ``pageurl`` canonical; ``maatlog_head`` owns it
@@ -365,6 +401,24 @@ def collect_archive_pages(app: Sphinx) -> Iterator[tuple[str, dict[str, Any], st
             index, builder=app.builder, from_docname=page.docname, root=config.archive_docname
         )
         is_home = home_docname is None and page.key.axis is None and page.number == 1
+        profile_view = _profile_view_for(app, page, index=index, config=config, linker=linker)
+        # 著者アーカイブでは既定著者ではなくそのアーカイブの著者を出す。ページの主題と
+        # 右ペインの内容が食い違うのを避ける。1 ページ目は page_kind="profile" なので
+        # 右ペイン自体を出さず、ここに来るのは 2 ページ目以降だけである。
+        archive_authors: tuple[str, ...] = ()
+        if page.key.axis is TaxonomyAxis.AUTHOR and page.key.value is not None:
+            archive_authors = (page.key.value,)
+        summaries = (
+            ()
+            if profile_view is not None
+            else _author_summaries(
+                app,
+                from_docname=page.docname,
+                config=config,
+                linker=linker,
+                author_ids=archive_authors,
+            )
+        )
         maatlog = as_template_mapping(
             archive_context(
                 page,
@@ -375,6 +429,8 @@ def collect_archive_pages(app: Sphinx) -> Iterator[tuple[str, dict[str, Any], st
                 site=_site_view(app, page.docname, config),
                 linker=linker.for_post,
                 is_home=is_home,
+                profile=profile_view,
+                author_summaries=summaries,
             )
         )
         yield (
@@ -383,7 +439,7 @@ def collect_archive_pages(app: Sphinx) -> Iterator[tuple[str, dict[str, Any], st
                 "maatlog": maatlog,
                 "title": page.key.label,
             },
-            ARCHIVE_TEMPLATE,
+            PROFILE_TEMPLATE if profile_view is not None else ARCHIVE_TEMPLATE,
         )
 
 
@@ -408,6 +464,77 @@ def _post_discovery_feeds(
         feed_taxonomies=config.feed_taxonomies,
         index=index,
         timezone=config.timezone,
+    )
+
+
+def _author_summaries(
+    app: Sphinx,
+    *,
+    from_docname: str,
+    config: MaatlogConfig,
+    linker: PostTaxonomyLinker,
+    author_ids: Sequence[str] = (),
+) -> tuple[AuthorSummaryView, ...]:
+    """Summaries for the right rail of one page.
+
+    *author_ids* is what the page itself knows about its authors: a post's
+    ``:maatlog-authors:``, or the author an author archive belongs to. When it
+    is empty the page cannot name an author, so the explicitly configured
+    ``maatlog_default_author`` stands in. Nothing is chosen implicitly.
+    """
+    ids = tuple(author_ids)
+    if not ids:
+        ids = () if config.default_author is None else (config.default_author,)
+    if not ids:
+        return ()
+    authors = linker.for_authors(ids)
+    if config.authors is not None:
+        authors = tuple(
+            TaxonomyLinkView(
+                id=author.id,
+                label=config.authors.get(author.id, author.label),
+                url=author.url,
+            )
+            for author in authors
+        )
+    return author_summary_views(
+        app.builder,
+        authors=authors,
+        profiles=config.author_profiles or {},
+        avatars=resolved_profiles(app).avatars,
+        from_docname=from_docname,
+    )
+
+
+def _profile_view_for(
+    app: Sphinx,
+    page: ArchivePage,
+    *,
+    index: DomainIndex,
+    config: MaatlogConfig,
+    linker: PostTaxonomyLinker,
+) -> AuthorProfileView | None:
+    """Return the profile view for page 1 of a configured author, else ``None``.
+
+    Page 2 and beyond stay plain author archives, so the profile header, About,
+    Interests, Stats and Featured sections appear exactly once per author.
+    """
+    if page.key.axis is not TaxonomyAxis.AUTHOR or page.number != 1 or page.key.value is None:
+        return None
+    profiles = config.author_profiles or {}
+    profile = profiles.get(page.key.value)
+    if profile is None:
+        return None
+    return build_profile_view(
+        app.builder,
+        author_id=page.key.value,
+        display_name=page.key.label,
+        profile=profile,
+        index=index,
+        avatar_uri=resolved_profiles(app).avatars.get(page.key.value),
+        from_docname=page.docname,
+        timezone=config.timezone,
+        linker=linker.for_post,
     )
 
 
@@ -436,6 +563,25 @@ def _archive_discovery_feeds(
     )
 
 
+def _apply_about_canonical(app: Sphinx, pagename: str, config: MaatlogConfig, context: dict[str, Any]) -> None:
+    """Point an About document's canonical URL at the profile page that embeds it.
+
+    The same text is reachable from the About document's own URL and from the
+    profile page. Consolidating on the profile page keeps the canonical honest
+    without excluding the source document from the build.
+
+    No-op without a resolved ``html_baseurl``: a relative canonical is invalid,
+    and Sphinx itself emits none in that case.
+    """
+    profiles = config.author_profiles
+    if not profiles or resolved_baseurl(app) is None:
+        return
+    for author_id, profile in profiles.items():
+        if profile.about_docname == pagename:
+            context["pageurl"] = absolute_doc_url(app, profile_docname(config.archive_docname, author_id))
+            return
+
+
 def _site_view(app: Sphinx, pagename: str, config: MaatlogConfig) -> SiteView:
     """Build the per-page ``maatlog.site`` view (archive URL is page-relative)."""
     return SiteView(
@@ -443,7 +589,18 @@ def _site_view(app: Sphinx, pagename: str, config: MaatlogConfig) -> SiteView:
         tagline=config.tagline,
         archive_url=relative_page_url_for(app.builder, pagename, config.archive_docname),
         top_image_title_font=config.top_image_title_font,
+        content_width=config.content_width,
     )
+
+
+def resolved_profiles(app: Sphinx) -> ResolvedProfiles:
+    """Return the profile data resolved during ``env-updated``.
+
+    Empty when no profile is configured or the build has not reached
+    :func:`finalize_domain` yet (document-only builders never do).
+    """
+    value = app.__dict__.get("_maatlog_resolved_profiles")
+    return value if isinstance(value, ResolvedProfiles) else ResolvedProfiles(avatars={})
 
 
 def resolved_home_docname(app: Sphinx, config: MaatlogConfig) -> str | None:
@@ -716,10 +873,11 @@ def setup(app: Sphinx) -> ExtensionMetadata:
     _register_bundled_themes(app)
     app.connect("config-inited", initialize_build_time)
     app.connect("builder-inited", warn_partial_support_once)
+    # Filters must exist before theme template compilation in validate_selected_theme.
+    app.connect("builder-inited", _initialize_html_metadata)
     app.connect("builder-inited", validate_selected_theme)
     app.connect("builder-inited", link_palette_stylesheet)
     app.connect("builder-inited", apply_pygments_style)
-    app.connect("builder-inited", _initialize_html_metadata)
     app.connect("source-read", capture_source, priority=999)
     app.connect("doctree-read", collect_maattop_from_myst, priority=99)
     app.connect("doctree-read", collect_post, priority=100)
@@ -768,6 +926,11 @@ def _initialize_html_metadata(app: Sphinx) -> None:
     _register_template_filters(app)
 
 
+def maatlog_json(values: Iterable[object]) -> str:
+    """Return a compact JSON array for HTML data attributes (ASCII-safe)."""
+    return json.dumps(list(values), ensure_ascii=True, separators=(",", ":"))
+
+
 def _register_template_filters(app: Sphinx) -> None:
     templates = getattr(app.builder, "templates", None)
     if templates is None:
@@ -782,3 +945,4 @@ def _register_template_filters(app: Sphinx) -> None:
         return format_post_date(value, timezone)
 
     environment.filters["maatlog_post_date"] = maatlog_post_date
+    environment.filters["maatlog_json"] = maatlog_json

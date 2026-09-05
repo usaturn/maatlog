@@ -149,13 +149,17 @@ def test_theme_javascript_loads_the_next_archive_page(make_project: ProjectFacto
 @pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
 def test_loaded_posts_are_announced_politely(make_project: ProjectFactory, theme: str) -> None:
     # 自動追加はフォーカスを動かさない。読み上げは aria-live に任せる。
+    # （モバイル Sidebar など別 enhancer のフォーカス管理は対象外）
     result = make_project(files=RUNTIME_PROJECT, theme=theme).build()
     script = result.asset("_static/maatlog.js").read_text(encoding="utf-8")
+    start = script.index("function enhanceInfiniteScroll")
+    end = script.index('registerEnhancer("infinite-scroll"')
+    infinite = script[start:end]
 
     assert "maatlog-infinite-status" in script
     assert '"aria-live", "polite"' in script
     assert '"role", "status"' in script
-    assert ".focus()" not in script
+    assert ".focus()" not in infinite
 
 
 @pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
@@ -200,3 +204,27 @@ def test_theme_javascript_marks_new_posts(make_project: ProjectFactory, theme: s
     assert "maatlog:session-baseline" in script
     # NEW バッジのクラス
     assert "maatlog-new-badge" in script
+
+
+@pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
+def test_theme_javascript_filters_archive_cards(make_project: ProjectFactory, theme: str) -> None:
+    # Issue #60: アーカイブ絞り込みは単一 runtime の enhancer。機能別 script は増やさない。
+    result = make_project(files=RUNTIME_PROJECT, theme=theme).build()
+    script = result.asset("_static/maatlog.js").read_text(encoding="utf-8")
+
+    assert 'registerEnhancer("archive-filter"' in script
+    assert "data-maatlog-tags" in script
+    assert "maatlog:content-added" in script
+    assert "maatlog-archive-empty-filtered" in script
+
+
+@pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
+def test_theme_javascript_opens_mobile_sidebar(make_project: ProjectFactory, theme: str) -> None:
+    # Issue #65: モバイル Sidebar は単一 runtime の enhancer。機能別 script は増やさない。
+    result = make_project(files=RUNTIME_PROJECT, theme=theme).build()
+    script = result.asset("_static/maatlog.js").read_text(encoding="utf-8")
+
+    assert 'registerEnhancer("mobile-sidebar"' in script
+    assert "data-maatlog-toggle" in script
+    assert "maatlog-sidebar-open" in script
+    assert "maatlog-sidebar-backdrop" in script

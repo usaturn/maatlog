@@ -6,7 +6,7 @@
 {%- else -%}<span class="maatlog-taxonomy-link">{{ link.label|e }}</span>{%- endif -%}
 {%- endfor -%}
 {%- endmacro -%}
-<article class="maatlog-post-card{% if card_variant is defined and card_variant == 'featured' %} maatlog-post-card-featured{% endif %}" data-maatlog-component="post-card"{% if card_anchor is defined and card_anchor %} id="maatlog-post-{{ card_anchor|e }}"{% endif %}{% if card.slug %} data-slug="{{ card.slug|e }}"{% endif %}{% if card.published_at %} data-maatlog-published-at="{{ card.published_at.isoformat() }}"{% endif %}>
+<article class="maatlog-post-card{% if card_variant is defined and card_variant == 'featured' %} maatlog-post-card-featured{% endif %}" data-maatlog-component="post-card"{% if card_anchor is defined and card_anchor %} id="maatlog-post-{{ card_anchor|e }}"{% endif %}{% if card.slug %} data-slug="{{ card.slug|e }}"{% endif %}{% if card.published_at %} data-maatlog-published-at="{{ card.published_at.isoformat() }}"{% endif %} data-maatlog-tags='{{ card.taxonomies.tags | map(attribute="id") | list | maatlog_json }}' data-maatlog-categories='{{ card.taxonomies.categories | map(attribute="id") | list | maatlog_json }}' data-maatlog-authors='{{ card.taxonomies.authors | map(attribute="id") | list | maatlog_json }}'>
   {%- if card.image_url -%}
   <img class="maatlog-post-card-image" src="{{ card.image_url|e }}" alt="" />
   {%- endif -%}

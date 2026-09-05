@@ -1,12 +1,12 @@
-{# MaatLog right sidebar: the table of contents of what this page shows.
+{# MaatLog table of contents: what this page shows, inside the right rail.
    ``maatlog_has_toc`` is computed once in ``layout.html`` so that the layout's
-   ``maatlog-layout-has-toc`` state class and this <aside> can never disagree.
+   ``maatlog-layout-has-toc`` state class and this element can never disagree.
    ``toc`` and ``display_toc`` only reach real documents (Sphinx builds them in
    ``get_doc_context``), so generated archive pages fall back to the cards they
    list. Renders nothing at all when there is neither. #}
 {%- set has_posts = maatlog.posts and maatlog.page_kind in ("home", "archive") -%}
 {%- if maatlog_has_toc -%}
-<aside class="maatlog-toc" data-maatlog-component="toc" aria-label="{{ _('On this page') }}">
+<nav class="maatlog-toc" data-maatlog-component="toc" aria-label="{{ _('On this page') }}">
   {%- if has_posts -%}
   <h2>{{ _('Posts on this page') }}</h2>
   <ul class="maatlog-toc-posts">
@@ -18,5 +18,5 @@
   <h2>{{ _('Contents') }}</h2>
   <div class="maatlog-toc-headings">{{ toc }}</div>
   {%- endif -%}
-</aside>
+</nav>
 {%- endif -%}

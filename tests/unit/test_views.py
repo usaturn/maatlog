@@ -13,6 +13,9 @@ from maatlog.authors import AuthorLink, AuthorProfile
 from maatlog.model import Post, PublicationStatus
 from maatlog.views import (
     AuthorLinkView,
+    AuthorProfileView,
+    AuthorStatsView,
+    AuthorSummaryView,
     FeedLinkView,
     MaatlogTemplateContext,
     PostTaxonomiesView,
@@ -20,6 +23,7 @@ from maatlog.views import (
     TaxonomyItemView,
     TaxonomyLinkView,
     TaxonomyNavigationView,
+    archive_context,
     archive_view,
     as_template_mapping,
     author_link_views,
@@ -73,8 +77,10 @@ def test_empty_context_has_all_public_keys() -> None:
         "feeds",
         "taxonomies",
         "site",
+        "profile",
+        "author_summaries",
     )
-    assert context.api_version == "1.9"
+    assert context.api_version == "1.16"
     assert context.site == SiteView(title="", tagline=None, archive_url="")
 
 
@@ -89,7 +95,7 @@ def test_context_exposes_the_maatlog_distribution_version() -> None:
 
 def test_empty_context_defaults() -> None:
     context = empty_context()
-    assert context.api_version == "1.9"
+    assert context.api_version == "1.16"
     assert context.page_kind == "normal"
     assert context.post is None
     assert context.posts == ()
@@ -115,6 +121,30 @@ def test_external_post_does_not_expose_body_html(post: PostFactory) -> None:
     assert view.external_url == "https://outside.example/x"
 
 
+def test_canonical_url_is_dropped_when_it_is_not_absolute(post: PostFactory) -> None:
+    """相対 canonical は不正。ブラウザは文書からの相対として解決するため URL がずれる。
+
+    ``html_baseurl`` が無いと ``absolute_doc_url()`` は builder の target URI をそのまま
+    返すので、この保護が無いと記事ページが到達不能な canonical を出す。
+    """
+    view = post_view(post(), page_url="posts/deep.html")
+
+    assert view.page_url == "posts/deep.html"
+    assert view.canonical_url is None
+
+
+def test_canonical_url_is_kept_when_absolute(post: PostFactory) -> None:
+    view = post_view(post(), page_url="https://example.test/posts/deep.html")
+
+    assert view.canonical_url == "https://example.test/posts/deep.html"
+
+
+def test_explicit_canonical_metadata_survives_a_relative_page_url(post: PostFactory) -> None:
+    view = post_view(post(canonical_url="https://example.test/elsewhere.html"), page_url="posts/deep.html")
+
+    assert view.canonical_url == "https://example.test/elsewhere.html"
+
+
 def test_internal_post_keeps_body_html(post: PostFactory) -> None:
     view = post_view(post(), body_html="<p>Body</p>")
     assert view.body_html == "<p>Body</p>"
@@ -127,7 +157,7 @@ def test_build_post_context_sets_page_kind(post: PostFactory) -> None:
     assert context.post.page_url == "hello.html"
     assert context.post.body_html == "<p>x</p>"
     mapping = as_template_mapping(context)
-    assert mapping["api_version"] == "1.9"
+    assert mapping["api_version"] == "1.16"
     assert mapping["page_kind"] == "post"
     assert mapping["post"]["body_html"] == "<p>x</p>"
 
@@ -146,6 +176,8 @@ def test_as_template_mapping_preserves_public_key_order() -> None:
         "feeds",
         "taxonomies",
         "site",
+        "profile",
+        "author_summaries",
     )
 
 
@@ -277,7 +309,7 @@ def test_normal_page_context_keeps_page_kind_normal() -> None:
     context = normal_page_context(site=site, taxonomies=taxonomies, feeds=feeds)
 
     assert context.page_kind == "normal"
-    assert context.api_version == "1.9"
+    assert context.api_version == "1.16"
     assert context.post is None
     assert context.posts == ()
     assert context.archive is None
@@ -343,3 +375,135 @@ def test_post_view_top_image_defaults(post: PostFactory) -> None:
 def test_site_view_top_image_title_font_default() -> None:
     site = SiteView(title="Blog", tagline=None, archive_url="/blog/")
     assert site.top_image_title_font is None
+
+
+def test_site_view_content_width_default() -> None:
+    site = SiteView(title="Blog", tagline=None, archive_url="/blog/")
+    assert site.content_width is None
+
+
+def test_site_view_content_width_is_carried_verbatim() -> None:
+    site = SiteView(title="Blog", tagline=None, archive_url="/blog/", content_width="100%")
+    assert site.content_width == "100%"
+
+
+EMPTY_STATS = AuthorStatsView(post_count=0, writing_since=None, latest_post=None)
+
+
+def test_empty_context_exposes_a_profile_key() -> None:
+    mapping = as_template_mapping(empty_context())
+
+    assert mapping["profile"] is None
+    assert mapping["page_kind"] == "normal"
+
+
+def test_profile_view_survives_the_template_mapping() -> None:
+    profile = AuthorProfileView(
+        slug="alice",
+        display_name="Alice Anderson",
+        role="Editor",
+        avatar_url="_images/alice.png",
+        initials="AA",
+        bio_short="Hello.",
+        interests=("Python",),
+        links=(),
+        about_html="<p>About</p>",
+        featured=(),
+        stats=EMPTY_STATS,
+    )
+
+    mapping = as_template_mapping(MaatlogTemplateContext(page_kind="profile", profile=profile))
+
+    assert mapping["page_kind"] == "profile"
+    assert mapping["profile"]["display_name"] == "Alice Anderson"
+    assert mapping["profile"]["stats"]["post_count"] == 0
+
+
+def test_author_summary_view_exposes_its_public_fields() -> None:
+    from maatlog.views import AuthorSummaryView
+
+    view = AuthorSummaryView(
+        slug="alice",
+        display_name="Alice Anderson",
+        avatar_url=None,
+        initials="AA",
+        bio_short="Python developer.",
+        links=(),
+        profile_url="blog/author/alice.html",
+    )
+
+    assert tuple(asdict(view)) == (
+        "slug",
+        "display_name",
+        "avatar_url",
+        "initials",
+        "bio_short",
+        "links",
+        "profile_url",
+    )
+
+
+def test_empty_context_has_no_author_summaries() -> None:
+    assert empty_context().author_summaries == ()
+
+
+def _summary(slug: str) -> AuthorSummaryView:
+    return AuthorSummaryView(
+        slug=slug,
+        display_name=slug.title(),
+        avatar_url=None,
+        initials=slug[0].upper(),
+        bio_short=None,
+        links=(),
+        profile_url=f"blog/author/{slug}.html",
+    )
+
+
+def _mock_builder() -> MagicMock:
+    builder = MagicMock()
+
+    def _relative_uri(_from: str, to: str) -> str:
+        return f"{to}.html"
+
+    builder.get_relative_uri.side_effect = _relative_uri
+    return builder
+
+
+def test_normal_page_context_carries_author_summaries() -> None:
+    context = normal_page_context(author_summaries=(_summary("alice"),))
+
+    assert [item.slug for item in context.author_summaries] == ["alice"]
+
+
+def test_build_post_context_carries_author_summaries(post: PostFactory) -> None:
+    context = build_post_context(post(), author_summaries=(_summary("bob"), _summary("alice")))
+
+    assert [item.slug for item in context.author_summaries] == ["bob", "alice"]
+
+
+def test_archive_context_carries_author_summaries() -> None:
+    page = ArchivePage(
+        key=ArchiveKey(axis=None, value=None, label="Posts"),
+        docname="blog",
+        number=1,
+        total_pages=1,
+        posts=(),
+        total_posts=0,
+    )
+
+    context = archive_context(page, _mock_builder(), author_summaries=(_summary("alice"),))
+
+    assert [item.slug for item in context.author_summaries] == ["alice"]
+
+
+def test_home_context_carries_author_summaries(post: PostFactory) -> None:
+    context = home_context(
+        (),
+        _mock_builder(),
+        docname="index",
+        page_size=10,
+        site=SiteView("Site", None, "blog.html"),
+        author_summaries=(_summary("alice"),),
+    )
+
+    assert [item.slug for item in context.author_summaries] == ["alice"]

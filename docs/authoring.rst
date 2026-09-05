@@ -215,3 +215,20 @@ ID は対応する conf.py の許可リストに存在しなければなりま�
        :limit: 5
 
 MyST では ``maatlog:post-list`` に標準のフェンス付きディレクティブ形式を使えます。
+
+About 文書
+----------
+
+著者の長文プロフィールは、通常の reStructuredText または MyST 文書として書きます。
+``maatlog_author_profiles`` の ``about_docname`` で docname を明示します。
+配置場所は強制されません（例: ``authors/alice``）。
+
+* toctree に載せる必要はありません。
+  MaatLog が About 文書に ``:orphan:`` 相当のメタデータを付けるため、
+  「どこからも include されていない」警告は出ません
+* ``html_baseurl`` を設定しているとき、About 文書の canonical URL は
+  その著者のプロフィールページ（著者アーカイブ 1 ページ目）を指します
+* 本文はプロフィールページを起点に再描画されるため、文書内の相対リンクと画像は
+  自動的に正しい URI になります
+* 再描画の過程で ``doctree-resolved`` が About 文書に対してもう一度発火します。
+  MaatLog 自身のハンドラは冪等です

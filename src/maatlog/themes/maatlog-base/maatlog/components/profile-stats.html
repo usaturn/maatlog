@@ -1,0 +1,29 @@
+{# Build-time statistics. Published posts only, resolved in ``maatlog_timezone``.
+   Each metric is omitted when it has no value, so a brand new author shows only
+   the post count. #}
+{%- set stats = maatlog.profile.stats if maatlog.profile else none -%}
+{%- if stats -%}
+<section class="maatlog-profile-stats" data-maatlog-component="profile-stats">
+  <h2 class="maatlog-profile-section-heading">{{ _('Stats') }}</h2>
+  <dl class="maatlog-profile-stat-list">
+    <div class="maatlog-profile-stat">
+      <dt class="maatlog-profile-stat-label">{{ _('Posts') }}</dt>
+      <dd class="maatlog-profile-stat-value">{{ stats.post_count }}</dd>
+    </div>
+    {%- if stats.writing_since -%}
+    <div class="maatlog-profile-stat">
+      <dt class="maatlog-profile-stat-label">{{ _('Writing since') }}</dt>
+      <dd class="maatlog-profile-stat-value">{{ stats.writing_since }}</dd>
+    </div>
+    {%- endif -%}
+    {%- if stats.latest_post -%}
+    <div class="maatlog-profile-stat">
+      <dt class="maatlog-profile-stat-label">{{ _('Latest post') }}</dt>
+      <dd class="maatlog-profile-stat-value">
+        <time datetime="{{ stats.latest_post.isoformat() }}">{{ stats.latest_post.strftime('%Y-%m-%d') }}</time>
+      </dd>
+    </div>
+    {%- endif -%}
+  </dl>
+</section>
+{%- endif -%}

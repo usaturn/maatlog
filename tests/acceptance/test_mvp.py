@@ -18,11 +18,11 @@ UNPUBLISHED = ("draft", "scheduled", "expired")
 
 # Published-only taxonomy labels/counts on the sidebar (draft/scheduled/expired excluded).
 SIDEBAR_COUNTS = (
-    ("Sphinx", 2),
+    ("Sphinx", 3),
     ("Python", 2),
-    ("Engineering", 2),
-    ("Alice", 2),
-    ("2026-08", 2),
+    ("Engineering", 3),
+    ("Alice", 3),
+    ("2026-08", 3),
 )
 
 # Docname stem matches maatlog-slug so Atom path-based slug inference stays stable.
@@ -96,7 +96,7 @@ def test_a03_unpublished_posts_are_excluded(site: AcceptanceSite) -> None:
     index = result.html("index.html")
     cards = index.select(".maatlog-post-list .maatlog-post-card")
     card_slugs = {attrs.get("data-slug") for attrs in cards}
-    assert card_slugs == {"rst-post", "md-post"}
+    assert card_slugs == {"rst-post", "md-post", "three-authors"}
 
     for post_path in ("posts/rst-post.html", "posts/md-post.html"):
         nav = result.html(post_path)
@@ -114,11 +114,11 @@ def test_a03_unpublished_posts_are_excluded(site: AcceptanceSite) -> None:
             rf'<span class="maatlog-taxonomy-count">{count}</span>',
             sidebar_html,
         ), f"expected sidebar count {label} ({count}) excluding unpublished"
-    # Counts must not inflate to include draft/scheduled/expired (would be 3+).
+    # Counts must not inflate to include draft/scheduled/expired (would be 4+).
     for label, _count in SIDEBAR_COUNTS:
         assert not re.search(
             rf'maatlog-taxonomy-label">{re.escape(label)}</span>'
-            rf'<span class="maatlog-taxonomy-count">([3-9]|\d{{2,}})</span>',
+            rf'<span class="maatlog-taxonomy-count">([4-9]|\d{{2,}})</span>',
             sidebar_html,
         )
 
@@ -196,8 +196,8 @@ def test_a06_global_and_taxonomy_atom(site: AcceptanceSite) -> None:
         extra_files={_EXTERNAL_POST_PATH: _EXTERNAL_POST},
     )
     global_feed = site.atom(result, "blog/atom.xml")
-    # Equal published_at → secondary sort by slug: md-post, rst-post; then older external.
-    assert global_feed.slugs == ("md-post", "rst-post", "external-post")
+    # Equal published_at → secondary sort by slug: md-post, rst-post; then older three-authors, then external.
+    assert global_feed.slugs == ("md-post", "rst-post", "three-authors", "external-post")
     assert global_feed.all_urls_absolute
     assert global_feed.all_ids_absolute
     for atom_id in global_feed.ids:
@@ -206,7 +206,7 @@ def test_a06_global_and_taxonomy_atom(site: AcceptanceSite) -> None:
         assert parsed.netloc
 
     tag_feed = site.atom(result, "blog/tag/sphinx/atom.xml")
-    assert set(tag_feed.slugs) == {"md-post", "rst-post"}
+    assert set(tag_feed.slugs) == {"md-post", "rst-post", "three-authors"}
     assert tag_feed.all_urls_absolute
     assert tag_feed.all_ids_absolute
 
@@ -216,7 +216,7 @@ def test_a06_global_and_taxonomy_atom(site: AcceptanceSite) -> None:
         "blog/month/2026-08/atom.xml",
     ):
         feed = site.atom(result, relative)
-        assert set(feed.slugs) == {"md-post", "rst-post"}
+        assert set(feed.slugs) == {"md-post", "rst-post", "three-authors"}
         assert feed.all_urls_absolute
         assert feed.all_ids_absolute
 
@@ -419,7 +419,7 @@ def test_a11_theme_contract_errors(site: AcceptanceSite) -> None:
         text,
     )
     assert "field=api" in text
-    assert "core_api=1.9" in text
+    assert "core_api=1.16" in text
     assert "theme_api=2.0" in text
     assert "value=2.0" in text
 
@@ -430,7 +430,7 @@ def test_a11_theme_contract_errors(site: AcceptanceSite) -> None:
         manifest_text,
     )
     assert "field=manifest" in manifest_text
-    assert "core_api=1.9" in manifest_text
+    assert "core_api=1.16" in manifest_text
     assert "expected=maatlog-theme.toml" in manifest_text
 
     missing_block = site.build_invalid("missing-block")
@@ -440,7 +440,7 @@ def test_a11_theme_contract_errors(site: AcceptanceSite) -> None:
         block_text,
     )
     assert "field=block" in block_text
-    assert "core_api=1.9" in block_text
+    assert "core_api=1.16" in block_text
     assert "theme_api=1.0" in block_text
 
     missing_templates = site.build_invalid("missing-templates")
@@ -450,7 +450,7 @@ def test_a11_theme_contract_errors(site: AcceptanceSite) -> None:
         templates_text,
     )
     assert "field=template" in templates_text
-    assert "core_api=1.9" in templates_text
+    assert "core_api=1.16" in templates_text
     assert "theme_api=1.0" in templates_text
 
 

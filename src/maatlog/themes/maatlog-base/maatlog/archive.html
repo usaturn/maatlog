@@ -43,6 +43,47 @@
   {%- endif -%}
   {%- endblock maatlog_archive_header -%}
 
+  {%- block maatlog_archive_filter -%}
+  {#- チップはこのページのカードにある分類だけを出す。サイト全体の分類を出すと、
+      ページ送りの 2 ページ目以降で「実在するのに該当なし」と誤って表示される。
+      表示順とラベルの源は maatlog.taxonomies のまま、ID で交差させる。 -#}
+  {%- set page_tag_ids = maatlog.posts | map(attribute="tags") | sum(start=()) -%}
+  {%- set page_category_ids = maatlog.posts | map(attribute="categories") | sum(start=()) -%}
+  {%- set page_author_ids = maatlog.posts | map(attribute="authors") | sum(start=()) -%}
+  {%- set filter_tags = maatlog.taxonomies.tags | selectattr("id", "in", page_tag_ids) | list -%}
+  {%- set filter_categories = maatlog.taxonomies.categories | selectattr("id", "in", page_category_ids) | list -%}
+  {%- set filter_authors = maatlog.taxonomies.authors | selectattr("id", "in", page_author_ids) | list -%}
+  {%- if filter_tags or filter_categories or filter_authors -%}
+  <section class="maatlog-archive-filter" data-maatlog-component="archive-filter" aria-label="Filter posts">
+    <div class="maatlog-filter-groups">
+      {%- set filter_axes = [
+        ("Tag", filter_tags, "tag"),
+        ("Category", filter_categories, "category"),
+        ("Author", filter_authors, "author"),
+      ] -%}
+      {%- for label, items, axis in filter_axes -%}
+      {%- if items -%}
+      <div class="maatlog-filter-group" data-maatlog-filter-axis="{{ axis }}">
+        <span class="maatlog-filter-label" id="maatlog-filter-{{ axis }}-label">{{ label }}</span>
+        <div class="maatlog-filter-options" role="group" aria-labelledby="maatlog-filter-{{ axis }}-label">
+          {%- for item in items -%}
+          <button type="button" class="maatlog-filter-chip" data-maatlog-filter-value="{{ item.id|e }}" aria-pressed="false">{{ item.label|e }}</button>
+          {%- endfor -%}
+        </div>
+      </div>
+      {%- endif -%}
+      {%- endfor -%}
+    </div>
+    <div class="maatlog-filter-actions">
+      <button type="button" class="maatlog-filter-reset" data-maatlog-filter-reset>Clear all</button>
+    </div>
+    {#- チップ操作は URL 遷移もフォーカス移動も伴わないので、0 件になったことは
+        ライブリージョンでしか伝わらない。 -#}
+    <p class="maatlog-archive-empty-filtered" role="status" hidden>No matching posts.</p>
+  </section>
+  {%- endif -%}
+  {%- endblock maatlog_archive_filter -%}
+
   {%- block maatlog_archive_items -%}
   <div class="maatlog-post-list">
     {%- with cards=maatlog.posts, featured_count=(3 if maatlog.archive and maatlog.archive.is_home else 0) -%}
@@ -55,6 +96,8 @@
   {%- block maatlog_post_meta -%}{%- endblock maatlog_post_meta -%}
   {%- block maatlog_post_body -%}{%- endblock maatlog_post_body -%}
   {%- block maatlog_post_navigation -%}{%- endblock maatlog_post_navigation -%}
+  {%- block maatlog_profile_header -%}{%- endblock maatlog_profile_header -%}
+  {%- block maatlog_profile_body -%}{%- endblock maatlog_profile_body -%}
 
   {%- block maatlog_pagination -%}
   {%- include "maatlog/components/pagination.html" -%}

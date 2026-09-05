@@ -31,7 +31,7 @@ def _tall_excerpt(repeat: int = 16) -> str:
 
 TALL_EXCERPT = _tall_excerpt()
 
-# 4 本足して公開記事を 6 本にする。page_size=1 なので blog.html + page/2..6 の 6 ページ。
+# 4 本足して公開記事を 7 本にする。page_size=1 なので blog.html + page/2..7 の 7 ページ。
 # 既存の 2 記事 (rst-post / md-post) もこのアーカイブの 1, 2 ページ目に乗るため、
 # 同じパスへの上書きでタテに長くする（本文ではなく excerpt を伸ばす。上記docstring参照）。
 EXTRA_POSTS: dict[str, str] = {
@@ -91,7 +91,7 @@ ARCHIVE_CONFIG: dict[str, object] = {
 
 
 def build_paginated_site(site: AcceptanceSite) -> AcceptanceBuildResult:
-    """6 ページのアーカイブを持つ受け入れサイトをビルドする。"""
+    """7 ページのアーカイブを持つ受け入れサイトをビルドする。"""
     return site.build(
         "html",
         theme="maatlog-default",
@@ -269,8 +269,8 @@ def test_loading_stops_on_the_last_page(site: AcceptanceSite) -> None:
                     scroll_to_bottom(page)
                     page.wait_for_timeout(150)
 
-                # 6 ページぶんすべてが 1 枚の一覧に並び、sentinel は役目を終えて消える。
-                assert len(slugs(page)) == 6
+                # 7 ページぶんすべてが 1 枚の一覧に並び、sentinel は役目を終えて消える。
+                assert len(slugs(page)) == 7
                 page.wait_for_selector(".maatlog-infinite-sentinel", state="detached")
                 assert page.query_selector(".maatlog-pagination") is not None
         finally:
@@ -339,7 +339,7 @@ def test_the_same_page_is_never_fetched_twice(site: AcceptanceSite) -> None:
                     page.wait_for_timeout(150)
 
             assert len(fetched) == len(set(fetched))
-            assert len(fetched) == 5
+            assert len(fetched) == 6
         finally:
             browser.close()
 

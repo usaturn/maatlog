@@ -7,6 +7,7 @@ from conftest import ProjectFactory
 from sphinx.errors import SphinxError
 
 from maatlog.errors import MaatlogBuildError
+from tests.integration.test_author_profile import PNG_1X1
 
 
 def _rst_post(
@@ -138,3 +139,49 @@ def test_parallel_maattop_image_matches_serial(make_project: ProjectFactory) -> 
     parallel_images = sorted(path.name for path in parallel.path("_images").iterdir())
     assert parallel_images == serial_images
     assert "hero.png" in serial_images
+
+
+def test_profile_pages_are_stable_under_parallel_builds(make_project: ProjectFactory) -> None:
+    files = {
+        "index.rst": "Root\n====\n\n.. toctree::\n\n   one\n",
+        "one.md": (
+            "---\nmaatlog-post: true\nmaatlog-slug: one\n"
+            "maatlog-published-at: 2026-07-31T09:00:00Z\nmaatlog-authors: [alice]\n---\n# One\n\nBody.\n"
+        ),
+        "authors/alice.md": "# About Alice\n\nAbout body.\n",
+        "authors/alice.png": PNG_1X1,
+    }
+    config = {
+        "maatlog_authors": {"alice": "Alice Anderson"},
+        "maatlog_author_profiles": {"alice": {"about_docname": "authors/alice", "avatar": "authors/alice.png"}},
+    }
+
+    serial = make_project(files=files, config=config).build().html("blog/author/alice.html").text
+    parallel_site = make_project(files=files, config=config)
+    parallel_result = parallel_site.build(parallel=2)
+
+    assert parallel_result.html("blog/author/alice.html").text == serial
+    assert (parallel_result.path("_images") / "alice.png").is_file()
+
+
+def test_author_avatars_are_written_under_parallel_builds(make_project: ProjectFactory) -> None:
+    # avatar は master プロセスの register_representative_images が拾う。
+    # 右ペインが増えても _images の内容は変わらないことを固定する。
+    site = make_project(
+        files={
+            "about.rst": "About\n=====\n\nBody.\n",
+            "authors/alice.png": PNG_1X1,
+        },
+        theme="maatlog-default",
+        config={
+            "maatlog_authors": {"alice": "Alice"},
+            "maatlog_default_author": "alice",
+            "maatlog_author_profiles": {"alice": {"avatar": "authors/alice.png"}},
+        },
+    )
+    result = site.build(parallel=2)
+    page = result.html("about.html")
+    image = page.select_one(".maatlog-author-summary-avatar-image")
+
+    assert image is not None
+    assert result.asset("_images/alice.png").exists()

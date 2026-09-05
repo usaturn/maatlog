@@ -54,7 +54,8 @@ CSS_CUSTOM_PROPERTIES = (
     "--maatlog-content-width",
     "--maatlog-sidebar-width",
     "--maatlog-nav-width",
-    "--maatlog-toc-width",
+    "--maatlog-rail-width",
+    "--maatlog-author-avatar-size",
     "--maatlog-banner-background",
     "--maatlog-banner-height",
     "--maatlog-space-xs",
@@ -125,6 +126,26 @@ def test_base_theme_package_data_on_disk() -> None:
     assert (theme_root / "static" / "maatlog.css").is_file()
     for relative in REQUIRED_TEMPLATES:
         assert (theme_root / relative).is_file(), relative
+
+
+def test_theme_templates_close_every_jinja_comment() -> None:
+    """Every ``{#`` gets its own ``#}``.
+
+    A comment terminated with ``-}`` instead of ``-#}`` does not close: Jinja keeps
+    reading to the next ``#}`` and swallows whatever lies between, so markup added
+    there disappears from the output without any error.
+    """
+    import maatlog
+
+    themes_root = Path(maatlog.__file__).resolve().parent / "themes"
+    environment = Environment()
+    templates = sorted(themes_root.rglob("*.html"))
+    assert templates, "no theme templates found"
+    for template in templates:
+        source = template.read_text(encoding="utf-8")
+        opened = source.count("{#")
+        closed = sum(1 for _, token, _ in environment.lex(source) if token == "comment_begin")
+        assert closed == opened, f"{template.relative_to(themes_root)} leaves a Jinja comment unclosed"
 
 
 def test_default_theme_is_usable_without_options(make_project: ProjectFactory) -> None:

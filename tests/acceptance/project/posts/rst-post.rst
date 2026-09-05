@@ -13,3 +13,13 @@ reStructuredText post
 Body shared with the MyST twin for parser parity.
 
 See the :doc:`/guide` and :py:func:`api.greet`.
+
+Section One
+-----------
+
+Content one.
+
+Section Two
+-----------
+
+Content two.

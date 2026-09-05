@@ -15,6 +15,7 @@ from maatlog.builders import warn_partial_support_once
 from maatlog.config import CONFIG_VALUES, MaatlogConfig, TaxonomyAxis, validate_config
 from maatlog.directives import process_post_list_nodes
 from maatlog.extension import (
+    _initialize_html_metadata,  # pyright: ignore[reportPrivateUsage]
     apply_pygments_style,
     collect_archive_pages,
     collect_maattop,
@@ -71,10 +72,10 @@ def test_setup_registers_config_values_and_validation_handler() -> None:
         "config-inited",  # validate_config
         "config-inited",  # initialize_build_time
         "builder-inited",  # warn_partial_support_once
+        "builder-inited",  # html metadata / filters (before theme template compile)
         "builder-inited",  # validate_selected_theme
         "builder-inited",  # link_palette_stylesheet
         "builder-inited",  # apply_pygments_style
-        "builder-inited",  # html metadata / baseurl
         "source-read",
         "doctree-read",
         "doctree-read",
@@ -97,9 +98,10 @@ def test_setup_registers_config_values_and_validation_handler() -> None:
     assert app.connect.call_args_list[0] == (("config-inited", validate_config), {})
     assert app.connect.call_args_list[1] == (("config-inited", initialize_build_time), {})
     assert app.connect.call_args_list[2] == (("builder-inited", warn_partial_support_once), {})
-    assert app.connect.call_args_list[3] == (("builder-inited", validate_selected_theme), {})
-    assert app.connect.call_args_list[4] == (("builder-inited", link_palette_stylesheet), {})
-    assert app.connect.call_args_list[5] == (("builder-inited", apply_pygments_style), {})
+    assert app.connect.call_args_list[3] == (("builder-inited", _initialize_html_metadata), {})
+    assert app.connect.call_args_list[4] == (("builder-inited", validate_selected_theme), {})
+    assert app.connect.call_args_list[5] == (("builder-inited", link_palette_stylesheet), {})
+    assert app.connect.call_args_list[6] == (("builder-inited", apply_pygments_style), {})
     assert app.connect.call_args_list[7] == (("source-read", capture_source), {"priority": 999})
     assert app.connect.call_args_list[8] == (
         ("doctree-read", collect_maattop_from_myst),

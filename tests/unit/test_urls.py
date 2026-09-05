@@ -9,7 +9,8 @@ from maatlog.urls import (
     absolute_page_url,
     absolutize_fragment_urls,
     absolutize_url,
-    is_external_link_url,
+    is_absolute_http_url,
+    is_relative_docname,
     post_urls,
     redact_url,
     validate_baseurl,
@@ -197,8 +198,8 @@ def test_redact_url_strips_userinfo() -> None:
         "https://user:pass@example.com/alice",
     ],
 )
-def test_is_external_link_url_accepts_absolute_http_urls(url: str) -> None:
-    assert is_external_link_url(url) is True
+def test_is_absolute_http_url_accepts_absolute_http_urls(url: str) -> None:
+    assert is_absolute_http_url(url) is True
 
 
 @pytest.mark.parametrize(
@@ -217,5 +218,21 @@ def test_is_external_link_url_accepts_absolute_http_urls(url: str) -> None:
         "   ",
     ],
 )
-def test_is_external_link_url_rejects_non_http_urls(url: str) -> None:
-    assert is_external_link_url(url) is False
+def test_is_absolute_http_url_rejects_non_http_urls(url: str) -> None:
+    assert is_absolute_http_url(url) is False
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["blog", "authors/alice", "a/b/c", "alice.profile"],
+)
+def test_is_relative_docname_accepts_relative_document_names(value: str) -> None:
+    assert is_relative_docname(value) is True
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["", "/blog", "blog/", "blog//alice", "./alice", "../alice", "blog/../alice", 123, None],
+)
+def test_is_relative_docname_rejects_everything_else(value: object) -> None:
+    assert is_relative_docname(value) is False

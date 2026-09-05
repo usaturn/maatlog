@@ -13,6 +13,7 @@ from maatlog import navigation as navigation_module
 from maatlog.config import MaatlogConfig, TaxonomyAxis
 from maatlog.model import Post, PublicationStatus
 from maatlog.navigation import (
+    PostTaxonomyLinker,
     _axis_rows,  # pyright: ignore[reportPrivateUsage]
     _cached_axis_rows,  # pyright: ignore[reportPrivateUsage]
     neighbors,
@@ -444,3 +445,33 @@ def test_taxonomy_item_is_not_current_for_a_prefix_lookalike(make_post: PostFact
     nav = taxonomy_navigation(index, builder=_uri_builder(), from_docname="blog/tag/alphabet", root="blog")
 
     assert not any(item.is_current for item in nav.tags)
+
+
+def test_for_authors_keeps_the_given_order_and_resolves_labels() -> None:
+    linker = PostTaxonomyLinker(
+        builder=_uri_builder(),
+        from_docname="about",
+        root="blog",
+        labels={TaxonomyAxis.AUTHOR: {"bob": "Bob", "alice": "Alice"}},
+        members={TaxonomyAxis.AUTHOR: {"alice": ("one",), "bob": ("two",)}},
+    )
+
+    links = linker.for_authors(("bob", "alice"))
+
+    assert [link.id for link in links] == ["bob", "alice"]
+    assert [link.label for link in links] == ["Bob", "Alice"]
+
+
+def test_for_authors_leaves_the_url_empty_for_an_author_without_posts() -> None:
+    linker = PostTaxonomyLinker(
+        builder=_uri_builder(),
+        from_docname="about",
+        root="blog",
+        labels={TaxonomyAxis.AUTHOR: {"carol": "Carol"}},
+        members={TaxonomyAxis.AUTHOR: {}},
+    )
+
+    (link,) = linker.for_authors(("carol",))
+
+    assert link.url == ""
+    assert link.label == "Carol"

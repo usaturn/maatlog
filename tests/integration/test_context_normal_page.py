@@ -86,3 +86,9 @@ def test_project_without_posts_gets_empty_navigation(make_project: ProjectFactor
 
     assert context["maatlog"]["taxonomies"]["tags"] == ()
     assert context["maatlog"]["page_kind"] == "normal"
+
+
+def test_normal_page_has_an_author_summaries_key(make_project: ProjectFactory) -> None:
+    maatlog = _context_for(make_project, "about")["maatlog"]
+
+    assert "author_summaries" in maatlog

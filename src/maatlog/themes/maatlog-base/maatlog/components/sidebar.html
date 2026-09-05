@@ -22,7 +22,7 @@
 </section>
 {%- endif -%}
 {%- endmacro -%}
-<div class="maatlog-sidebar" data-maatlog-component="sidebar">
+<div id="maatlog-sidebar" class="maatlog-sidebar" data-maatlog-component="sidebar">
   {%- set tax = maatlog.taxonomies -%}
   {{ taxonomy_section(tax.tags, "Tags", "maatlog-taxonomy-tags", "All tags") }}
   {{ taxonomy_section(tax.categories, "Categories", "maatlog-taxonomy-categories", "All categories") }}

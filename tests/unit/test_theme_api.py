@@ -10,6 +10,7 @@ from sphinx.application import Sphinx
 
 from maatlog.errors import MaatlogBuildError
 from maatlog.theme_api import (
+    BLOCK_PAGE_TEMPLATES,
     CORE_THEME_API,
     PALETTES_RELATIVE,
     REQUIRED_BLOCKS,
@@ -110,7 +111,7 @@ def test_core_is_compatible_with_equal_or_lower_minor() -> None:
 
 
 def test_core_theme_api_is_the_current_contract_version() -> None:
-    assert CORE_THEME_API == ThemeApiVersion(major=1, minor=9)
+    assert CORE_THEME_API == ThemeApiVersion(major=1, minor=16)
 
 
 def test_load_maatlog_section_reads_toml() -> None:
@@ -173,13 +174,13 @@ def test_bundled_theme_manifest_requires_api_1_8(theme_name: str) -> None:
 def test_required_contract_constants() -> None:
     assert "maatlog/post.html" in REQUIRED_TEMPLATES
     assert "maatlog/archive.html" in REQUIRED_TEMPLATES
-    assert len(REQUIRED_BLOCKS) == 9
+    assert len(REQUIRED_BLOCKS) == 11
     assert "maatlog_post_body" in REQUIRED_BLOCKS
     assert "maatlog_sidebar" in REQUIRED_BLOCKS
 
 
 def test_core_theme_api_renders_as_a_dotted_string() -> None:
-    assert str(CORE_THEME_API) == "1.9"
+    assert str(CORE_THEME_API) == "1.16"
 
 
 def test_older_theme_api_versions_stay_compatible() -> None:
@@ -193,18 +194,29 @@ def test_older_theme_api_versions_stay_compatible() -> None:
     assert is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=7))
     assert is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=8))
     assert is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=9))
+    assert is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=10))
+    assert is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=11))
+    assert is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=12))
+    assert is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=13))
+    assert is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=14))
+    assert is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=15))
     assert not is_compatible(CORE_THEME_API, ThemeApiVersion(major=2, minor=0))
 
 
 def test_required_contract_is_unchanged_by_one_five() -> None:
     # 1.5 も任意契約だけを足す。必須テンプレートとブロックは 1.0 のまま。
+    # 1.12 でプロフィール契約が加わる。
     assert REQUIRED_TEMPLATES == (
         "maatlog/post.html",
         "maatlog/archive.html",
+        "maatlog/profile.html",
         "maatlog/components/post-card.html",
         "maatlog/components/pagination.html",
         "maatlog/components/sidebar.html",
         "maatlog/components/feed-links.html",
+        "maatlog/components/author-links.html",
+        "maatlog/components/right-rail.html",
+        "maatlog/components/author-summary.html",
     )
     assert REQUIRED_BLOCKS == (
         "maatlog_head",
@@ -214,9 +226,17 @@ def test_required_contract_is_unchanged_by_one_five() -> None:
         "maatlog_post_navigation",
         "maatlog_archive_header",
         "maatlog_archive_items",
+        "maatlog_profile_header",
+        "maatlog_profile_body",
         "maatlog_pagination",
         "maatlog_sidebar",
     )
+
+
+def test_config_style_block_is_optional() -> None:
+    """maatlog_config_style は任意契約。standalone テーマの検証を落とさない。"""
+    assert "maatlog_config_style" not in REQUIRED_BLOCKS
+    assert len(REQUIRED_BLOCKS) == 11
 
 
 def test_manifest_without_palettes_is_palette_unaware() -> None:
@@ -415,3 +435,47 @@ def test_a_pygments_table_without_palettes_fails_the_manifest() -> None:
 
     assert error.value.diagnostics[0].code == "maatlog.theme.manifest-invalid"
     assert error.value.diagnostics[0].field == "pygments"
+
+
+def test_core_theme_api_is_bumped_for_the_profile_contract() -> None:
+    # プロフィール契約は 1.12 で入った。以降のマイナーでも維持される。
+    assert (CORE_THEME_API.major, CORE_THEME_API.minor) >= (1, 12)
+
+
+def test_core_theme_api_is_bumped_for_the_back_to_top_contract() -> None:
+    # Issue #61 の Back to Top は 1.13 の任意契約。以降のマイナーがそれを包含する。
+    assert (CORE_THEME_API.major, CORE_THEME_API.minor) >= (1, 13)
+
+
+def test_core_theme_api_is_bumped_for_the_share_contract() -> None:
+    # Issue #64 の Share 契約は 1.15 の任意契約。以降のマイナーがそれを包含する。
+    assert (CORE_THEME_API.major, CORE_THEME_API.minor) >= (1, 15)
+
+
+def test_core_theme_api_is_bumped_for_the_right_rail_contract() -> None:
+    # Issue #102 の right rail は 1.16 の必須契約。
+    assert (CORE_THEME_API.major, CORE_THEME_API.minor) == (1, 16)
+
+
+def test_profile_templates_are_required() -> None:
+    assert "maatlog/profile.html" in REQUIRED_TEMPLATES
+    assert "maatlog/components/author-links.html" in REQUIRED_TEMPLATES
+
+
+def test_profile_blocks_are_required_on_every_page_template() -> None:
+    assert "maatlog_profile_header" in REQUIRED_BLOCKS
+    assert "maatlog_profile_body" in REQUIRED_BLOCKS
+    assert "maatlog/profile.html" in BLOCK_PAGE_TEMPLATES
+
+
+def test_right_rail_components_are_required_templates() -> None:
+    from maatlog.theme_api import REQUIRED_TEMPLATES
+
+    assert "maatlog/components/right-rail.html" in REQUIRED_TEMPLATES
+    assert "maatlog/components/author-summary.html" in REQUIRED_TEMPLATES
+
+
+def test_core_api_is_one_sixteen() -> None:
+    from maatlog.theme_api import CORE_THEME_API
+
+    assert str(CORE_THEME_API) == "1.16"

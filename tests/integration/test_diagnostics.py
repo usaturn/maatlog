@@ -16,11 +16,15 @@ from sphinx.application import Sphinx
 
 import maatlog.feeds as feeds_mod
 import maatlog.theme_api as theme_api_mod
+from maatlog.authors import AuthorProfile
+from maatlog.config import TaxonomyAxis
 from maatlog.domain import MaatlogDomain
 from maatlog.errors import Diagnostic, MaatlogBuildError, format_diagnostic, safe_value
 from maatlog.feeds import write_feeds_after_success
 from maatlog.model import Post, PublicationStatus
 from maatlog.outputs import safe_owned_path
+from maatlog.profiles import resolve_profiles
+from maatlog.taxonomy import DomainIndex
 from maatlog.theme_api import CORE_THEME_API, ThemeApiVersion, parse_and_validate_manifest
 
 # Unit raisers call the same private raise helpers production uses (not re-implemented).
@@ -64,6 +68,10 @@ FATAL_CODE_INVENTORY: frozenset[str] = frozenset(
         "maatlog.datetime.order",
         "maatlog.config.invalid",
         "maatlog.author.link-invalid",
+        "maatlog.author.profile-unknown",
+        "maatlog.author.featured-unknown",
+        "maatlog.author.featured-foreign",
+        "maatlog.author.about-unknown",
         "maatlog.feed.baseurl-required",
         "maatlog.feed.output-unsafe",
         "maatlog.feed.render-failed",
@@ -265,6 +273,12 @@ DIAGNOSTIC_CASES: dict[str, dict[str, Any]] = {
         "code": "maatlog.config.invalid",
         "field": "maatlog_page_size",
     },
+    "content-width-invalid": {
+        "files": {"index.rst": "Root\n====\n"},
+        "config": {"maatlog_content_width": "60rem; color: red"},
+        "code": "maatlog.config.invalid",
+        "field": "maatlog_content_width",
+    },
     "author-link-invalid": {
         "files": {"index.rst": "Root\n====\n"},
         "config": {"maatlog_author_profiles": {"alice": {"links": [{"type": "github", "url": "/alice"}]}}},
@@ -404,6 +418,7 @@ def test_fatal_diagnostic_has_location_field_and_expected(
         in {
             "html_baseurl",
             "maatlog_page_size",
+            "maatlog_content_width",
             "maatlog_author_profiles.alice.links[0].url",
             "SOURCE_DATE_EPOCH",
             "docname",
@@ -550,7 +565,52 @@ UNIT_FATAL_CASES: tuple[tuple[str, str, str], ...] = (
     ("maatlog.feed.output-unsafe", "path", "feed-unsafe"),
     ("maatlog.feed.xml-invalid", "path", "feed-xml"),
     ("maatlog.feed.render-failed", "feeds", "feed-render"),
+    ("maatlog.author.profile-unknown", "maatlog_author_profiles.ghost", "profile-unknown"),
+    (
+        "maatlog.author.featured-unknown",
+        "maatlog_author_profiles.alice.featured_posts",
+        "featured-unknown",
+    ),
+    (
+        "maatlog.author.featured-foreign",
+        "maatlog_author_profiles.bob.featured_posts",
+        "featured-foreign",
+    ),
+    ("maatlog.author.about-unknown", "maatlog_author_profiles.alice.about_docname", "about-unknown"),
 )
+
+
+def _profile_index() -> DomainIndex:
+    """One published post by ``alice`` so profile cross-references have something to hit."""
+    post = _unit_post(slug="only", docname="only")
+    return DomainIndex(
+        docname_by_slug={post.slug: post.docname},
+        members={
+            TaxonomyAxis.AUTHOR: {"alice": ("only",), "bob": ()},
+            TaxonomyAxis.TAG: {},
+            TaxonomyAxis.CATEGORY: {},
+            TaxonomyAxis.MONTH: {},
+        },
+        labels={
+            TaxonomyAxis.AUTHOR: {"alice": "Alice", "bob": "Bob"},
+            TaxonomyAxis.TAG: {},
+            TaxonomyAxis.CATEGORY: {},
+            TaxonomyAxis.MONTH: {},
+        },
+        published=(post,),
+    )
+
+
+def _raise_profile_diagnostic(profiles: Mapping[str, AuthorProfile], *, tmp_path: Path) -> MaatlogBuildError:
+    with pytest.raises(MaatlogBuildError) as caught:
+        resolve_profiles(
+            profiles,
+            authors={"alice": "Alice", "bob": "Bob"},
+            index=_profile_index(),
+            known_docnames={"only"},
+            srcdir=tmp_path,
+        )
+    return caught.value
 
 
 def _raise_unit_fatal(
@@ -573,6 +633,14 @@ def _raise_unit_fatal(
         return _raise_feed_xml_invalid(tmp_path)
     if kind == "feed-render":
         return _raise_feed_render_failed(tmp_path, monkeypatch)
+    if kind == "profile-unknown":
+        return _raise_profile_diagnostic({"ghost": AuthorProfile()}, tmp_path=tmp_path)
+    if kind == "featured-unknown":
+        return _raise_profile_diagnostic({"alice": AuthorProfile(featured_posts=("absent",))}, tmp_path=tmp_path)
+    if kind == "featured-foreign":
+        return _raise_profile_diagnostic({"bob": AuthorProfile(featured_posts=("only",))}, tmp_path=tmp_path)
+    if kind == "about-unknown":
+        return _raise_profile_diagnostic({"alice": AuthorProfile(about_docname="authors/absent")}, tmp_path=tmp_path)
     msg = f"unknown unit fatal kind: {kind}"
     raise AssertionError(msg)
 

@@ -231,6 +231,15 @@ class PostTaxonomyLinker:
             authors=self._links(TaxonomyAxis.AUTHOR, post.authors),
         )
 
+    def for_authors(self, ids: Sequence[str]) -> tuple[TaxonomyLinkView, ...]:
+        """Resolve author ids into links, keeping the order they were given in.
+
+        The right rail needs display names and profile URLs for authors that do
+        not come from a post (the configured default author), so this exposes
+        the same per-page resolution and cache ``for_post`` uses.
+        """
+        return self._links(TaxonomyAxis.AUTHOR, tuple(ids))
+
     def _links(self, axis: TaxonomyAxis, ids: tuple[str, ...]) -> tuple[TaxonomyLinkView, ...]:
         return tuple(self._link(axis, taxonomy_id) for taxonomy_id in ids)
 

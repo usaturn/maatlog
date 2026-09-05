@@ -1,0 +1,9 @@
+{%- if maatlog_author_links -%}
+<ul class="maatlog-author-links" data-maatlog-component="author-links">
+  {%- for link in maatlog_author_links -%}
+  <li class="maatlog-author-link-item">
+    <a class="maatlog-author-link" href="{{ link.url|e }}">{{ link.label|e }}</a>
+  </li>
+  {%- endfor -%}
+</ul>
+{%- endif -%}

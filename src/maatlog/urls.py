@@ -34,17 +34,32 @@ def post_urls(page_url: str, canonical: str | None, external: str | None) -> Pos
     )
 
 
-def is_external_link_url(value: str) -> bool:
-    """Return True when *value* is an absolute ``http``/``https`` URL usable as a profile link.
+def is_absolute_http_url(value: str) -> bool:
+    """Return True when *value* is an absolute ``http``/``https`` URL.
 
     ``validate_baseurl()`` は ``html_baseurl`` 専用の厳格な検証なので流用しない。
-    プロフィールリンクは query と fragment を持ちうるため、scheme と host だけを要求する。
+    プロフィールリンクや canonical は query と fragment を持ちうるため、
+    scheme と host だけを要求する。
     """
     try:
         parts = urlsplit(value.strip())
     except ValueError:
         return False
     return parts.scheme in {"http", "https"} and bool(parts.netloc)
+
+
+def is_relative_docname(value: object) -> bool:
+    """Return True when *value* is a relative Sphinx document name.
+
+    Rejects absolute paths, trailing slashes, and empty / ``.`` / ``..``
+    segments. Shared by ``maatlog_archive_docname`` validation and author
+    profile ``about_docname`` validation so both use one rule.
+    """
+    if not isinstance(value, str) or not value:
+        return False
+    if value.startswith("/") or value.endswith("/"):
+        return False
+    return all(segment not in {"", ".", ".."} for segment in value.split("/"))
 
 
 def validate_baseurl(url: str | None) -> str:

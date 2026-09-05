@@ -45,11 +45,11 @@ RELATED_BAR_PAGES = (
 CHILD_LAYOUT_OPT_IN = """\
 {%- extends "!layout.html" -%}
 {%- set maatlog_has_toc = True -%}
-{%- block maatlog_toc -%}
+{%- block maatlog_right_rail -%}
 <aside class="maatlog-toc" data-maatlog-component="toc">
 <p>Custom TOC</p>
 </aside>
-{%- endblock maatlog_toc -%}
+{%- endblock maatlog_right_rail -%}
 """
 
 
@@ -124,7 +124,7 @@ def test_layout_marks_only_pages_that_render_a_toc(
 
 def test_child_layout_can_opt_in_to_toc_state(make_project: ProjectFactory) -> None:
     # 派生テンプレートが root-level で maatlog_has_toc を明示し、標準より広い
-    # 条件で maatlog_toc を出せば、状態クラスと aside は両方存在する。
+    # 条件で maatlog_right_rail を出せば、状態クラスと aside は両方存在する。
     files = {
         **LAYOUT_PROJECT,
         "_templates/layout.html": CHILD_LAYOUT_OPT_IN,

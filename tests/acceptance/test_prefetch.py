@@ -234,6 +234,54 @@ def test_the_same_url_is_never_prefetched_twice(site: AcceptanceSite) -> None:
 
 
 @pytest.mark.browser
+def test_hash_variants_of_the_same_document_are_prefetched_once(site: AcceptanceSite) -> None:
+    result = site.build(
+        "html",
+        theme="maatlog-default",
+        extra_files={
+            "posts/hash-prefetch.rst": (
+                ":maatlog-post: true\n"
+                ":maatlog-slug: hash-prefetch\n"
+                ":maatlog-published-at: 2026-08-12T12:00:00Z\n"
+                "\n"
+                "Hash prefetch\n"
+                "=============\n"
+                "\n"
+                "`Install <../guide.html#install>`_\n"
+                "\n"
+                "`Usage <../guide.html#usage>`_\n"
+            )
+        },
+        config_overrides={"suppress_warnings": ["toc.not_included"]},
+    )
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        try:
+            page = browser.new_context().new_page()
+            with serve_directory(result.outdir) as base_url:
+                page.goto(f"{base_url}posts/hash-prefetch.html", wait_until="load")
+
+                install = absolute_href(page, 'a[href$="guide.html#install"]')
+                usage = absolute_href(page, 'a[href$="guide.html#usage"]')
+                assert install is not None
+                assert usage is not None
+
+                page.locator('a[href$="guide.html#install"]').hover()
+                page.wait_for_function(
+                    """() => [...document.querySelectorAll('link[rel="prefetch"]')]
+                        .some((link) => link.href.endsWith("guide.html"))"""
+                )
+                page.locator('a[href$="guide.html#usage"]').hover()
+                page.wait_for_timeout(200)
+
+                guide_matches = [href for href in prefetch_hrefs(page) if "guide.html" in href]
+                assert len(guide_matches) == 1
+                assert guide_matches[0].endswith(GUIDE_PAGE)
+        finally:
+            browser.close()
+
+
+@pytest.mark.browser
 def test_save_data_suppresses_prefetch(site: AcceptanceSite) -> None:
     result = site.build("html", theme="maatlog-default")
     with sync_playwright() as playwright:
