@@ -1,0 +1,12 @@
+{# Interests. Author-declared values only; never inferred from tags. #}
+{%- set profile = maatlog.profile -%}
+{%- if profile and profile.interests -%}
+<section class="maatlog-profile-interests" data-maatlog-component="profile-interests">
+  <h2 class="maatlog-profile-section-heading">{{ _('Interests') }}</h2>
+  <ul class="maatlog-profile-interest-list">
+    {%- for interest in profile.interests -%}
+    <li class="maatlog-profile-interest">{{ interest|e }}</li>
+    {%- endfor -%}
+  </ul>
+</section>
+{%- endif -%}

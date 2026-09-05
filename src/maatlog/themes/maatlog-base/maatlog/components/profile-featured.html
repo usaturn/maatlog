@@ -1,0 +1,11 @@
+{# Featured posts. Reuses the shared post grid rather than a bespoke card, and is
+   hidden entirely when the author declares none. #}
+{%- set profile = maatlog.profile -%}
+{%- if profile and profile.featured -%}
+<section class="maatlog-profile-featured" data-maatlog-component="profile-featured">
+  <h2 class="maatlog-profile-section-heading">{{ _('Featured posts') }}</h2>
+  {%- with cards=profile.featured -%}
+  {%- include "maatlog/components/post-grid.html" -%}
+  {%- endwith -%}
+</section>
+{%- endif -%}

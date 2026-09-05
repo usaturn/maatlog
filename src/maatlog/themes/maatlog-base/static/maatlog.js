@@ -644,6 +644,8 @@
     if (url.pathname === current.pathname && url.search === current.search) {
       return null;
     }
+    // Fragments never reach the server, so use the document URL as the dedupe key.
+    url.hash = "";
     return url.href;
   }
 
@@ -855,6 +857,599 @@
   registerEnhancer("new-posts", {
     selector: ".maatlog-post-card[data-maatlog-published-at]",
     apply: enhanceNewBadge,
+  });
+
+  // ---------------------------------------------------------------------------
+  // Archive filter — Issue #60
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Parse a JSON id array from a data attribute.
+   *
+   * @param {string | null} raw
+   * @returns {string[]}
+   */
+  function parseTaxonomyIds(raw) {
+    if (raw === null || raw === "") {
+      return [];
+    }
+    try {
+      const value = JSON.parse(raw);
+      if (!Array.isArray(value)) {
+        return [];
+      }
+      return value.filter((item) => typeof item === "string");
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Same-axis OR: any selected id matching the card passes. Empty selection passes.
+   *
+   * @param {string[]} selected
+   * @param {string | null} raw
+   * @returns {boolean}
+   */
+  function matchesFilterAxis(selected, raw) {
+    if (selected.length === 0) {
+      return true;
+    }
+    const cardIds = parseTaxonomyIds(raw);
+    return selected.some((id) => cardIds.includes(id));
+  }
+
+  /**
+   * @param {Element} group
+   * @returns {string[]}
+   */
+  function activeFilterIds(group) {
+    /** @type {string[]} */
+    const ids = [];
+    for (const chip of group.querySelectorAll("[data-maatlog-filter-value].is-active")) {
+      const value = chip.getAttribute("data-maatlog-filter-value");
+      if (value !== null) {
+        ids.push(value);
+      }
+    }
+    return ids;
+  }
+
+  /**
+   * Apply the current chip state to every post card under *archive*.
+   *
+   * @param {Element} archive
+   * @returns {void}
+   */
+  function applyArchiveFilter(archive) {
+    const toolbar = archive.querySelector('[data-maatlog-component="archive-filter"]');
+    const list = archive.querySelector(".maatlog-post-list");
+    if (toolbar === null || list === null) {
+      return;
+    }
+    const empty = toolbar.querySelector(".maatlog-archive-empty-filtered");
+
+    /** @type {{ tag: string[], category: string[], author: string[] }} */
+    const selected = { tag: [], category: [], author: [] };
+    for (const group of toolbar.querySelectorAll("[data-maatlog-filter-axis]")) {
+      const axis = group.getAttribute("data-maatlog-filter-axis");
+      if (axis === "tag" || axis === "category" || axis === "author") {
+        selected[axis] = activeFilterIds(group);
+      }
+    }
+
+    let visible = 0;
+    for (const card of list.querySelectorAll(".maatlog-post-card")) {
+      // ホーム本文の maatlog:post-list はキュレーションであってアーカイブの
+      // 母集団ではない。home.html はユーザ本文を .maatlog-post-list の内側に
+      // 置くため、印を見て明示的に外す。
+      if (card.closest('[data-maatlog-component="post-list"]') !== null) {
+        if (card instanceof HTMLElement && !card.hidden) {
+          visible += 1;
+        }
+        continue;
+      }
+      const ok =
+        matchesFilterAxis(selected.tag, card.getAttribute("data-maatlog-tags")) &&
+        matchesFilterAxis(selected.category, card.getAttribute("data-maatlog-categories")) &&
+        matchesFilterAxis(selected.author, card.getAttribute("data-maatlog-authors"));
+      if (card instanceof HTMLElement) {
+        card.hidden = !ok;
+      }
+      if (ok) {
+        visible += 1;
+      }
+    }
+
+    const active = selected.tag.length > 0 || selected.category.length > 0 || selected.author.length > 0;
+    if (empty instanceof HTMLElement) {
+      empty.hidden = !(active && visible === 0);
+    }
+  }
+
+  /**
+   * Progressive enhancement: wire filter chips on an archive root.
+   *
+   * Re-applies when Infinite Scroll fires ``maatlog:content-added``.
+   *
+   * @param {Element} archive
+   * @returns {void}
+   */
+  function enhanceArchiveFilter(archive) {
+    const toolbar = archive.querySelector('[data-maatlog-component="archive-filter"]');
+    if (toolbar === null) {
+      return;
+    }
+
+    for (const chip of toolbar.querySelectorAll("[data-maatlog-filter-value]")) {
+      if (!(chip instanceof HTMLButtonElement)) {
+        continue;
+      }
+      chip.addEventListener("click", () => {
+        const next = !chip.classList.contains("is-active");
+        chip.classList.toggle("is-active", next);
+        chip.setAttribute("aria-pressed", String(next));
+        applyArchiveFilter(archive);
+      });
+    }
+
+    const reset = toolbar.querySelector("[data-maatlog-filter-reset]");
+    if (reset instanceof HTMLButtonElement) {
+      reset.addEventListener("click", () => {
+        for (const chip of toolbar.querySelectorAll("[data-maatlog-filter-value].is-active")) {
+          chip.classList.remove("is-active");
+          chip.setAttribute("aria-pressed", "false");
+        }
+        applyArchiveFilter(archive);
+      });
+    }
+
+    archive.addEventListener("maatlog:content-added", () => {
+      applyArchiveFilter(archive);
+    });
+
+    applyArchiveFilter(archive);
+  }
+
+  registerEnhancer("archive-filter", {
+    selector: '[data-maatlog-component="archive"]',
+    apply: enhanceArchiveFilter,
+  });
+
+  // ---------------------------------------------------------------------------
+  // Mobile sidebar drawer — Issue #65
+  // ---------------------------------------------------------------------------
+
+  const MOBILE_SIDEBAR_QUERY = "(max-width: 48rem)";
+
+  /**
+   * A closed ``<details>`` keeps rendering its own ``<summary>`` and drops the
+   * rest of its subtree from the sequential focus order, but computed
+   * ``display`` / ``visibility`` still report the subtree as shown.
+   *
+   * @param {HTMLElement} el
+   * @returns {boolean}
+   */
+  function isCollapsedDetailsContent(el) {
+    const details = el.closest("details:not([open])");
+    if (details === null) {
+      return false;
+    }
+    return !(el.tagName === "SUMMARY" && el.parentElement === details);
+  }
+
+  /**
+   * @param {Element} root
+   * @returns {HTMLElement[]}
+   */
+  function focusableWithin(root) {
+    const nodes = root.querySelectorAll(
+      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])',
+    );
+    /** @type {HTMLElement[]} */
+    const focusable = [];
+    for (const el of nodes) {
+      if (!(el instanceof HTMLElement)) {
+        continue;
+      }
+      if (isCollapsedDetailsContent(el)) {
+        continue;
+      }
+      // offsetParent is null for fixed elements in some engines; use visibility check.
+      const style = window.getComputedStyle(el);
+      if (style.visibility !== "hidden" && style.display !== "none") {
+        focusable.push(el);
+      }
+    }
+    return focusable;
+  }
+
+  /**
+   * Progressive enhancement: off-canvas drawer for the taxonomy sidebar on
+   * narrow viewports. Without JS (or outside the mobile query) the sidebar
+   * stays in normal document flow at the bottom of the page.
+   *
+   * @param {Element} sidebar
+   * @returns {void}
+   */
+  function enhanceMobileSidebar(sidebar) {
+    if (!(sidebar instanceof HTMLElement)) {
+      return;
+    }
+    const toggleCandidate = document.querySelector('[data-maatlog-toggle="sidebar"]');
+    if (!(toggleCandidate instanceof HTMLButtonElement)) {
+      return;
+    }
+    const toggle = toggleCandidate;
+    // The template owns the wording so gettext keeps working; the literals are
+    // only a fallback for themes that ship neither data attribute.
+    const labelOpen = toggle.dataset.maatlogLabelOpen ?? toggle.getAttribute("aria-label") ?? "Open site menu";
+    const labelClose = toggle.dataset.maatlogLabelClose ?? "Close site menu";
+
+    if (sidebar.tabIndex < 0) {
+      sidebar.tabIndex = -1;
+    }
+
+    const backdrop = document.createElement("button");
+    backdrop.type = "button";
+    backdrop.className = "maatlog-sidebar-backdrop";
+    backdrop.setAttribute("aria-label", labelClose);
+    backdrop.tabIndex = -1;
+    document.body.append(backdrop);
+
+    /** @type {Element[]} */
+    const inertTargets = [];
+    for (const sel of ["#maatlog-main", '[data-maatlog-component="toc"]']) {
+      const el = document.querySelector(sel);
+      if (el !== null) {
+        inertTargets.push(el);
+      }
+    }
+
+    const media = typeof window.matchMedia === "function" ? window.matchMedia(MOBILE_SIDEBAR_QUERY) : null;
+
+    /**
+     * @returns {boolean}
+     */
+    function isMobile() {
+      return media !== null ? media.matches : false;
+    }
+
+    /**
+     * @returns {boolean}
+     */
+    function isOpen() {
+      return sidebar.classList.contains("is-open");
+    }
+
+    /**
+     * @returns {void}
+     */
+    function focusSidebar() {
+      const focusables = focusableWithin(sidebar);
+      (focusables[0] ?? sidebar).focus();
+    }
+
+    /**
+     * @param {boolean} open
+     * @returns {void}
+     */
+    function setOpen(open) {
+      if (!isMobile()) {
+        open = false;
+      }
+      sidebar.classList.toggle("is-open", open);
+      document.documentElement.classList.toggle("maatlog-sidebar-open", open);
+      backdrop.classList.toggle("is-visible", open);
+      toggle.setAttribute("aria-expanded", String(open));
+      toggle.setAttribute("aria-label", open ? labelClose : labelOpen);
+      for (const el of inertTargets) {
+        if (open) {
+          el.setAttribute("inert", "");
+        } else {
+          el.removeAttribute("inert");
+        }
+      }
+      if (open) {
+        if (getComputedStyle(sidebar).visibility === "visible") {
+          focusSidebar();
+        } else {
+          sidebar.addEventListener("transitionend", function focusAfterTransition(event) {
+            if (event.target !== sidebar) {
+              return;
+            }
+            sidebar.removeEventListener("transitionend", focusAfterTransition);
+            if (isOpen()) {
+              focusSidebar();
+            }
+          });
+        }
+      } else if (document.activeElement instanceof Node && sidebar.contains(document.activeElement)) {
+        toggle.focus();
+      }
+    }
+
+    toggle.addEventListener("click", () => {
+      setOpen(!isOpen());
+    });
+    backdrop.addEventListener("click", () => {
+      setOpen(false);
+      toggle.focus();
+    });
+    document.addEventListener("keydown", (event) => {
+      if (!isOpen()) {
+        return;
+      }
+      if (event.key === "Escape") {
+        setOpen(false);
+        toggle.focus();
+        return;
+      }
+      if (event.key !== "Tab") {
+        return;
+      }
+      const focusables = focusableWithin(sidebar);
+      if (focusables.length === 0) {
+        event.preventDefault();
+        sidebar.focus();
+        return;
+      }
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      const active = document.activeElement;
+      if (event.shiftKey && active === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    });
+
+    if (media !== null) {
+      const onChange = () => {
+        if (!media.matches) {
+          setOpen(false);
+        }
+      };
+      if (typeof media.addEventListener === "function") {
+        media.addEventListener("change", onChange);
+      } else {
+        // Safari < 14
+        media.addListener(onChange);
+      }
+    }
+
+    setOpen(false);
+  }
+
+  registerEnhancer("mobile-sidebar", {
+    selector: '[data-maatlog-component="sidebar"]',
+    apply: enhanceMobileSidebar,
+  });
+
+  // ---------------------------------------------------------------------------
+  // Back to top — Issue #61
+  // ---------------------------------------------------------------------------
+
+  const BACK_TO_TOP_THRESHOLD = 600;
+
+  /**
+   * Scroll the window to the top, honouring the reader's motion preference.
+   *
+   * The preference is read per click rather than through a listener so that a
+   * change made while the page is open takes effect on the next press.
+   *
+   * @returns {void}
+   */
+  function scrollWindowToTop() {
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    try {
+      window.scrollTo({ top: 0, behavior: reduced ? "auto" : "smooth" });
+    } catch {
+      // Browsers without ScrollToOptions take the two-argument form.
+      window.scrollTo(0, 0);
+    }
+  }
+
+  /**
+   * Move keyboard focus to the top of the page after scrolling there.
+   *
+   * Scrolling alone leaves focus on a button that is about to hide itself, so a
+   * keyboard reader would lose their place at the bottom of the document. The
+   * banner is the first landmark of every MaatLog page; the temporary tabindex
+   * is dropped again on blur so the tab order stays as the document declares it.
+   *
+   * @returns {void}
+   */
+  function focusPageTop() {
+    const banner = document.querySelector(".maatlog-banner");
+    if (!(banner instanceof HTMLElement)) {
+      return;
+    }
+    banner.setAttribute("tabindex", "-1");
+    banner.addEventListener(
+      "blur",
+      () => {
+        banner.removeAttribute("tabindex");
+      },
+      { once: true },
+    );
+    banner.focus({ preventScroll: true });
+  }
+
+  /**
+   * Reveal the floating "back to top" button once the reader has scrolled.
+   *
+   * Progressive enhancement: the button ships with ``hidden``, so a document
+   * without JavaScript never shows it and scrolls exactly as before.
+   *
+   * @param {Element} button
+   * @returns {void}
+   */
+  function enhanceBackToTop(button) {
+    if (!(button instanceof HTMLElement)) {
+      return;
+    }
+    // A narrowed const so the nested callbacks below keep the element type.
+    const element = button;
+    let visible = false;
+    let frame = 0;
+
+    function update() {
+      frame = 0;
+      const next = window.scrollY >= BACK_TO_TOP_THRESHOLD;
+      if (next === visible) {
+        // The performance contract: touch the DOM only on a state change.
+        return;
+      }
+      visible = next;
+      element.hidden = !next;
+    }
+
+    function schedule() {
+      if (frame !== 0) {
+        return;
+      }
+      frame = window.requestAnimationFrame(update);
+    }
+
+    window.addEventListener("scroll", schedule, { passive: true });
+    // A restored scroll position (reload, bfcache) arrives without a scroll event.
+    window.addEventListener("pageshow", update);
+
+    element.addEventListener("click", () => {
+      scrollWindowToTop();
+      focusPageTop();
+    });
+
+    update();
+  }
+
+  registerEnhancer("back-to-top", {
+    selector: '[data-maatlog-component="back-to-top"]',
+    apply: enhanceBackToTop,
+  });
+
+  // ---------------------------------------------------------------------------
+  // Share / copy URL — Issue #64
+  // ---------------------------------------------------------------------------
+
+  /**
+   * The URL a "share this" press should distribute.
+   *
+   * Prefer the page's canonical link when it is absolute (stable across query
+   * strings); otherwise fall back to the address-bar location.
+   *
+   * Only an absolute ``href`` counts. A relative one is resolved by the browser
+   * against the current document, so ``canonical.href`` would hand the reader a
+   * URL shifted by one directory — unreachable for any post below the root.
+   *
+   * @returns {string}
+   */
+  function resolveShareUrl() {
+    const canonical = document.querySelector('link[rel="canonical"]');
+    if (canonical instanceof HTMLLinkElement && /^https?:\/\//i.test(canonical.getAttribute("href") ?? "")) {
+      return canonical.href;
+    }
+    return window.location.href;
+  }
+
+  /**
+   * Copy *url* to the system clipboard.
+   *
+   * Rejects (rather than resolving) when the Clipboard API is missing, so the
+   * caller can distinguish "copied" from "show the URL instead". Missing
+   * access is not an error a caller must handle specially.
+   *
+   * @param {string} url
+   * @returns {Promise<void>}
+   */
+  async function copyToClipboard(url) {
+    const clipboard = /** @type {{ clipboard?: { writeText(text: string): Promise<void> } }} */ (navigator).clipboard;
+    if (clipboard === undefined || typeof clipboard.writeText !== "function") {
+      throw new Error("Clipboard API unavailable");
+    }
+    await clipboard.writeText(url);
+  }
+
+  /**
+   * Update the share status element without dropping its live-region contract.
+   *
+   * The ``role="status"`` / ``aria-live="polite"`` attributes belong to the
+   * template; only ``textContent`` is rewritten so screen readers keep
+   * announcing updates.
+   *
+   * @param {Element} status
+   * @param {"copied" | "fallback"} kind
+   * @param {string} url
+   * @returns {void}
+   */
+  function showShareStatus(status, kind, url) {
+    if (kind === "copied") {
+      status.textContent = "Copied!";
+      return;
+    }
+    // Clipboard が使えない環境向けの安全な fallback: 選択できるテキストで URL を提示。
+    status.textContent = url;
+  }
+
+  /**
+   * Wire the share button: Web Share when available, otherwise copy the URL.
+   *
+   * Progressive enhancement: no JavaScript at all leaves the button inert, and
+   * any failure is contained in this handler so the other features and the
+   * page survive.
+   *
+   * @param {Element} root
+   * @returns {void}
+   */
+  function enhanceShare(root) {
+    if (!(root instanceof Element)) {
+      return;
+    }
+    const button = root.querySelector(".maatlog-share-button");
+    const status = root.querySelector(".maatlog-share-status");
+    if (!(button instanceof HTMLButtonElement) || !(status instanceof HTMLElement)) {
+      return;
+    }
+
+    button.addEventListener("click", () => {
+      void (async () => {
+        // 直前の押下の結果を先に捨てる。status は「今押した結果」だけを述べる live region
+        // なので、残したままだと共有成功時に古い「Copied!」を読ませてしまい、同じ文字列の
+        // 再代入では aria-live の再読み上げも起きない。
+        status.textContent = "";
+        const url = resolveShareUrl();
+        // Navigator を構造的に読むのは Safari の browserslist チェックで
+        // navigator.share を必須扱いにしないため（shouldSuppressPrefetch と同じ流儀）。
+        const webShare = /** @type {{ share?: (data: { title: string; url: string }) => Promise<void> }} */ (navigator)
+          .share;
+        if (typeof webShare === "function") {
+          try {
+            await webShare.call(navigator, { title: document.title, url });
+            return; // 共有成功 → 何もしない。
+          } catch (error) {
+            if (error instanceof DOMException && error.name === "AbortError") {
+              return; // 読者がキャンセル → Clipboard へフォールバックしない。
+            }
+            // その他の共有失敗 → 下の clipboard へフォールバックする。
+          }
+        }
+        try {
+          await copyToClipboard(url);
+          showShareStatus(status, "copied", url);
+        } catch {
+          // 非可用（非 https、権限なし）でも例外を出さず、URL 自体を表示する。
+          showShareStatus(status, "fallback", url);
+        }
+      })();
+    });
+  }
+
+  registerEnhancer("share", {
+    selector: '[data-maatlog-component="share"]',
+    apply: enhanceShare,
   });
 
   document.documentElement.classList.add("maatlog-js");

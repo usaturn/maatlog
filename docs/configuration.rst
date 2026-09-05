@@ -140,10 +140,50 @@
 著者プロフィール
 ----------------
 
-``maatlog_author_profiles`` は著者の外部リンクを保持する設定です。
+``maatlog_author_profiles`` は著者プロフィールページ用のリッチデータを保持する設定です。
 キーは著者 ID で、 ``maatlog_authors`` と同じ ``[a-z0-9][a-z0-9._-]*`` に一致する必要があります。
-値は ``links`` キーだけを持つ辞書です。
-表示名は ``maatlog_authors`` を唯一の情報源とするため、こちらには置きません
+値は次の 7 キーのみを持つ辞書です（すべて任意）。
+表示名は ``maatlog_authors`` が唯一の情報源であり、こちらには置きません
+
+.. list-table::
+   :header-rows: 1
+   :widths: 22 18 12 48
+
+   * - キー
+     - 型
+     - 既定
+     - 意味
+   * - ``role``
+     - 空でない ``str``
+     - 省略
+     - 肩書き・役割
+   * - ``avatar``
+     - srcdir 相対 URI の ``str``
+     - 省略
+     - プロフィールのアバター画像。
+       記事の ``maatlog-image`` と同じ安全性検査（symlink 不可・srcdir 脱出不可・実在必須）を通ります
+   * - ``bio_short``
+     - 空でない ``str``
+     - 省略
+     - ヘッダ直下に出す短い自己紹介
+   * - ``interests``
+     - 空でない文字列のシーケンス
+     - ``()`` 
+     - 興味・専門分野の一覧
+   * - ``links``
+     - リンク辞書のシーケンス
+     - ``()`` 
+     - 外部リンク（下記）
+   * - ``featured_posts``
+     - 空でない文字列のシーケンス
+     - ``()`` 
+     - その著者の **published** 投稿の slug。
+       順序どおりプロフィールに並びます
+   * - ``about_docname``
+     - 相対 docname の ``str``
+     - 省略
+     - About 文書（通常の Sphinx ページ）の docname。
+       toctree に載せなくて構いません
 
 ``links`` の各要素は次のキーを持ちます
 
@@ -164,8 +204,78 @@
 
 ``type`` または ``url`` の欠落、および ``http`` / ``https`` 以外の URL は ``maatlog.author.link-invalid`` としてビルドを失敗させます
 
-``maatlog_authors`` との相互参照は検証しません。
-``maatlog_authors`` が ``None`` のとき ID は投稿から自動登録されるため、対応する表示名が無くても不正ではありません
+プロフィールを設定した著者のアーカイブ 1 ページ目（``blog/author/<id>`` など）は
+``maatlog/profile.html`` で描画されます。
+2 ページ目以降は従来どおり ``maatlog/archive.html`` です。
+``maatlog_authors`` が ``None`` のとき ID は投稿から自動登録されるため、
+``maatlog_authors`` を設定している場合だけ、プロフィールの著者 ID がその辞書に存在するかを検証します
+
+診断
+~~~~
+
+設定の形が不正なときは ``maatlog.config.invalid`` です。
+相互参照とアバターは ``env-updated`` の時点で検証し、問題があればビルドを失敗させます
+
+.. list-table::
+   :header-rows: 1
+   :widths: 32 68
+
+   * - コード
+     - 条件
+   * - ``maatlog.author.profile-unknown``
+     - ``maatlog_authors`` を設定しているのに、プロフィールの著者 ID がその辞書に無い
+   * - ``maatlog.author.featured-unknown``
+     - ``featured_posts`` の slug が published 投稿として存在しない
+   * - ``maatlog.author.featured-foreign``
+     - ``featured_posts`` の slug が、その著者の published 投稿ではない
+   * - ``maatlog.author.about-unknown``
+     - ``about_docname`` が存在しない Sphinx 文書を指している
+   * - ``maatlog.image.invalid``
+     - ``avatar`` の URI が記事代表画像と同じ理由で拒否された（絶対 URL・srcdir 外・クエリ付きなど）
+   * - ``maatlog.image.missing``
+     - ``avatar`` が指すファイルが srcdir 内に存在しない
+
+例
+~~
+
+::
+
+    maatlog_authors = {
+        "alice": "Alice",
+    }
+    maatlog_author_profiles = {
+        "alice": {
+            "role": "Editor & Developer",
+            "avatar": "authors/alice.png",
+            "bio_short": "Python / Cloud / Sphinx developer.",
+            "interests": ["Python", "Cloud", "Sphinx"],
+            "links": [
+                {"type": "github", "url": "https://github.com/example"},
+                {"type": "website", "url": "https://example.com/"},
+            ],
+            "about_docname": "authors/alice",
+        },
+    }
+
+既定著者
+--------
+
+``maatlog_default_author``
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+著者を特定できないページ（トップページ、タグ・カテゴリ・アーカイブ・検索結果など）で
+右ペインに表示する著者の ID です。既定値は ``None`` で、未設定のときはそれらのページに
+Author Summary を表示しません。
+
+.. code-block:: python
+
+   maatlog_default_author = "alice"
+
+``maatlog_authors`` を設定している場合、そこに無い ID を指定するとビルドが
+``maatlog.config.invalid`` で失敗します。``maatlog_authors`` を設定していない場合、
+著者 ID は記事から動的に登録されるため、この照合は行いません。
+
+``maatlog_authors`` の先頭要素が暗黙に選ばれることはありません。
 
 アーカイブのルート
 ------------------
@@ -215,6 +325,43 @@ Sphinx ドキュメント名でなければなりません
 ``maatlog_generate_feeds = False`` を設定すると、フィード生成とディスカバリリンクを
 スキップします
 
+本文の幅
+--------
+
+``maatlog_content_width`` は、記事本文（段落・リスト・引用・見出し）と通常ページの
+prose（段落・リスト・引用。見出しは対象外）の最大行幅を指定します。
+値は CSS の ``max-width`` として使える宣言値です
+
+* 既定は ``None`` です。このときテーマの既定値
+  ``clamp(42rem, 24rem + 16vw, 60rem)`` をそのまま使います
+* ``"100%"`` を指定すると、本文が中央列いっぱいまで広がります。
+  ウルトラワイドや 4K で本文の右端と右目次の間に空白が残るのを解消できます
+* ``"72rem"`` のような固定値、 ``"clamp(42rem, 70vw, 90rem)"`` のような
+  CSS 関数も指定できます
+* ``maatlog-default`` ではコードブロック・表・画像はこの制限の対象外であり、
+  設定に関わらず中央列の幅を使えます。
+  ``maatlog-base`` を直接使う場合は ``article`` 全体がこの幅で抑えられるため、
+  コードブロック等も連動して広がります
+
+::
+
+    maatlog_content_width = "100%"
+
+値はテーマの ``<style>`` へそのまま埋め込まれるため、
+宣言や要素の外へ出られる文字（ ``<``、 ``>``、 ``{``、 ``}``、 ``;``、
+``\``、 ``/*`` ）を含む値はビルド時に
+``maatlog.config.invalid`` で拒否します。
+空文字と文字列以外の値も同様に拒否します。
+値が幅として意味を成すかどうかまでは検査しません。
+CSS として無効な値を指定したときの挙動はブラウザに依存し、
+テーマの既定値へ戻るとは限りません。
+カスタムプロパティはほぼ任意の値を受け取るため、 ``max-width`` が計算値時に無効となり、
+幅の制限そのものが外れることがあります
+
+この設定は ``maatlog-base`` を継承したテーマで有効です。
+継承しないテーマは ``maatlog_config_style`` ブロックを実装した場合にだけ
+反映します。 :doc:`theme-api` を参照してください
+
 タイムゾーンとビルド時刻
 ------------------------
 
@@ -247,10 +394,15 @@ Sphinx ドキュメント名でなければなりません
     }
     maatlog_author_profiles = {
         "alice": {
+            "role": "Editor & Developer",
+            "avatar": "authors/alice.png",
+            "bio_short": "Python / Cloud / Sphinx developer.",
+            "interests": ["Python", "Cloud", "Sphinx"],
             "links": [
                 {"type": "github", "url": "https://github.com/alice"},
                 {"type": "x", "url": "https://x.com/alice", "label": "@alice"},
             ],
+            "about_docname": "authors/alice",
         },
     }
     maatlog_archive_docname = "blog"
@@ -258,3 +410,4 @@ Sphinx ドキュメント名でなければなりません
     maatlog_generate_feeds = True
     maatlog_feed_taxonomies = ("tag", "category", "author", "month")
     maatlog_feed_limit = 20
+    maatlog_content_width = None

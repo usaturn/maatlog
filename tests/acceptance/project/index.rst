@@ -27,6 +27,8 @@ Cross-references
 
    home
    guide
+   long-toc
    api
    posts/rst-post
    posts/md-post
+   posts/three-authors

@@ -1,0 +1,49 @@
+{# MaatLog author summary for the right rail. Uses ``maatlog.author_summaries``.
+   Profile-page data (About, Interests, Stats, Featured) is deliberately absent:
+   this component renders on every page, so it must stay cheap and short.
+   The card is a macro because the "+N authors" disclosure repeats it. #}
+{%- macro maatlog_author_summary_card(author) -%}
+<div class="maatlog-author-summary-card">
+  <div class="maatlog-author-summary-avatar">
+    {%- if author.avatar_url -%}
+    <img class="maatlog-author-summary-avatar-image" src="{{ author.avatar_url|e }}" alt="" width="56" height="56" />
+    {%- else -%}
+    <span class="maatlog-author-summary-avatar-initials" aria-hidden="true">{{ author.initials|e }}</span>
+    {%- endif -%}
+  </div>
+  <p class="maatlog-author-summary-name">{{ author.display_name|e }}</p>
+  {%- if author.bio_short -%}
+  <p class="maatlog-author-summary-bio">{{ author.bio_short|e }}</p>
+  {%- endif -%}
+  {%- with maatlog_author_links=author.links -%}
+  {%- include "maatlog/components/author-links.html" -%}
+  {%- endwith -%}
+  {%- if author.profile_url -%}
+  <a class="maatlog-author-summary-profile-link" href="{{ author.profile_url|e }}">{{ _('View profile') }}</a>
+  {%- endif -%}
+</div>
+{%- endmacro -%}
+{%- set maatlog_summaries = maatlog.author_summaries -%}
+{%- if maatlog_summaries -%}
+<section class="maatlog-author-summary"
+         data-maatlog-component="author-summary"
+         aria-labelledby="maatlog-author-summary-title">
+  <h2 class="maatlog-author-summary-title" id="maatlog-author-summary-title">
+    {{- _('Written by') if maatlog.page_kind == 'post' else _('Author') -}}
+  </h2>
+  {%- for author in maatlog_summaries[:2] -%}
+  {{ maatlog_author_summary_card(author) }}
+  {%- endfor -%}
+  {%- if maatlog_summaries|length > 2 -%}
+  {#- ``<details>`` keeps the disclosure working without JavaScript, the same
+      way ``maatlog-taxonomy-more`` does in the navigation sidebar. -#}
+  <details class="maatlog-author-summary-more">
+    {%- set remaining = maatlog_summaries|length - 2 -%}
+    <summary>+{{ remaining }} {{ _('author') if remaining == 1 else _('authors') }}</summary>
+    {%- for author in maatlog_summaries[2:] -%}
+    {{ maatlog_author_summary_card(author) }}
+    {%- endfor -%}
+  </details>
+  {%- endif -%}
+</section>
+{%- endif -%}

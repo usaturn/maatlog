@@ -1,0 +1,14 @@
+{# MaatLog right rail: the column beside the content. The author summary sits at
+   the top and the table of contents follows it.
+
+   The container is a <div>, not an <aside>, on purpose. The narrow breakpoint
+   drops its box with ``display: contents`` so the summary can move below the
+   article while the TOC stays above it, and a landmark element would risk
+   losing its landmark when its box is gone. The semantics live on the children:
+   the summary is a labelled <section>, the TOC a labelled <nav>. #}
+{%- if maatlog_has_rail -%}
+<div class="maatlog-right-rail" data-maatlog-component="right-rail">
+  {%- include "maatlog/components/author-summary.html" -%}
+  {%- include "maatlog/components/toc-sidebar.html" -%}
+</div>
+{%- endif -%}

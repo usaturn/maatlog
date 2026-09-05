@@ -28,10 +28,14 @@ PALETTES_RELATIVE: Final = "static/palettes"
 REQUIRED_TEMPLATES: Final[tuple[str, ...]] = (
     "maatlog/post.html",
     "maatlog/archive.html",
+    "maatlog/profile.html",
     "maatlog/components/post-card.html",
     "maatlog/components/pagination.html",
     "maatlog/components/sidebar.html",
     "maatlog/components/feed-links.html",
+    "maatlog/components/author-links.html",
+    "maatlog/components/right-rail.html",
+    "maatlog/components/author-summary.html",
 )
 
 REQUIRED_BLOCKS: Final[tuple[str, ...]] = (
@@ -42,6 +46,8 @@ REQUIRED_BLOCKS: Final[tuple[str, ...]] = (
     "maatlog_post_navigation",
     "maatlog_archive_header",
     "maatlog_archive_items",
+    "maatlog_profile_header",
+    "maatlog_profile_body",
     "maatlog_pagination",
     "maatlog_sidebar",
 )
@@ -50,6 +56,7 @@ REQUIRED_BLOCKS: Final[tuple[str, ...]] = (
 BLOCK_PAGE_TEMPLATES: Final[tuple[str, ...]] = (
     "maatlog/post.html",
     "maatlog/archive.html",
+    "maatlog/profile.html",
 )
 
 
@@ -112,7 +119,7 @@ class PaletteDeclaration(BaseModel):
         return None
 
 
-CORE_THEME_API: Final = ThemeApiVersion(major=1, minor=9)
+CORE_THEME_API: Final = ThemeApiVersion(major=1, minor=16)
 
 
 def is_compatible(core: ThemeApiVersion, theme: ThemeApiVersion) -> bool:

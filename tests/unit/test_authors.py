@@ -4,7 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from maatlog.authors import AuthorLink, AuthorProfile, validate_author_profile
+from maatlog.authors import (
+    CONFIG_INVALID_CODE,
+    AuthorLink,
+    AuthorProfile,
+    validate_author_profile,
+)
 from maatlog.errors import Diagnostic
 
 FIELD = "maatlog_author_profiles.alice"
@@ -182,3 +187,126 @@ def test_author_link_is_frozen() -> None:
 
     with pytest.raises(ValueError):
         link.type = "x"  # pyright: ignore[reportAttributeAccessIssue]
+
+
+FULL_PROFILE = {
+    "role": "Editor & Developer",
+    "avatar": "authors/alice.png",
+    "bio_short": "Python / Cloud / Sphinx developer.",
+    "interests": ["Python", "Cloud", "Sphinx"],
+    "links": [{"type": "github", "url": "https://github.com/alice"}],
+    "featured_posts": ["one", "two"],
+    "about_docname": "authors/alice",
+}
+
+
+def test_validate_author_profile_accepts_every_key() -> None:
+    diagnostics: list[Diagnostic] = []
+
+    profile = validate_author_profile(FIELD, FULL_PROFILE, diagnostics)
+
+    assert diagnostics == []
+    assert profile is not None
+    assert profile.role == "Editor & Developer"
+    assert profile.avatar == "authors/alice.png"
+    assert profile.bio_short == "Python / Cloud / Sphinx developer."
+    assert profile.interests == ("Python", "Cloud", "Sphinx")
+    assert profile.featured_posts == ("one", "two")
+    assert profile.about_docname == "authors/alice"
+
+
+def test_validate_author_profile_defaults_every_optional_key() -> None:
+    diagnostics: list[Diagnostic] = []
+
+    profile = validate_author_profile(FIELD, {"links": []}, diagnostics)
+
+    assert diagnostics == []
+    assert profile == AuthorProfile()
+
+
+def test_validate_author_profile_strips_optional_text() -> None:
+    diagnostics: list[Diagnostic] = []
+
+    profile = validate_author_profile(FIELD, {"role": "  Editor  "}, diagnostics)
+
+    assert diagnostics == []
+    assert profile is not None
+    assert profile.role == "Editor"
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [
+        ("role", ""),
+        ("role", 1),
+        ("avatar", "   "),
+        ("bio_short", []),
+        ("interests", "Python"),
+        ("interests", [""]),
+        ("interests", [1]),
+        ("featured_posts", "one"),
+        ("featured_posts", [""]),
+        ("about_docname", "/authors/alice"),
+        ("about_docname", "authors/../alice"),
+        ("about_docname", ""),
+    ],
+)
+def test_validate_author_profile_rejects_malformed_values(key: str, value: object) -> None:
+    diagnostics: list[Diagnostic] = []
+
+    profile = validate_author_profile(FIELD, {key: value}, diagnostics)
+
+    assert profile is None
+    assert [item.code for item in diagnostics] == ["maatlog.config.invalid"]
+
+
+def test_validate_author_profile_rejects_duplicate_featured_posts() -> None:
+    """同一 slug を重複設定した設定ミスは diagnostic で弾く（L-1 / PR #137 review）。"""
+    diagnostics: list[Diagnostic] = []
+
+    profile = validate_author_profile(FIELD, {**FULL_PROFILE, "featured_posts": ["one", "two", "one"]}, diagnostics)
+
+    assert profile is None
+    assert [item.code for item in diagnostics] == ["maatlog.config.invalid"]
+    assert diagnostics[0].field == f"{FIELD}.featured_posts"
+    assert diagnostics[0].expected == "a sequence without duplicate slugs"
+
+
+def test_validate_author_profile_still_rejects_unknown_keys() -> None:
+    diagnostics: list[Diagnostic] = []
+
+    profile = validate_author_profile(FIELD, {"nickname": "al"}, diagnostics)
+
+    assert profile is None
+    assert [item.code for item in diagnostics] == ["maatlog.config.invalid"]
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        (" authors/alice ", "authors/alice"),
+        ("\nabout\n", "about"),
+    ],
+)
+def test_validate_author_profile_trims_whitespace_about_docname(raw: str, expected: str) -> None:
+    """前後空白は正規化して受け付け、about-unknown に落ちる前の紛らわしさを消す。"""
+    diagnostics: list[Diagnostic] = []
+
+    result = validate_author_profile(FIELD, {"about_docname": raw}, diagnostics)
+
+    assert result is not None
+    assert result.about_docname == expected
+    assert diagnostics == []
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [" ", "   ", "\t"],
+)
+def test_validate_author_profile_rejects_blank_about_docname(raw: str) -> None:
+    diagnostics: list[Diagnostic] = []
+
+    result = validate_author_profile(FIELD, {"about_docname": raw}, diagnostics)
+
+    assert result is None
+    assert [item.code for item in diagnostics] == [CONFIG_INVALID_CODE]

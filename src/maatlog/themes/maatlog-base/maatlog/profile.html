@@ -1,0 +1,40 @@
+{# MaatLog author profile page. This is page 1 of an author archive with a profile
+   header on top; page 2 and beyond keep rendering through ``maatlog/archive.html``,
+   so the header, About, Interests, Stats and Featured sections appear exactly once. #}
+{%- extends "layout.html" -%}
+
+{%- block extrahead -%}
+  {{ super() }}
+  {%- block maatlog_head -%}
+  {%- for feed in maatlog.feeds -%}
+  <link rel="alternate" type="application/atom+xml" title="{{ feed.title|e }}" href="{{ feed.url|e }}" />
+  {%- endfor -%}
+  {%- endblock maatlog_head -%}
+{%- endblock extrahead -%}
+
+{%- block body -%}
+<section class="maatlog-profile" data-maatlog-component="profile">
+  {%- block maatlog_profile_header -%}
+  {%- include "maatlog/components/profile-header.html" -%}
+  {%- endblock maatlog_profile_header -%}
+
+  {%- block maatlog_profile_body -%}
+  {%- include "maatlog/components/profile-about.html" -%}
+  {%- include "maatlog/components/profile-interests.html" -%}
+  {%- include "maatlog/components/profile-stats.html" -%}
+  {%- include "maatlog/components/profile-featured.html" -%}
+  {%- include "maatlog/components/profile-posts.html" -%}
+  {%- endblock maatlog_profile_body -%}
+
+  {#- Required blocks of the contract that this page does not use. Pagination is
+      rendered inside profile-posts.html so it stays with the list it pages. -#}
+  {%- block maatlog_post_header -%}{%- endblock maatlog_post_header -%}
+  {%- block maatlog_post_meta -%}{%- endblock maatlog_post_meta -%}
+  {%- block maatlog_post_body -%}{%- endblock maatlog_post_body -%}
+  {%- block maatlog_post_navigation -%}{%- endblock maatlog_post_navigation -%}
+  {%- block maatlog_archive_header -%}{%- endblock maatlog_archive_header -%}
+  {%- block maatlog_archive_items -%}{%- endblock maatlog_archive_items -%}
+  {%- block maatlog_pagination -%}{%- endblock maatlog_pagination -%}
+  {%- block maatlog_sidebar -%}{%- endblock maatlog_sidebar -%}
+</section>
+{%- endblock body -%}

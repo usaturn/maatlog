@@ -10,6 +10,13 @@
    is written twice on purpose. Keep the two dark blocks identical — the
    contract test in tests/integration/test_theme_tokens.py enforces it. */
 
+/* UA スタイルシートの [hidden] は UA オリジンなので、display を宣言する author
+   ルール（カードの display: flex など）に必ず負ける。hidden 属性を使う
+   コンポーネントが増えても効き続けるよう、土台をここで一度だけ置く。 */
+[hidden] {
+  display: none !important;
+}
+
 /* Font family names are case-sensitive identifiers, not CSS keywords. */
 /* stylelint-disable value-keyword-case */
 :root {
@@ -20,10 +27,24 @@
      preferred term grows with viewport, ceiling keeps 4K readable. */
   --maatlog-content-width: clamp(42rem, 24rem + 16vw, 60rem);
   --maatlog-main-width: clamp(50rem, 30rem + 18vw, 72rem);
+
+  /* プロフィールページ専用。共有の content/main 幅は上書きしない。 */
+  --maatlog-profile-main-width: clamp(56rem, 34rem + 20vw, 80rem);
+  --maatlog-profile-content-width: clamp(48rem, 28rem + 18vw, 68rem);
   --maatlog-sidebar-width: 16rem;
   --maatlog-nav-width: 13rem;
-  --maatlog-toc-width: 13.5rem;
+  --maatlog-rail-width: 13.5rem;
+  --maatlog-author-avatar-size: 3.5rem;
   --maatlog-banner-height: 4rem;
+
+  /* 固定 UI のレイヤ帯。下段 30 は Back to Top など本文補助の浮遊 UI、
+     40-42 は Sidebar のドロワー系（Issue #65）。下段は常にドロワーの背面。 */
+  --maatlog-z-back-to-top: 30;
+  --maatlog-back-to-top-size: 2.75rem;
+  --maatlog-z-sidebar-backdrop: 40;
+  --maatlog-z-sidebar-drawer: 41;
+  --maatlog-z-sidebar-toggle: 42;
+  --maatlog-sidebar-drawer-width: min(20rem, 85vw);
 
   /* sticky ヘッダの下端。nav / TOC の top と max-height はここから計算する。 */
   --maatlog-sticky-top: calc(var(--maatlog-banner-height) + var(--maatlog-space-md));
@@ -126,6 +147,61 @@ section.maatlog-archive {
   margin: 0 auto;
   color: var(--maatlog-color-text, #1a1d23);
   padding: var(--maatlog-space-md, 1rem);
+}
+
+section.maatlog-profile {
+  max-width: var(--maatlog-profile-content-width, 48rem);
+  margin: 0 auto;
+  color: var(--maatlog-color-text, #1a1d23);
+  padding: var(--maatlog-space-md, 1rem);
+}
+
+.maatlog-profile-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--maatlog-space-sm, 0.5rem);
+  text-align: center;
+  margin-bottom: var(--maatlog-space-lg, 2rem);
+}
+
+.maatlog-profile-name {
+  margin: 0;
+}
+
+.maatlog-profile-role,
+.maatlog-profile-bio {
+  margin: 0;
+  color: var(--maatlog-color-muted, #4a5568);
+}
+
+.maatlog-profile-section-heading {
+  margin-top: var(--maatlog-space-lg, 2rem);
+  margin-bottom: var(--maatlog-space-sm, 0.5rem);
+}
+
+.maatlog-profile-interest-list,
+.maatlog-profile-stat-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--maatlog-space-sm, 0.5rem);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.maatlog-profile-stat {
+  display: flex;
+  flex-direction: column;
+}
+
+.maatlog-profile-stat-label,
+.maatlog-profile-stat-value {
+  margin: 0;
+}
+
+.maatlog-profile-about-body > :first-child {
+  margin-top: 0;
 }
 
 .maatlog-post-header,
@@ -294,6 +370,122 @@ a {
   text-transform: uppercase;
   vertical-align: middle;
   margin-bottom: var(--maatlog-space-xs, 0.25rem);
+}
+
+/* Archive filter — Issue #60.
+   チップは JavaScript でしか動かない。runtime が走らなかった読者に死んだ
+   コントロールを見せないよう、既定で隠して .maatlog-js で開く。 */
+.maatlog-archive-filter {
+  display: none;
+}
+
+.maatlog-js .maatlog-archive-filter {
+  display: block;
+  margin: 0 0 var(--maatlog-space-lg, 1.25rem);
+}
+
+.maatlog-filter-groups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--maatlog-space-md, 1rem);
+}
+
+.maatlog-filter-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--maatlog-space-sm, 0.5rem);
+}
+
+.maatlog-filter-label {
+  font-weight: 600;
+}
+
+.maatlog-filter-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.maatlog-filter-chip {
+  border: 1px solid var(--maatlog-color-border, #d5d9e0);
+  background: transparent;
+  border-radius: var(--maatlog-radius-pill, 9999px);
+  padding: 0.2rem 0.7rem;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.maatlog-filter-chip.is-active,
+.maatlog-filter-chip[aria-pressed="true"] {
+  background: var(--maatlog-badge-background);
+  color: var(--maatlog-badge-text);
+  border-color: transparent;
+}
+
+.maatlog-filter-chip:focus-visible {
+  outline: 2px solid var(--maatlog-color-accent, #1f6feb);
+  outline-offset: 2px;
+}
+
+.maatlog-filter-actions {
+  margin-top: var(--maatlog-space-sm, 0.5rem);
+}
+
+.maatlog-filter-reset {
+  border: 0;
+  background: none;
+  cursor: pointer;
+  text-decoration: underline;
+  font: inherit;
+  color: inherit;
+  padding: 0;
+}
+
+.maatlog-filter-reset:focus-visible {
+  outline: 2px solid var(--maatlog-color-accent, #1f6feb);
+  outline-offset: 2px;
+}
+
+.maatlog-archive-empty-filtered {
+  margin: var(--maatlog-space-md, 1rem) 0 0;
+  color: var(--maatlog-color-muted, #6b7280);
+  font-style: italic;
+}
+
+/* 記事ページの Share コントロール — Issue #64.
+   Web Share / Clipboard API に依存するため、runtime が走らなかった読者に死んだ
+   コントロールを見せないよう、既定で隠して .maatlog-js で開く。 */
+.maatlog-share {
+  display: none;
+  margin: var(--maatlog-space-md, 1rem) 0 0;
+}
+
+.maatlog-js .maatlog-share {
+  display: flex;
+  align-items: center;
+  gap: var(--maatlog-space-sm, 0.5rem);
+}
+
+.maatlog-share-button {
+  font: inherit;
+  color: var(--maatlog-color-link, #004b6b);
+  background: none;
+  border: 1px solid var(--maatlog-color-border, #d0d0d0);
+  border-radius: 0.25rem;
+  padding: 0.4rem 0.8rem;
+  cursor: pointer;
+}
+
+.maatlog-share-button:focus-visible {
+  outline: 2px solid var(--maatlog-color-link, #004b6b);
+  outline-offset: 2px;
+}
+
+.maatlog-share-status {
+  font-size: 0.9rem;
+  color: var(--maatlog-color-muted, #5c5c5c);
 }
 
 /* カード全体をタイトルリンクのクリック領域にする（stretched link）。
@@ -491,7 +683,8 @@ a {
 }
 
 .maatlog-nav,
-.maatlog-toc {
+.maatlog-toc,
+.maatlog-author-summary {
   padding: var(--maatlog-space-md, 1rem);
 }
 
@@ -500,7 +693,52 @@ a {
 }
 
 .maatlog-toc {
-  max-width: var(--maatlog-toc-width, 14rem);
+  max-width: var(--maatlog-rail-width, 14rem);
+}
+
+/* 右列コンテナ。幅は列トラックが決めるので、ここでは箱の性質だけを持つ。 */
+.maatlog-right-rail {
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+.maatlog-author-summary {
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+.maatlog-author-summary-title {
+  margin: 0 0 var(--maatlog-space-sm, 0.5rem);
+}
+
+.maatlog-author-summary-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--maatlog-space-xs, 0.25rem);
+}
+
+.maatlog-author-summary-card + .maatlog-author-summary-card {
+  margin-top: var(--maatlog-space-md, 1rem);
+}
+
+.maatlog-author-summary-name,
+.maatlog-author-summary-bio {
+  margin: 0;
+}
+
+.maatlog-author-summary-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--maatlog-author-avatar-size, 3.5rem);
+  height: var(--maatlog-author-avatar-size, 3.5rem);
+  overflow: hidden;
+}
+
+.maatlog-author-summary-avatar-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .maatlog-toc-posts {
@@ -629,4 +867,161 @@ a {
     right: 1rem;
     font-size: clamp(1.2rem, 5vw, 2rem);
   }
+}
+
+/* Mobile sidebar drawer (Issue #65). Hidden until .maatlog-js + narrow viewport. */
+.maatlog-sidebar-toggle {
+  display: none;
+}
+
+.maatlog-sidebar-backdrop {
+  display: none;
+}
+
+@media (width <= 48rem) {
+  .maatlog-js .maatlog-sidebar-toggle {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--maatlog-space-xs, 0.25rem);
+    border: 1px solid var(--maatlog-color-control-border, #767e8c);
+    border-radius: var(--maatlog-radius-pill, 9999px);
+    background: transparent;
+    color: var(--maatlog-color-text, #1a1d23);
+    cursor: pointer;
+  }
+
+  .maatlog-js .maatlog-sidebar-toggle-icon {
+    block-size: 1.25rem;
+    inline-size: 1.25rem;
+  }
+
+  .maatlog-js .maatlog-sidebar {
+    position: fixed;
+    inset-block: 0;
+    inset-inline-start: calc(-1 * var(--maatlog-sidebar-drawer-width, min(20rem, 85vw)));
+    z-index: var(--maatlog-z-sidebar-drawer, 41);
+    box-sizing: border-box;
+    width: var(--maatlog-sidebar-drawer-width, min(20rem, 85vw));
+    max-width: none;
+    max-height: none;
+    margin: 0;
+    padding-block: var(--maatlog-space-md, 1rem);
+    padding-inline: max(var(--maatlog-space-md, 1rem), env(safe-area-inset-left, 0px)) var(--maatlog-space-md, 1rem);
+    overflow: hidden auto;
+    background: var(--maatlog-color-surface, #fff);
+    border-inline-end: 1px solid var(--maatlog-color-border, #d5d9e0);
+    visibility: hidden;
+    transition:
+      inset-inline-start var(--maatlog-motion-fast) ease,
+      visibility var(--maatlog-motion-fast) ease;
+  }
+
+  .maatlog-js .maatlog-sidebar.is-open {
+    inset-inline-start: 0;
+    visibility: visible;
+  }
+
+  .maatlog-js .maatlog-sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: var(--maatlog-z-sidebar-backdrop, 40);
+    display: block;
+    padding: 0;
+    border: 0;
+    background: rgb(0 0 0 / 40%);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    cursor: pointer;
+    transition:
+      opacity var(--maatlog-motion-fast) ease,
+      visibility var(--maatlog-motion-fast) ease;
+  }
+
+  .maatlog-js .maatlog-sidebar-backdrop.is-visible {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+  }
+
+  html.maatlog-sidebar-open {
+    overflow: hidden;
+  }
+
+  /* Issue #65: the open drawer covers the banner, so the toggle is pinned above
+     the drawer as its close control while the rest of the banner drops out of
+     painting, hit testing and the accessibility tree. ``position`` and
+     ``backdrop-filter`` are pinned here so the banner cannot capture the fixed
+     toggle in its own stacking or containing block. */
+  html.maatlog-sidebar-open .maatlog-banner {
+    position: relative;
+    z-index: var(--maatlog-z-sidebar-toggle, 42);
+    visibility: hidden;
+    backdrop-filter: none;
+  }
+
+  html.maatlog-sidebar-open .maatlog-sidebar-toggle {
+    position: fixed;
+    inset-block-start: var(--maatlog-space-md, 1rem);
+    inset-inline-start: var(--maatlog-space-md, 1rem);
+    z-index: var(--maatlog-z-sidebar-toggle, 42);
+    visibility: visible;
+    background: var(--maatlog-color-surface, #fff);
+  }
+
+  /* Room for the pinned toggle above the drawer's own content. */
+  html.maatlog-sidebar-open .maatlog-sidebar {
+    padding-block-start: calc(var(--maatlog-space-md, 1rem) * 2 + 2rem);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .maatlog-js .maatlog-sidebar,
+  .maatlog-js .maatlog-sidebar-backdrop {
+    transition: none;
+    transform: none;
+  }
+}
+
+/* Back to top — Issue #61.
+   ボタンは hidden 付きで出荷され、テーマ runtime がページ上端から 600px を
+   超えたときだけ外す。JavaScript の無い環境では現れない。 */
+.maatlog-back-to-top {
+  position: fixed;
+  inset-block-end: max(var(--maatlog-space-lg, 2rem), env(safe-area-inset-bottom, 0px));
+  inset-inline-end: max(var(--maatlog-space-md, 1rem), env(safe-area-inset-right, 0px));
+  z-index: var(--maatlog-z-back-to-top, 30);
+  display: inline-flex;
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: center;
+  inline-size: var(--maatlog-back-to-top-size, 2.75rem);
+  block-size: var(--maatlog-back-to-top-size, 2.75rem);
+  padding: 0;
+  color: var(--maatlog-color-text, #131a2a);
+  background: var(--maatlog-color-surface, #fff);
+  border: 1px solid var(--maatlog-color-control-border, #64748b);
+  border-radius: var(--maatlog-radius-pill, 9999px);
+  cursor: pointer;
+}
+
+.maatlog-back-to-top:hover {
+  background: var(--maatlog-color-surface-hover, #eef2f8);
+}
+
+.maatlog-back-to-top:focus-visible {
+  outline: 2px solid var(--maatlog-color-accent, #0c6b7d);
+  outline-offset: 2px;
+}
+
+.maatlog-back-to-top-icon {
+  block-size: 1.25rem;
+  inline-size: 1.25rem;
+}
+
+/* ドロワー展開中はページをスクロールできず、backdrop とも重なるため出さない。 */
+html.maatlog-sidebar-open .maatlog-back-to-top {
+  display: none;
 }

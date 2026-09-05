@@ -458,3 +458,60 @@ def test_post_list_docname_dropped_when_directive_removed(make_project: ProjectF
     project.write("listing.rst", "Listing\n=======\n\nPlain page now.\n")
     second = project.build(reuse_environment=True)
     assert "listing" not in second.domain_data("maatlog").post_list_docnames
+
+
+PROFILE_CONFIG = {
+    "maatlog_authors": {"alice": "Alice Anderson"},
+    "maatlog_author_profiles": {"alice": {"about_docname": "authors/alice"}},
+}
+
+PROFILE_INDEX = """Root
+====
+
+.. toctree::
+
+   one
+"""
+
+PROFILE_POST = """---
+maatlog-post: true
+maatlog-slug: one
+maatlog-published-at: 2026-07-31T09:00:00Z
+maatlog-authors: [alice]
+---
+# One
+
+Body.
+"""
+
+
+def test_editing_only_the_about_document_refreshes_the_profile_page(make_project: ProjectFactory) -> None:
+    site = make_project(
+        files={
+            "index.rst": PROFILE_INDEX,
+            "one.md": PROFILE_POST,
+            "authors/alice.md": "# About Alice\n\nFirst revision.\n",
+        },
+        config=PROFILE_CONFIG,
+    )
+    first = site.build()
+    assert "First revision." in first.html("blog/author/alice.html")
+
+    site.write("authors/alice.md", "# About Alice\n\nSecond revision.\n")
+    second = site.build(reuse_environment=True)
+
+    page = second.html("blog/author/alice.html")
+    assert "Second revision." in page
+    assert "First revision." not in page
+
+
+def test_author_summary_survives_an_incremental_rebuild(make_project: ProjectFactory) -> None:
+    site = make_project(
+        files={"about.rst": "About\n=====\n\nBody.\n"},
+        theme="maatlog-default",
+        config={"maatlog_authors": {"alice": "Alice"}, "maatlog_default_author": "alice"},
+    )
+    site.build()
+    result = site.build(reuse_environment=True)
+
+    assert result.html("about.html").select_one(".maatlog-author-summary") is not None

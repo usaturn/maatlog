@@ -44,7 +44,23 @@ maatlog_categories = {
 maatlog_authors = {
     "alice": "Alice",
     "bob": "Bob",
+    "carol": "Carol",
+    "dave": "Dave",
 }
+maatlog_author_profiles = {
+    "alice": {
+        "role": "Editor & Developer",
+        "avatar": "authors/alice.png",
+        "bio_short": "Python / Cloud / Sphinx developer.",
+        "interests": ["Python", "Cloud", "Sphinx"],
+        "links": [
+            {"type": "github", "url": "https://github.com/example"},
+            {"type": "website", "url": "https://example.com/"},
+        ],
+        "about_docname": "authors/alice",
+    },
+}
+maatlog_default_author = "alice"
 maatlog_archive_docname = "blog"
 maatlog_home_docname = "home"
 maatlog_page_size = 10

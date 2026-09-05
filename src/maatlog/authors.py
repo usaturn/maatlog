@@ -13,10 +13,13 @@ from typing import Any, Final, cast
 from pydantic import BaseModel, ConfigDict
 
 from .errors import Diagnostic
-from .urls import is_external_link_url
+from .urls import is_absolute_http_url, is_relative_docname
 
 LINK_INVALID_CODE: Final = "maatlog.author.link-invalid"
 CONFIG_INVALID_CODE: Final = "maatlog.config.invalid"
+
+#: Expected value reported when ``featured_posts`` repeats the same slug.
+_EXPECTED_NO_DUPLICATES: Final = "a sequence without duplicate slugs"
 
 #: Icon used for every link type MaatLog ships no brand icon for.
 GENERIC_LINK_ICON: Final = "link"
@@ -36,8 +39,16 @@ KNOWN_LINK_TYPES: Final[Mapping[str, tuple[str, str]]] = MappingProxyType(
     }
 )
 
-_PROFILE_KEYS: Final = frozenset({"links"})
+_PROFILE_KEYS: Final = frozenset(
+    {"role", "avatar", "bio_short", "interests", "links", "featured_posts", "about_docname"}
+)
 _LINK_KEYS: Final = frozenset({"type", "url", "label"})
+
+#: Tells "the key was present but malformed" apart from "the key was absent".
+_INVALID: Final = object()
+
+_EXPECTED_MAPPING: Final = "a mapping of " + ", ".join(sorted(_PROFILE_KEYS))
+_EXPECTED_TEXT_SEQUENCE: Final = "a sequence of non-empty strings"
 
 
 class AuthorLink(BaseModel):
@@ -52,11 +63,23 @@ class AuthorLink(BaseModel):
 
 
 class AuthorProfile(BaseModel):
-    """Rich author data. Only ``links`` exists today; more fields land with #70."""
+    """Rich author data configured through ``maatlog_author_profiles``.
+
+    Every field is optional so a profile that only sets ``links`` keeps working.
+    Cross-references (``featured_posts`` slugs, ``about_docname``, the avatar
+    file) are resolved later against the domain index and the source tree; this
+    model only checks the shape of the configured value.
+    """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
+    role: str | None = None
+    avatar: str | None = None
+    bio_short: str | None = None
+    interests: tuple[str, ...] = ()
     links: tuple[AuthorLink, ...] = ()
+    featured_posts: tuple[str, ...] = ()
+    about_docname: str | None = None
 
 
 def validate_author_profile(field: str, value: Any, diagnostics: list[Diagnostic]) -> AuthorProfile | None:
@@ -64,20 +87,56 @@ def validate_author_profile(field: str, value: Any, diagnostics: list[Diagnostic
 
     *field* is the dotted path of this profile (``maatlog_author_profiles.<slug>``)
     and prefixes the ``field`` of every diagnostic raised here.
+
+    Only the shape of the configured value is checked. Whether a featured slug
+    exists, an About document is present, or an avatar file is readable needs the
+    build environment and is decided in :mod:`maatlog.profiles`.
     """
     if not isinstance(value, Mapping):
-        _config_invalid(diagnostics, field, value, "a mapping with a links key")
+        _config_invalid(diagnostics, field, value, _EXPECTED_MAPPING)
         return None
 
     mapping = cast(Mapping[object, object], value)
     unknown = sorted(str(key) for key in mapping if key not in _PROFILE_KEYS)
     if unknown:
-        _config_invalid(diagnostics, field, unknown, "only the links key")
+        _config_invalid(diagnostics, field, unknown, _EXPECTED_MAPPING)
         return None
 
+    role = _optional_text(mapping, "role", field, diagnostics)
+    avatar = _optional_text(mapping, "avatar", field, diagnostics)
+    bio_short = _optional_text(mapping, "bio_short", field, diagnostics)
+    interests = _text_sequence(mapping, "interests", field, diagnostics)
+    featured_posts = _text_sequence(mapping, "featured_posts", field, diagnostics)
+    about_docname = _optional_docname(mapping, "about_docname", field, diagnostics)
+    links = _link_sequence(mapping, field, diagnostics)
+
+    # Every validator has already appended its diagnostics, so all problems in
+    # this profile are reported even though the first failure ends the function.
+    if any(item is _INVALID for item in (role, avatar, bio_short, about_docname)):
+        return None
+    if interests is None or featured_posts is None or links is None:
+        return None
+    if len(set(featured_posts)) != len(featured_posts):
+        _config_invalid(diagnostics, f"{field}.featured_posts", featured_posts, _EXPECTED_NO_DUPLICATES)
+        return None
+
+    return AuthorProfile(
+        role=cast(str | None, role),
+        avatar=cast(str | None, avatar),
+        bio_short=cast(str | None, bio_short),
+        interests=interests,
+        links=links,
+        featured_posts=featured_posts,
+        about_docname=cast(str | None, about_docname),
+    )
+
+
+def _link_sequence(
+    mapping: Mapping[object, object], field: str, diagnostics: list[Diagnostic]
+) -> tuple[AuthorLink, ...] | None:
     raw_links = mapping.get("links")
     if raw_links is None:
-        return AuthorProfile(links=())
+        return ()
     if isinstance(raw_links, (str, bytes)) or not isinstance(raw_links, Sequence):
         _config_invalid(diagnostics, f"{field}.links", raw_links, "a sequence of link mappings")
         return None
@@ -92,7 +151,54 @@ def validate_author_profile(field: str, value: Any, diagnostics: list[Diagnostic
         links.append(link)
     if not is_valid:
         return None
-    return AuthorProfile(links=tuple(links))
+    return tuple(links)
+
+
+def _optional_text(
+    mapping: Mapping[object, object], key: str, field: str, diagnostics: list[Diagnostic]
+) -> str | None | object:
+    """Return the stripped text, ``None`` when absent, or ``_INVALID`` when malformed."""
+    raw = mapping.get(key)
+    if raw is None:
+        return None
+    if not isinstance(raw, str) or not raw.strip():
+        _config_invalid(diagnostics, f"{field}.{key}", raw, "a non-empty string")
+        return _INVALID
+    return raw.strip()
+
+
+def _text_sequence(
+    mapping: Mapping[object, object], key: str, field: str, diagnostics: list[Diagnostic]
+) -> tuple[str, ...] | None:
+    """Return the stripped values, ``()`` when absent, or ``None`` when malformed."""
+    raw = mapping.get(key)
+    if raw is None:
+        return ()
+    if isinstance(raw, (str, bytes)) or not isinstance(raw, Sequence):
+        _config_invalid(diagnostics, f"{field}.{key}", raw, _EXPECTED_TEXT_SEQUENCE)
+        return None
+    values: list[str] = []
+    for item in cast(Sequence[object], raw):
+        if not isinstance(item, str) or not item.strip():
+            _config_invalid(diagnostics, f"{field}.{key}", item, _EXPECTED_TEXT_SEQUENCE)
+            return None
+        values.append(item.strip())
+    return tuple(values)
+
+
+def _optional_docname(
+    mapping: Mapping[object, object], key: str, field: str, diagnostics: list[Diagnostic]
+) -> str | None | object:
+    raw = mapping.get(key)
+    if raw is None:
+        return None
+    # Untrimmed values otherwise pass is_relative_docname() and only surface
+    # later as a confusing ``maatlog.author.about-unknown`` build error.
+    value = raw.strip() if isinstance(raw, str) else raw
+    if not is_relative_docname(value):
+        _config_invalid(diagnostics, f"{field}.{key}", raw, "a relative Sphinx document name")
+        return _INVALID
+    return value
 
 
 def _validate_link(field: str, value: object, diagnostics: list[Diagnostic]) -> AuthorLink | None:
@@ -116,7 +222,7 @@ def _validate_link(field: str, value: object, diagnostics: list[Diagnostic]) -> 
 
     raw_url = mapping.get("url")
     url = raw_url.strip() if isinstance(raw_url, str) else ""
-    if not url or not is_external_link_url(url):
+    if not url or not is_absolute_http_url(url):
         _link_invalid(diagnostics, f"{field}.url", raw_url, "an absolute http or https URL")
         is_valid = False
 

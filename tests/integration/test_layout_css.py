@@ -28,7 +28,8 @@ Paragraph one.
 NEW_CUSTOM_PROPERTIES = (
     "--maatlog-main-width",
     "--maatlog-nav-width",
-    "--maatlog-toc-width",
+    "--maatlog-rail-width",
+    "--maatlog-author-avatar-size",
     "--maatlog-banner-background",
     "--maatlog-banner-height",
 )
@@ -243,22 +244,22 @@ def test_default_wide_layout_gives_spare_width_to_main(
     assert "max-width: none;" in rule
 
 
-def test_default_toc_state_adds_a_right_track_without_capping_main(
+def test_default_rail_state_adds_a_right_track_without_capping_main(
     make_project: ProjectFactory,
 ) -> None:
     css = _stylesheet(make_project, "maatlog-default")
     base = _css_rule(css, ".maatlog-layout")
-    with_toc = _css_rule(css, ".maatlog-layout-has-toc")
+    with_rail = _css_rule(css, ".maatlog-layout-has-rail")
     base_columns = "grid-template-columns:minmax(0,var(--maatlog-nav-width,15rem))minmax(0,1fr);"
-    toc_columns = (
+    rail_columns = (
         "grid-template-columns:minmax(0,var(--maatlog-nav-width,15rem))"
-        "minmax(0,1fr)minmax(0,var(--maatlog-toc-width,14rem));"
+        "minmax(0,1fr)minmax(0,var(--maatlog-rail-width,14rem));"
     )
 
     assert base_columns in _compact(base)
-    assert toc_columns in _compact(with_toc)
-    assert 'grid-template-areas: "nav main toc";' in _normalise(with_toc)
-    assert css.index(".maatlog-layout-has-toc {") > css.index(".maatlog-layout {")
+    assert rail_columns in _compact(with_rail)
+    assert 'grid-template-areas: "nav main rail";' in _normalise(with_rail)
+    assert css.index(".maatlog-layout-has-rail {") > css.index(".maatlog-layout {")
 
 
 def test_default_sizes_sidebars_to_their_tracks(
@@ -266,14 +267,29 @@ def test_default_sizes_sidebars_to_their_tracks(
 ) -> None:
     css = _stylesheet(make_project, "maatlog-default")
     nav = _css_rule(css, ".maatlog-nav")
-    toc = _css_rule(css, ".maatlog-toc")
+    rail = _css_rule(css, ".maatlog-right-rail")
 
     assert "box-sizing: border-box;" in nav
     assert "width: 100%;" in nav
     assert "max-width: var(--maatlog-nav-width, 15rem);" in nav
-    assert "box-sizing: border-box;" in toc
-    assert "width: 100%;" in toc
-    assert "max-width: var(--maatlog-toc-width, 14rem);" in toc
+    assert "box-sizing: border-box;" in rail
+    assert "width: 100%;" in rail
+    assert "max-width: var(--maatlog-rail-width, 14rem);" in rail
+
+
+def test_default_scrolls_the_toc_inside_a_sticky_rail(make_project: ProjectFactory) -> None:
+    css = _stylesheet(make_project, "maatlog-default")
+    rail = _css_rule(css, ".maatlog-right-rail")
+    toc = _css_rule(css, ".maatlog-toc")
+
+    assert "position: sticky" in rail
+    assert "flex-direction: column" in rail
+    assert "flex: 1 1 auto" in toc
+    assert "overflow-y: auto" in toc
+    # flex アイテムの既定 min-height: auto は内部スクロールを殺す。
+    # 下限 8rem は Summary が rail 高を超えた時に TOC が 0px へ潰れるのを防ぐ。
+    assert "min-height: 8rem" in toc
+    assert "min-height: 0" not in toc
 
 
 def test_default_makes_the_sidebars_sticky(make_project: ProjectFactory) -> None:
@@ -296,23 +312,37 @@ def test_default_uses_overflow_wrap_without_deprecated_word_break(make_project: 
     assert "word-break: break-word" not in css
 
 
-def test_medium_breakpoint_places_the_toc_only_when_there_is_one(
+def test_medium_breakpoint_places_the_rail_above_the_content(
     make_project: ProjectFactory,
 ) -> None:
     block = _media_block(_stylesheet(make_project, "maatlog-default"), "width <= 64rem")
 
     assert 'grid-template-areas: "nav main";' in _normalise(_css_rule(block, ".maatlog-layout"))
-    assert 'grid-template-areas: "nav toc" "nav main";' in _normalise(_css_rule(block, ".maatlog-layout-has-toc"))
-    assert block.index(".maatlog-layout-has-toc {") > block.index(".maatlog-layout {")
-    assert "position: static" in _css_rule(block, ".maatlog-toc")
+    assert 'grid-template-areas: "nav rail" "nav main";' in _normalise(_css_rule(block, ".maatlog-layout-has-rail"))
+    assert block.index(".maatlog-layout-has-rail {") > block.index(".maatlog-layout {")
+    assert "position: static" in _css_rule(block, ".maatlog-right-rail")
+    # rail が flex コンテナでなくなる幅では、base の下限 8rem は潰れ防止ではなく
+    # 内容の下に残る下駄になる。max-height / overflow-y と同じ場所で解除する。
+    assert "min-height: 0" in _css_rule(block, ".maatlog-toc")
 
 
-def test_narrow_breakpoint_stacks_both_toc_states(make_project: ProjectFactory) -> None:
+def test_narrow_breakpoint_stacks_the_summary_after_the_content(
+    make_project: ProjectFactory,
+) -> None:
     block = _media_block(_stylesheet(make_project, "maatlog-default"), "width <= 48rem")
+    layout = _css_rule(block, ".maatlog-layout")
 
-    assert 'grid-template-areas: "main" "nav";' in _normalise(_css_rule(block, ".maatlog-layout"))
-    assert 'grid-template-areas: "toc" "main" "nav";' in _normalise(_css_rule(block, ".maatlog-layout-has-toc"))
-    assert block.index(".maatlog-layout-has-toc {") > block.index(".maatlog-layout {")
+    assert "display: flex" in layout
+    assert "flex-direction: column" in layout
+    # 横は引き伸ばし、本文は縮小可能にしないと幅広テーブルでページが広がる。
+    assert "align-items: stretch" in layout
+    assert "min-width: 0" in _css_rule(block, ".maatlog-layout-main")
+    # rail のボックスを外し、TOC は本文の上、要約は本文の下へ分ける。
+    assert "display: contents" in _css_rule(block, ".maatlog-right-rail")
+    assert "order: 1" in _css_rule(block, ".maatlog-toc")
+    assert "order: 2" in _css_rule(block, ".maatlog-layout-main")
+    assert "order: 3" in _css_rule(block, ".maatlog-author-summary")
+    assert "order: 4" in _css_rule(block, ".maatlog-nav")
     assert "position: static" in _css_rule(block, ".maatlog-nav")
     assert "border-top: 1px solid" in _css_rule(block, ".maatlog-nav")
     assert "padding: var(--maatlog-space-md" in _css_rule(block, ".maatlog-banner")
@@ -475,7 +505,7 @@ def test_default_search_input_uses_at_least_16px_font_to_avoid_ios_zoom(make_pro
 
 def test_default_sticky_sidebars_clear_the_banner(make_project: ProjectFactory) -> None:
     css = _stylesheet(make_project, "maatlog-default")
-    rule = _css_rules(css, ".maatlog-toc")[1]
+    rule = _css_rule(css, ".maatlog-right-rail")
 
     assert "top: var(--maatlog-sticky-top)" in rule
     assert _compact("calc(100vh - var(--maatlog-sticky-top) - var(--maatlog-space-md))") in _compact(rule)
@@ -1008,7 +1038,8 @@ def test_default_nav_links_recover_on_hover(make_project: ProjectFactory) -> Non
 def test_default_sidebars_use_a_thin_scrollbar(make_project: ProjectFactory) -> None:
     css = _stylesheet(make_project, "maatlog-default")
 
-    assert "scrollbar-width: thin" in _css_rule(css, ".maatlog-nav,\n.maatlog-toc")
+    assert "scrollbar-width: thin" in _css_rule(css, ".maatlog-nav")
+    assert "scrollbar-width: thin" in _css_rule(css, ".maatlog-toc")
 
 
 def test_default_sidebar_feed_links_have_no_bullets(make_project: ProjectFactory) -> None:
@@ -1160,3 +1191,130 @@ def test_hero_title_overlaps_the_image(make_project: ProjectFactory, theme: str)
     title = _css_rule(css, ".maatlog-post-top-image-title")
     assert "position: absolute" in title
     assert "--maatlog-top-image-title-color" in css
+
+
+def test_base_theme_defines_profile_width_tokens(make_project: ProjectFactory) -> None:
+    css = _stylesheet(make_project, "maatlog-base")
+
+    assert "--maatlog-profile-main-width:" in css
+    assert "--maatlog-profile-content-width:" in css
+
+
+def test_base_theme_lets_profile_main_use_the_full_grid_track(make_project: ProjectFactory) -> None:
+    """Profile pages skip the page TOC column, so main should not be capped below the grid track."""
+    css = _stylesheet(make_project, "maatlog-base")
+
+    assert "--maatlog-profile-main-width:" in css
+    assert ".maatlog-layout-page-profile .maatlog-layout-main" not in css
+
+
+def test_base_theme_does_not_touch_the_shared_content_width(make_project: ProjectFactory) -> None:
+    """通常ページの行長ポリシー（Issue #71 / #110）を退行させない。"""
+    css = _stylesheet(make_project, "maatlog-base")
+
+    assert "--maatlog-content-width: clamp(42rem, 24rem + 16vw, 60rem);" in css
+
+
+@pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
+def test_author_summary_card_is_styled(make_project: ProjectFactory, theme: str) -> None:
+    css = _stylesheet(make_project, theme)
+
+    assert ".maatlog-author-summary-card {" in css
+
+
+def test_base_sizes_the_author_avatar(make_project: ProjectFactory) -> None:
+    css = _stylesheet(make_project, "maatlog-base")
+    avatar = _css_rule(css, ".maatlog-author-summary-avatar")
+
+    assert "width: var(--maatlog-author-avatar-size, 3.5rem);" in avatar
+    assert "height: var(--maatlog-author-avatar-size, 3.5rem);" in avatar
+
+
+CONFIG_STYLE_PROJECT = {
+    "about.rst": "About\n=====\n\nA plain page paragraph.\n",
+    "post.rst": """:maatlog-post: true
+:maatlog-slug: width-post
+:maatlog-published-at: 2026-07-31T09:00:00Z
+
+Width Post
+==========
+
+Paragraph one.
+""",
+}
+
+
+def test_no_config_style_is_emitted_when_nothing_is_configured(
+    make_project: ProjectFactory,
+) -> None:
+    """未設定時の <head> は現状のまま。<style> を増やさない。"""
+    result = make_project(files=CONFIG_STYLE_PROJECT).build()
+
+    for page in ("index.html", "about.html", "post.html", "blog.html"):
+        html = result.path(page).read_text(encoding="utf-8")
+        assert "--maatlog-content-width:" not in html
+        assert "--maatlog-top-image-title-font:" not in html
+
+
+@pytest.mark.parametrize("page", ["index.html", "about.html", "post.html", "blog.html"])
+def test_content_width_reaches_every_page_kind(make_project: ProjectFactory, page: str) -> None:
+    """normal（index / about）・post・archive のいずれにも :root トークンが出る。"""
+    result = make_project(
+        files=CONFIG_STYLE_PROJECT,
+        config={"maatlog_content_width": "100%"},
+    ).build()
+
+    html = result.path(page).read_text(encoding="utf-8")
+    assert "<style>:root { --maatlog-content-width: 100%; }</style>" in html
+
+
+def test_content_width_reaches_the_blog_home(make_project: ProjectFactory) -> None:
+    """page_kind == "home" も layout.html を通る。"""
+    result = make_project(
+        files=CONFIG_STYLE_PROJECT,
+        config={"maatlog_content_width": "100%", "maatlog_home_docname": "index"},
+    ).build()
+
+    html = result.path("index.html").read_text(encoding="utf-8")
+    assert "<style>:root { --maatlog-content-width: 100%; }</style>" in html
+
+
+def test_content_width_style_wins_over_the_theme_stylesheet(
+    make_project: ProjectFactory,
+) -> None:
+    """同一詳細度の :root はソース順で後勝ち。<style> は <link> より後に出す。"""
+    result = make_project(
+        files=CONFIG_STYLE_PROJECT,
+        config={"maatlog_content_width": "100%"},
+    ).build()
+
+    html = result.path("post.html").read_text(encoding="utf-8")
+    link_at = html.index("_static/maatlog.css")
+    style_at = html.index("--maatlog-content-width: 100%")
+    assert link_at < style_at
+
+
+def test_content_width_keeps_css_functions_unescaped(make_project: ProjectFactory) -> None:
+    """<style> は raw text。エスケープすると clamp() の引数が壊れる。"""
+    result = make_project(
+        files=CONFIG_STYLE_PROJECT,
+        config={"maatlog_content_width": "clamp(42rem, 70vw, 90rem)"},
+    ).build()
+
+    html = result.path("post.html").read_text(encoding="utf-8")
+    assert "--maatlog-content-width: clamp(42rem, 70vw, 90rem);" in html
+
+
+def test_config_style_emits_both_tokens_in_one_rule(make_project: ProjectFactory) -> None:
+    result = make_project(
+        files=CONFIG_STYLE_PROJECT,
+        config={
+            "maatlog_content_width": "100%",
+            "maatlog_top_image_title_font": "Georgia, serif",
+        },
+    ).build()
+
+    html = result.path("post.html").read_text(encoding="utf-8")
+    assert (
+        "<style>:root { --maatlog-content-width: 100%; --maatlog-top-image-title-font: Georgia, serif; }</style>"
+    ) in html

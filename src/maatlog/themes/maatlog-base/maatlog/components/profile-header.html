@@ -1,0 +1,25 @@
+{# Profile header: avatar, display name, role, external links, short bio and
+   feed discovery links. Uses ``maatlog.profile`` and ``maatlog.feeds``. #}
+{%- set profile = maatlog.profile -%}
+{%- if profile -%}
+<header class="maatlog-profile-header" data-maatlog-component="profile-header">
+  <div class="maatlog-profile-avatar">
+    {%- if profile.avatar_url -%}
+    <img class="maatlog-profile-avatar-image" src="{{ profile.avatar_url|e }}" alt="" width="160" height="160" />
+    {%- else -%}
+    <span class="maatlog-profile-avatar-initials" aria-hidden="true">{{ profile.initials|e }}</span>
+    {%- endif -%}
+  </div>
+  <h1 class="maatlog-profile-name">{{ profile.display_name|e }}</h1>
+  {%- if profile.role -%}
+  <p class="maatlog-profile-role">{{ profile.role|e }}</p>
+  {%- endif -%}
+  {%- with maatlog_author_links=profile.links -%}
+  {%- include "maatlog/components/author-links.html" -%}
+  {%- endwith -%}
+  {%- if profile.bio_short -%}
+  <p class="maatlog-profile-bio">{{ profile.bio_short|e }}</p>
+  {%- endif -%}
+  {%- include "maatlog/components/feed-links.html" -%}
+</header>
+{%- endif -%}

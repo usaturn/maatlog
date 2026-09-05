@@ -38,11 +38,6 @@
   {%- for feed in maatlog.feeds -%}
   <link rel="alternate" type="application/atom+xml" title="{{ feed.title|e }}" href="{{ feed.url|e }}" />
   {%- endfor -%}
-  {%- if maatlog.site and maatlog.site.top_image_title_font -%}
-  {#- <style> is a raw text element: HTML escaping here would corrupt valid CSS.
-      maatlog_top_image_title_font is validated in config.py instead. -#}
-  <style>:root { --maatlog-top-image-title-font: {{ maatlog.site.top_image_title_font }}; }</style>
-  {%- endif -%}
   {%- endblock maatlog_head -%}
 {%- endblock extrahead -%}
 
@@ -112,6 +107,17 @@
     </div>
     {%- endblock maatlog_post_meta -%}
 
+    {%- block maatlog_post_share -%}
+    {%- if maatlog.post -%}
+    <div class="maatlog-share" data-maatlog-component="share">
+      <button type="button" class="maatlog-share-button">{{ _('Share') }}</button>
+      <span class="maatlog-share-status" role="status" aria-live="polite"></span>
+    </div>
+    {%- endif -%}
+    {%- endblock maatlog_post_share -%}
+    {#- Share は Web Share / Clipboard API に依存するため、単一 runtime の enhancer が
+        .maatlog-js ゲートで表示する。JS 無効時は出さない。-#}
+
     {#- Decorative: it repeats the title. Theme API 1.4, optional. -#}
     {%- block maatlog_post_hero -%}
     {%- if maatlog.post and maatlog.post.image_url -%}
@@ -154,6 +160,8 @@
 
   {%- block maatlog_archive_header -%}{%- endblock maatlog_archive_header -%}
   {%- block maatlog_archive_items -%}{%- endblock maatlog_archive_items -%}
+  {%- block maatlog_profile_header -%}{%- endblock maatlog_profile_header -%}
+  {%- block maatlog_profile_body -%}{%- endblock maatlog_profile_body -%}
 
   {%- block maatlog_pagination -%}
   {%- include "maatlog/components/pagination.html" -%}

@@ -12,6 +12,7 @@ from sphinx.config import Config
 
 from .authors import AuthorProfile, validate_author_profile
 from .errors import Diagnostic, MaatlogBuildError
+from .urls import is_relative_docname
 
 
 class TaxonomyAxis(StrEnum):
@@ -27,6 +28,7 @@ CONFIG_VALUES = {
     "maatlog_categories": (None, "env"),
     "maatlog_authors": (None, "env"),
     "maatlog_author_profiles": (None, "env"),
+    "maatlog_default_author": (None, "env"),
     "maatlog_archive_docname": ("blog", "env"),
     "maatlog_page_size": (10, "env"),
     "maatlog_tagline": (None, "html"),
@@ -36,6 +38,7 @@ CONFIG_VALUES = {
     "maatlog_feed_limit": (20, "html"),
     "maatlog_palette": (None, "html"),
     "maatlog_top_image_title_font": (None, "html"),
+    "maatlog_content_width": (None, "html"),
 }
 
 TAXONOMY_KEY_PATTERN = re_compile(r"[a-z0-9][a-z0-9._-]*\Z")
@@ -61,6 +64,7 @@ class MaatlogConfig(BaseModel):
     categories: Mapping[str, str] | None
     authors: Mapping[str, str] | None
     author_profiles: Mapping[str, AuthorProfile] | None
+    default_author: str | None
     archive_docname: str
     page_size: int
     tagline: str | None
@@ -70,6 +74,7 @@ class MaatlogConfig(BaseModel):
     feed_limit: int
     palette: str | None
     top_image_title_font: str | None
+    content_width: str | None
 
     @field_validator("tags", "categories", "authors")
     @classmethod
@@ -99,6 +104,9 @@ class MaatlogConfig(BaseModel):
         categories = _validate_taxonomy_mapping("maatlog_categories", resolved["maatlog_categories"], diagnostics)
         authors = _validate_taxonomy_mapping("maatlog_authors", resolved["maatlog_authors"], diagnostics)
         author_profiles = _validate_author_profiles(resolved["maatlog_author_profiles"], diagnostics)
+        default_author = _validate_default_author(
+            resolved["maatlog_default_author"], authors=resolved["maatlog_authors"], diagnostics=diagnostics
+        )
         archive_docname = _validate_docname(
             "maatlog_archive_docname", resolved["maatlog_archive_docname"], diagnostics
         )
@@ -113,6 +121,9 @@ class MaatlogConfig(BaseModel):
         palette = _validate_palette(resolved["maatlog_palette"], diagnostics)
         top_image_title_font = _validate_optional_css_value(
             "maatlog_top_image_title_font", resolved["maatlog_top_image_title_font"], diagnostics
+        )
+        content_width = _validate_optional_css_value(
+            "maatlog_content_width", resolved["maatlog_content_width"], diagnostics
         )
 
         if diagnostics:
@@ -130,6 +141,7 @@ class MaatlogConfig(BaseModel):
             categories=categories,
             authors=authors,
             author_profiles=author_profiles,
+            default_author=default_author,
             archive_docname=archive_docname,
             page_size=page_size,
             tagline=tagline,
@@ -139,6 +151,7 @@ class MaatlogConfig(BaseModel):
             feed_limit=feed_limit,
             palette=palette,
             top_image_title_font=top_image_title_font,
+            content_width=content_width,
         )
 
 
@@ -222,15 +235,31 @@ def _validate_author_profiles(value: Any, diagnostics: list[Diagnostic]) -> Mapp
     return MappingProxyType(validated)
 
 
-def _validate_docname(field: str, value: Any, diagnostics: list[Diagnostic]) -> str | None:
-    if not isinstance(value, str) or not value:
-        _invalid(diagnostics, field, value, "a relative Sphinx document name")
+def _validate_default_author(value: Any, *, authors: Any, diagnostics: list[Diagnostic]) -> str | None:
+    """Validate ``maatlog_default_author``.
+
+    ``maatlog_authors`` との突き合わせは両方が設定値なので、domain も env も要らず
+    ``config-inited`` の時点で判定できる。ただし ``maatlog_authors`` が ``None`` の
+    ときは author id が投稿から動的に登録されるため、照合できる静的な集合が無い。
+    ``resolve_profiles()`` の ``profile-unknown`` 判定と同じ理由で検査を省く。
+    """
+    field = "maatlog_default_author"
+    if value is None:
         return None
-    segments = value.split("/")
-    if value.startswith("/") or value.endswith("/") or any(segment in {"", ".", ".."} for segment in segments):
-        _invalid(diagnostics, field, value, "a relative Sphinx document name")
+    if not isinstance(value, str) or TAXONOMY_KEY_PATTERN.fullmatch(value) is None:
+        _invalid(diagnostics, field, value, "a lowercase author id")
+        return None
+    if isinstance(authors, Mapping) and value not in authors:
+        _invalid(diagnostics, field, value, "an author id present in maatlog_authors")
         return None
     return value
+
+
+def _validate_docname(field: str, value: Any, diagnostics: list[Diagnostic]) -> str | None:
+    if not is_relative_docname(value):
+        _invalid(diagnostics, field, value, "a relative Sphinx document name")
+        return None
+    return cast(str, value)
 
 
 def _validate_optional_docname(field: str, value: Any, diagnostics: list[Diagnostic]) -> str | None:

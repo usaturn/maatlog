@@ -284,3 +284,27 @@ def test_new_badge_selector_uses_the_badge_tokens(make_project: ProjectFactory, 
 
     assert block_declaration(css, ".maatlog-new-badge", "background") == "var(--maatlog-badge-background)"
     assert block_declaration(css, ".maatlog-new-badge", "color") == "var(--maatlog-badge-text)"
+
+
+def test_default_theme_styles_the_profile_avatar_and_interests(make_project: ProjectFactory) -> None:
+    css = _stylesheet(make_project, "maatlog-default")
+
+    assert ".maatlog-profile-avatar-image" in css
+    assert ".maatlog-profile-avatar-initials" in css
+    assert ".maatlog-profile-interest" in css
+
+
+def test_default_theme_mirrors_the_profile_width_tokens(make_project: ProjectFactory) -> None:
+    """default は自前の maatlog.css を持ち、base のファイルを丸ごと上書きする。"""
+    css = _stylesheet(make_project, "maatlog-default")
+
+    assert "--maatlog-profile-main-width:" in css
+    assert "--maatlog-profile-content-width:" in css
+    assert ".maatlog-layout-page-profile .maatlog-layout-main" not in css
+
+
+def test_profile_styles_hard_code_no_colour(make_project: ProjectFactory) -> None:
+    """同ファイルの色トークン契約をプロフィールのスタイルにも適用する。"""
+    css = _stylesheet(make_project, "maatlog-default")
+
+    assert _colour_literals_outside_tokens(_css_rule_body(css, ".maatlog-profile-interest")) == []

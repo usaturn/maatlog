@@ -1,0 +1,9 @@
+{# All posts by this author, plus the pagination that leads to page 2 and beyond.
+   Pagination lives here so it stays attached to the list it pages through. #}
+<section class="maatlog-profile-posts" data-maatlog-component="profile-posts">
+  <h2 class="maatlog-profile-section-heading">{{ _('All posts') }}</h2>
+  {%- with cards=maatlog.posts -%}
+  {%- include "maatlog/components/post-grid.html" -%}
+  {%- endwith -%}
+  {%- include "maatlog/components/pagination.html" -%}
+</section>

@@ -124,8 +124,7 @@ def test_maatlog_top_image_title_font_injected(make_project: ProjectFactory) -> 
     ).build()
 
     html = result.path("post.html").read_text(encoding="utf-8")
-    assert "--maatlog-top-image-title-font" in html
-    assert "Georgia, serif" in html
+    assert "<style>:root { --maatlog-top-image-title-font: Georgia, serif; }</style>" in html
 
 
 def test_maatlog_top_image_title_font_keeps_quotes_unescaped(make_project: ProjectFactory) -> None:
@@ -141,3 +140,21 @@ def test_maatlog_top_image_title_font_keeps_quotes_unescaped(make_project: Proje
     html = result.path("post.html").read_text(encoding="utf-8")
     assert "&#34;" not in html
     assert '--maatlog-top-image-title-font: "Noto Sans JP", serif;' in html
+
+
+def test_maatlog_top_image_title_font_is_emitted_on_non_post_pages(
+    make_project: ProjectFactory,
+) -> None:
+    """:root トークンなので、出力点は layout.html にあり全ページ種別で出る。"""
+    result = make_project(
+        config={"maatlog_top_image_title_font": "Georgia, serif"},
+        files={
+            "index.rst": "Root\n====\n\n.. toctree::\n\n   about\n   post\n",
+            "about.rst": "About\n=====\n\nA plain page.\n",
+            "post.rst": RST_WITH_MAATTOP,
+            "images/hero.png": b"png",
+        },
+    ).build()
+
+    html = result.path("about.html").read_text(encoding="utf-8")
+    assert "--maatlog-top-image-title-font: Georgia, serif;" in html

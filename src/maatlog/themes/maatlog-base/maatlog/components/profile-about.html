@@ -1,0 +1,10 @@
+{# About section. ``about_html`` is already-rendered, trusted Sphinx output and is
+   therefore emitted unescaped, exactly like ``maatlog.post.body_html``. It was
+   rendered for this page's location, so its relative URIs are already correct. #}
+{%- set profile = maatlog.profile -%}
+{%- if profile and profile.about_html -%}
+<section class="maatlog-profile-about" data-maatlog-component="profile-about">
+  <h2 class="maatlog-profile-section-heading">{{ _('About') }}</h2>
+  <div class="maatlog-profile-about-body">{{ profile.about_html }}</div>
+</section>
+{%- endif -%}

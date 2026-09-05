@@ -1,0 +1,12 @@
+{# ページ先頭へ戻る固定ボタン。テーマ runtime が hidden を外すまで表示されない
+   ため、JavaScript の無い環境ではそもそも現れない。 #}
+<button type="button"
+        class="maatlog-back-to-top"
+        data-maatlog-component="back-to-top"
+        aria-label="{{ _('Back to top') }}"
+        hidden>
+  <svg class="maatlog-back-to-top-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path d="M12 19V5M5 12l7-7 7 7"
+          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+  </svg>
+</button>

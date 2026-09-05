@@ -248,3 +248,122 @@ def test_top_image_title_font_rejects_css_control_characters(value: str) -> None
         MaatlogConfig.from_values({"maatlog_top_image_title_font": value})
 
     assert error.value.diagnostics[0].field == "maatlog_top_image_title_font"
+
+
+def test_config_accepts_full_author_profile() -> None:
+    config = MaatlogConfig.from_values(
+        {
+            "maatlog_authors": {"alice": "Alice Anderson"},
+            "maatlog_author_profiles": {
+                "alice": {
+                    "role": "Editor",
+                    "avatar": "authors/alice.png",
+                    "bio_short": "Hello.",
+                    "interests": ["Python"],
+                    "links": [{"type": "github", "url": "https://github.com/alice"}],
+                    "featured_posts": ["one"],
+                    "about_docname": "authors/alice",
+                }
+            },
+        }
+    )
+
+    assert config.author_profiles is not None
+    profile = config.author_profiles["alice"]
+    assert profile.interests == ("Python",)
+    assert profile.featured_posts == ("one",)
+    assert profile.about_docname == "authors/alice"
+
+
+def test_default_author_accepts_a_lowercase_author_id() -> None:
+    config = MaatlogConfig.from_values({"maatlog_authors": {"alice": "Alice"}, "maatlog_default_author": "alice"})
+
+    assert config.default_author == "alice"
+
+
+def test_default_author_defaults_to_none() -> None:
+    assert MaatlogConfig.from_values({}).default_author is None
+
+
+@pytest.mark.parametrize("value", ["Alice", "", " ", 1, ["alice"]])
+def test_default_author_rejects_a_malformed_value(value: object) -> None:
+    with pytest.raises(MaatlogBuildError) as excinfo:
+        MaatlogConfig.from_values({"maatlog_default_author": value})
+
+    assert [item.code for item in excinfo.value.diagnostics] == ["maatlog.config.invalid"]
+    assert excinfo.value.diagnostics[0].field == "maatlog_default_author"
+
+
+def test_default_author_must_exist_in_maatlog_authors() -> None:
+    with pytest.raises(MaatlogBuildError) as excinfo:
+        MaatlogConfig.from_values({"maatlog_authors": {"alice": "Alice"}, "maatlog_default_author": "carol"})
+
+    diagnostic = excinfo.value.diagnostics[0]
+    assert diagnostic.code == "maatlog.config.invalid"
+    assert diagnostic.field == "maatlog_default_author"
+    assert diagnostic.expected == "an author id present in maatlog_authors"
+
+
+def test_default_author_is_not_checked_when_authors_are_dynamic() -> None:
+    # maatlog_authors が None のとき author id は投稿から登録されるため、
+    # 静的な集合が無く、存在検査はできない。
+    config = MaatlogConfig.from_values({"maatlog_default_author": "carol"})
+
+    assert config.default_author == "carol"
+
+
+def test_content_width_defaults_to_none() -> None:
+    config = MaatlogConfig.from_values({})
+    assert config.content_width is None
+
+
+def test_content_width_accepts_none_explicitly() -> None:
+    config = MaatlogConfig.from_values({"maatlog_content_width": None})
+    assert config.content_width is None
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "100%",
+        "72rem",
+        "80rem",
+        "clamp(42rem, 70vw, 90rem)",
+        "min(90vw, 100rem)",
+        "calc(100% - 2rem)",
+        "var(--custom-width)",
+        "none",
+    ],
+)
+def test_content_width_accepts_css_width_values(value: str) -> None:
+    """CSS の max-width として妥当な書き方は素通しする。"""
+    config = MaatlogConfig.from_values({"maatlog_content_width": value})
+    assert config.content_width == value
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "60rem; color: red",
+        "60rem} body { display: none",
+        "60rem</style><script>alert(1)</script>",
+        "60rem /* comment */",
+        "60rem\\26 ",
+        "",
+        "   ",
+    ],
+)
+def test_content_width_rejects_values_that_escape_the_declaration(value: str) -> None:
+    """``<style>`` へ素通しするため、宣言や要素から抜け出せる値は拒否する。"""
+    with pytest.raises(MaatlogBuildError) as error:
+        MaatlogConfig.from_values({"maatlog_content_width": value})
+
+    assert error.value.diagnostics[0].field == "maatlog_content_width"
+
+
+@pytest.mark.parametrize("value", [72, 72.0, True, [], {}])
+def test_content_width_rejects_non_strings(value: object) -> None:
+    with pytest.raises(MaatlogBuildError) as error:
+        MaatlogConfig.from_values({"maatlog_content_width": value})
+
+    assert error.value.diagnostics[0].field == "maatlog_content_width"

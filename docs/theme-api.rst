@@ -9,9 +9,15 @@ MaatLog のテーマは Sphinx の HTML テーマに小さな契約を加えた�
 API バージョン
 --------------
 
-Theme API の現在のバージョンは **1.9** です。
-``api = "1.0"`` を宣言するテーマは
-引き続き受理されます
+Theme API の現在のバージョンは **1.16** です。
+``api = "1.0"`` を宣言する ``inherits-base`` のテーマは
+引き続き受理されます。
+``standalone`` のテーマは ``api = "1.16"`` を宣言し、
+1.12 追加分と 1.16 追加分の必須テンプレートを自前で同梱する必要があります
+（詳細は下記「1.11 から 1.12 で追加された契約」と
+「1.15 から 1.16 で追加された契約」を参照してください）。
+1.13 から 1.15 は任意契約だけを足すため、必須テンプレートと必須ブロックは 1.12 のままでした。
+1.16 は必須テンプレートを 2 件足します
 
 開発が安定するまでの間、Theme API の更新は下位互換しない破壊的変更です。
 新しいコアは、以前の ``api`` を宣言するテーマを受理し続けることを約束しません。
@@ -24,7 +30,7 @@ Theme API の現在のバージョンは **1.9** です。
 コアはメジャー ``1`` を実装するテーマを受け入れます。
 テーマがコアの提供するマイナー
 より高いバージョンを要求する場合、検証は失敗します。
-現在の 1.9 コアは 1.0 / 1.1 / 1.2 / 1.3 / 1.4 / 1.5 / 1.6 / 1.7 / 1.8 テーマを受理しますが、次の Theme API 更新が
+現在の 1.16 コアは 1.0 / 1.1 / 1.2 / 1.3 / 1.4 / 1.5 / 1.6 / 1.7 / 1.8 / 1.9 / 1.10 / 1.11 / 1.12 / 1.13 / 1.14 / 1.15 テーマを受理しますが、次の Theme API 更新が
 同じ約束を引き継ぐとは限りません
 
 1.0 から 1.1 で追加された任意の契約:
@@ -179,9 +185,188 @@ Theme API の現在のバージョンは **1.9** です。
 ``maatlog.post.top_image_url`` があるとき ``<h1>`` に
 ``maatlog-visually-hidden`` を付け、タイトルをオーバーレイ側で描画します
 
-必須テンプレートと必須ブロックは 1.0 から変わっていません。
-``api = "1.0"``、
-``api = "1.1"``、 ``api = "1.2"``、 ``api = "1.3"``、 ``api = "1.4"``、 ``api = "1.5"``、 ``api = "1.6"``、 ``api = "1.7"``、 ``api = "1.8"``、 ``api = "1.9"`` を宣言するテーマは引き続き検証を通ります。
+1.9 から 1.10 で追加された任意の契約:
+
+* **任意ブロック** — ``maatlog_archive_filter`` （ ``maatlog/archive.html`` 、
+  アーカイブの絞り込みツールバー）
+* **任意 Jinja フィルタ** — ``maatlog_json`` （値を HTML 属性へ埋められる
+  ``ensure_ascii=True`` の JSON にします）
+* **任意キー** — post-card の ``data-maatlog-tags`` /
+  ``data-maatlog-categories`` / ``data-maatlog-authors``
+  （分類 ID の JSON 配列です。表示ラベルではありません）
+* **任意クラス** — ``maatlog-archive-filter``、 ``maatlog-filter-groups``、
+  ``maatlog-filter-group``、 ``maatlog-filter-label``、
+  ``maatlog-filter-options``、 ``maatlog-filter-chip``、
+  ``maatlog-filter-actions``、 ``maatlog-filter-reset``、
+  ``maatlog-archive-empty-filtered``
+
+``maatlog_archive_filter`` の母集団は **そのページのカード** です。
+チップは ``maatlog.posts`` に実在する分類 ID だけを描画します。
+サイト全体の分類を出すと、ページ送りの 2 ページ目以降で
+「投稿は実在するのに該当なし」と誤って表示されるためです。
+サイト全体の分類ブラウズはタクソノミサイドバーと分類アーカイブが担います
+
+絞り込みは JavaScript でのみ動きます。
+``maatlog-base`` は ``.maatlog-archive-filter`` を既定で ``display: none`` にし、
+テーマ runtime が付ける ``.maatlog-js`` で開きます。
+0 件メッセージ ``.maatlog-archive-empty-filtered`` は ``role="status"`` を
+持ちます。チップ操作は URL 遷移もフォーカス移動も伴わないためです
+
+1.10 から 1.11 で追加された任意の契約:
+
+* **任意属性** — Sidebar の ``id="maatlog-sidebar"`` （
+  ``data-maatlog-component="sidebar"`` と同一要素）、バナーの
+  ``data-maatlog-toggle="sidebar"``、トグルの
+  ``data-maatlog-label-open`` / ``data-maatlog-label-close``
+* **任意クラス** — ``maatlog-sidebar-toggle``、 ``maatlog-sidebar-backdrop``、
+  状態 ``is-open`` / ``is-visible``、 ``<html>`` の ``maatlog-sidebar-open``
+* **任意 CSS カスタムプロパティ** — ``--maatlog-z-sidebar-backdrop`` （既定 40）、
+  ``--maatlog-z-sidebar-drawer`` （既定 41）、
+  ``--maatlog-z-sidebar-toggle`` （既定 42）、
+  ``--maatlog-sidebar-drawer-width`` （既定 ``min(20rem, 85vw)``）
+
+狭い viewport（``width <= 48rem``）かつ ``.maatlog-js`` のときだけ、
+テーマ runtime の ``mobile-sidebar`` enhancer が Sidebar を off-canvas
+ドロワーとして開閉します。JavaScript が無いときは従来どおり本文下部の
+縦積みレイアウトで Sidebar 情報へ到達できます。
+``--maatlog-z-sidebar-*`` と safe-area padding は後続の固定 UI
+（Back to Top など）が衝突しないためのレイヤー契約です
+
+ドロワーを開いている間、トグルは ``--maatlog-z-sidebar-toggle`` の層へ固定配置され、
+ドロワーの Close コントロールとして機能します。バナーの残りは
+``visibility: hidden`` で描画・hit test・アクセシビリティツリーから外れます。
+トグルの ``aria-label`` はテーマ runtime が開閉のたびに書き換えますが、文言は
+``data-maatlog-label-open`` / ``data-maatlog-label-close`` から読みます。
+両属性を省いたテーマでは初期 ``aria-label`` と英語のフォールバックを使います
+
+1.11 から 1.12 で追加された契約:
+
+* **必須テンプレートの追加** — ``maatlog/profile.html``、
+  ``maatlog/components/author-links.html``
+* **必須ブロックの追加** — ``maatlog_profile_header``、 ``maatlog_profile_body``
+* **非互換になるのは standalone テーマのみ**。
+  ``implementation = "inherits-base"`` のテーマは継承チェーン経由で自動追随します
+* **``page_kind``** — ``"profile"`` が加わりました。
+  プロフィールページでは TOC 列を出さないため ``maatlog-layout-has-toc`` は付きません
+  （投稿ページの 3 カラムに対し 2 カラム）。
+  レイアウト要素には ``maatlog-layout-page-profile`` が付きます
+* **``maatlog.profile``** — 著者プロフィールページでのみ populated になる
+  **AuthorProfileView** （下記）
+* **プロフィールページの位置** — 著者アーカイブの 1 ページ目です。
+  2 ページ目以降は ``maatlog/archive.html`` のままです
+* **任意 CSS カスタムプロパティ** — ``--maatlog-profile-main-width``、
+  ``--maatlog-profile-content-width`` （後述「CSS カスタムプロパティ」）
+* **任意クラス** — ``.maatlog-profile`` およびその子（ヘッダ、アバター、About、
+  featured、stats、interests など）
+
+1.12 から 1.13 で追加された任意の契約:
+
+* **任意テンプレート** — ``maatlog/components/back-to-top.html``
+* **任意ブロック** — ``layout.html`` の ``maatlog_back_to_top``
+* **任意属性** — ``data-maatlog-component="back-to-top"``
+* **任意クラス** — ``.maatlog-back-to-top``、 ``.maatlog-back-to-top-icon``
+* **任意 CSS カスタムプロパティ** — ``--maatlog-z-back-to-top`` （既定 30）、
+  ``--maatlog-back-to-top-size`` （既定 ``2.75rem``）
+
+ボタンは ``hidden`` 付きで出力され、テーマ runtime の ``back-to-top`` enhancer が
+ページ上端から 600px を超えたときだけ ``hidden`` を外します。
+JavaScript の無い環境では現れず、本文のスクロールにも影響しません。
+押下時は ``prefers-reduced-motion: reduce`` を尊重してアニメーションの有無を切り替え、
+スクロール後はページ先頭のバナーへフォーカスを移します
+
+固定 UI のレイヤ帯は 2 段です。
+下段 ``--maatlog-z-back-to-top`` （30）が本文補助の浮遊 UI、
+上段 ``--maatlog-z-sidebar-*`` （40–42）が Sidebar のドロワー系です。
+後続の固定 UI は下段を共有し、右下から積み上げます。
+モバイルドロワー展開中（``<html>`` の ``maatlog-sidebar-open``）は
+Back to Top を ``display: none`` にします。
+ボタンは ``.maatlog-layout`` の外側に出力します。
+祖先が ``transform`` / ``filter`` / ``contain`` を持つと ``position: fixed`` の
+containing block がそこへ移るためです
+
+1.13 から 1.14 で追加された任意の契約:
+
+* **任意ブロック** — ``maatlog_config_style`` （ ``layout.html`` 、
+  ``extrahead`` の末尾。 ``conf.py`` 由来の ``:root`` カスタムプロパティを
+  1 つの ``<style>`` にまとめて出力します）
+* **任意キー** — ``maatlog.site.content_width``
+  （ ``maatlog_content_width`` の値。未設定のときは ``None`` です）
+
+``maatlog_config_style`` は ``<head>`` の中で ``css()`` より後に出ます。
+同一詳細度の ``:root`` 宣言はソース順で決まる為、
+テーマの ``static/maatlog.css`` とパレット CSS の両方を上書きできます。
+``maatlog-base`` を継承しないテーマは、このブロックを実装しない限り
+``maatlog_content_width`` と ``maatlog_top_image_title_font`` に対応しません。
+検証は落ちません
+
+``--maatlog-top-image-title-font`` の出力元は
+``maatlog/post.html`` の ``maatlog_head`` から
+``layout.html`` の ``maatlog_config_style`` へ移りました。
+``:root`` のトークンである為、記事ページだけでなく全ページ種別で出ます
+
+``--maatlog-content-width`` は ``conf.py`` の ``maatlog_content_width`` で
+上書きできます。テーマ側の既定値
+``clamp(42rem, 24rem + 16vw, 60rem)`` は変わっていません
+
+1.14 から 1.15 で追加された任意の契約:
+
+* **任意ブロック** — ``maatlog/post.html`` の ``maatlog_post_share``
+* **任意属性** — ``data-maatlog-component="share"``
+* **任意クラス** — ``.maatlog-share``
+
+Share ボタンは記事ページのメタ情報直後に出力され、単一 runtime の ``share`` enhancer が
+Web Share API 対応環境では ``navigator.share()``、非対応環境では URL の Clipboard コピーを
+行います。共有 URL は ``link[rel="canonical"]`` を優先し、無ければ ``location.href`` です。
+canonical が絶対 URL でない場合は ``location.href`` を使います。
+``navigator.share`` をユーザーがキャンセルした場合（``AbortError``）は Clipboard へフォールバック
+しません。Clipboard が使えない場合は例外を出さず、URL を選択可能な状態で表示します。
+``.maatlog-share`` は既定で非表示で、JavaScript 有効時（``.maatlog-js``）にのみ表示されます
+
+Share を出すテーマは ``data-maatlog-component="share"`` を付けた要素の内側に
+``.maatlog-share-button`` と ``.maatlog-share-status`` を置いてください。
+enhancer はこの 2 つをクラスで取得し、どちらかが欠けると無言で何もしません。
+``.maatlog-share`` は表示制御だけに使うクラスなので任意です
+
+1.15 から 1.16 で追加された契約:
+
+* **必須テンプレートの追加** — ``maatlog/components/right-rail.html``、
+  ``maatlog/components/author-summary.html``
+* **非互換になるのは standalone テーマのみ**。
+  ``implementation = "inherits-base"`` のテーマは継承チェーン経由で自動追随します
+* **``maatlog.author_summaries``** — 右ペインが描く著者の **AuthorSummaryView**
+  タプル（下記「コンテキスト名前空間」）
+* **レイアウト状態クラスの変更** — 3 カラムの成立条件が TOC だけから
+  ``maatlog_has_rail`` （TOC と Author Summary の論理和）基準に変わりました。
+  3 列グリッドの起動条件は ``maatlog-layout-has-rail`` に移りました。
+  ``maatlog-layout-has-toc`` と ``maatlog-layout-has-author-summary`` は
+  独立した状態クラスとして残ります
+* **``maatlog_toc`` ブロック** — ``maatlog_right_rail`` に改名しました。
+  右目次は右列コンポーネント（``maatlog/components/right-rail.html``）の内側に移り、
+  要素種別も ``<aside>`` から ``<nav>`` に変わりました
+* この更新は **破壊的変更** です。
+  1.15 のテーマを 1.16 コアで使うには下記の移行が必要です
+
+1.15 から 1.16 への移行
+~~~~~~~~~~~~~~~~~~~~~~~
+
+- ``maatlog-layout-has-toc`` に 3 列グリッドを定義していたテーマは、
+  同じ定義を ``maatlog-layout-has-rail`` へ移してください
+- ``grid-area: toc`` は ``grid-area: rail`` へ移してください
+- ``--maatlog-toc-width`` は ``--maatlog-rail-width`` に変わりました
+- ``maatlog_toc`` ブロックを上書きしていたテーマは
+  ``maatlog_right_rail`` へ名前を変えてください
+- ``.maatlog-toc`` は ``<aside>`` から ``<nav>`` に変わりました
+
+1.0 から 1.11 までの必須テンプレートと必須ブロックは変わっていませんでした。
+``implementation = "inherits-base"`` のテーマは、宣言する API が ``"1.0"`` から
+``"1.16"`` のどれでも引き続き検証を通ります（``maatlog-base`` の継承チェーン経由で
+1.12 追加分と 1.16 追加分の必須テンプレート／ブロックを取得するため）。
+1.16 で追加される必須ブロックはありません。
+``implementation = "standalone"`` のテーマは ``api = "1.16"`` を宣言し、
+1.12 追加分の必須テンプレートと必須ブロック、および 1.16 追加分の必須テンプレートを
+自前で持つ必要があります。
+``"1.11"`` 以下のままでは ``template-missing`` / ``block-missing`` で、
+``"1.15"`` 以下のままでは ``template-missing`` で落ちます。
 ただし
 ``implementation = "inherits-base"`` のテーマは、宣言する API に関わらず
 ``maatlog-base`` の新しいページ外枠・配色トークン・テーマ JavaScript を継承します。
@@ -243,8 +428,12 @@ Theme API
 #. ヘッダーバナー (``maatlog_banner`` ブロック)
 #. ページレイアウト — 基本は左ナビ ( ``maatlog_nav``) と本文 (``body``) の
    2 カラム。
-   右目次 ( ``maatlog_toc``) を出力するページだけ、右目次を加えた
-   3 カラム
+   右列 ( ``maatlog_right_rail``) を出力するページだけ、右列を加えた
+   3 カラム。
+   右列を立てるかどうかは ``layout.html`` の ``maatlog_has_rail`` が決めます。
+   ``maatlog_has_rail`` は ``maatlog_has_toc`` と ``maatlog_has_author_summary`` の
+   論理和です。
+   TOC が無くても Author Summary があれば右列が立ちます
 
 ``relbar1`` と  ``relbar2`` はどちらも空にしてあり、Sphinx の関連リンク帯は
 出力しません。
@@ -269,7 +458,7 @@ Theme API
 投稿・アーカイブ外枠、カード一覧、
 通常ページ本文、投稿本文はいずれも main 幅を使います。
 左右 nav/TOC の最大幅は
-従来どおり ``--maatlog-nav-width`` / ``--maatlog-toc-width`` が担います
+従来どおり ``--maatlog-nav-width`` が担い、右列の最大幅は ``--maatlog-rail-width`` が担います
 
 ``maatlog_sidebar`` ブロックの位置
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -308,22 +497,24 @@ Theme API 1.2 から、 ``maatlog/components/sidebar.html`` の出力はレイ�
 可視 toctree に明示した文書は MaatLog の公開状態では再フィルター
 しないため、draft / scheduled 投稿を可視 toctree に入れるとタイトルも表示されます
 
-``maatlog_toc`` を上書きする
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+``maatlog_right_rail`` を上書きする
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 右目次を標準と異なる条件で出すときは、同じ ``layout.html`` の root-level で
 ``maatlog_has_toc`` を明示します。
+``maatlog_has_toc`` は rail の判定（``maatlog_has_rail``）に含まれるため、
+引き続き有効です。
 親レイアウトは定義済みの値を尊重します。
 未定義のときだけ標準条件を計算します::
 
     {%- extends "maatlog-base/layout.html" -%}
     {%- set maatlog_has_toc = True -%}
 
-    {%- block maatlog_toc -%}
-    <aside class="maatlog-toc" data-maatlog-component="toc">
+    {%- block maatlog_right_rail -%}
+    <div class="maatlog-right-rail" data-maatlog-component="right-rail">
       <p>On this page</p>
-    </aside>
-    {%- endblock maatlog_toc -%}
+    </div>
+    {%- endblock maatlog_right_rail -%}
 
 ``maatlog_has_toc`` を ``False`` にした場合も、親はその値を上書きしません
 
@@ -332,8 +523,9 @@ Theme API 1.2 から、 ``maatlog/components/sidebar.html`` の出力はレイ�
 
 公式テーマのページ外枠（サイドバーの追従、狭い画面での並べ替え）は JavaScript を
 使いません。
-サイドバーの追従は CSS の ``position: sticky``、狭い画面での並べ替えは
-``grid-template-areas`` だけで行っています。
+サイドバーの追従は CSS の ``position: sticky``、狭い画面（``width <= 48rem``）での
+並べ替えは flex の ``order`` と、右列コンテナ（``.maatlog-right-rail``）の
+``display: contents`` で行っています。
 ライト／ダークの初期適用は、後述の
 テーマ JavaScript が担当します
 
@@ -342,12 +534,17 @@ Theme API 1.2 から、 ``maatlog/components/sidebar.html`` の出力はレイ�
 
 * ``maatlog/post.html``
 * ``maatlog/archive.html``
+* ``maatlog/profile.html``
 * ``maatlog/components/post-card.html``
 * ``maatlog/components/pagination.html``
 * ``maatlog/components/sidebar.html``
 * ``maatlog/components/feed-links.html``
+* ``maatlog/components/author-links.html``
+* ``maatlog/components/right-rail.html`` — 右列のコンテナ。
+  Author Summary と TOC を包みます（1.16 以降）
+* ``maatlog/components/author-summary.html`` — 著者の簡易プロフィール（1.16 以降）
 
-``post.html`` と ``archive.html`` は完全なページテンプレートです（``layout.html``
+``post.html`` と ``archive.html`` と ``profile.html`` は完全なページテンプレートです（``layout.html``
 を継承しても構いません）。
 コンポーネントは include / import 専用で、暗黙のグローバル
 変更に依存してはいけません
@@ -397,6 +594,10 @@ Theme API 1.2 から、 ``maatlog/components/sidebar.html`` の出力はレイ�
      - アーカイブの種別、ラベル、件数
    * - ``maatlog_archive_items``
      - 投稿カードの並び
+   * - ``maatlog_profile_header``
+     - プロフィールのヘッダ（アバター、表示名、役割、短い bio、外部リンク）
+   * - ``maatlog_profile_body``
+     - About 本文、featured 投稿、統計、興味、著者の全投稿一覧
    * - ``maatlog_pagination``
      - ページリンク
    * - ``maatlog_sidebar``
@@ -420,6 +621,7 @@ Theme API 1.2 から、 ``maatlog/components/sidebar.html`` の出力はレイ�
 テーマが実装しなくても検証は通ります
 
 * ``maatlog_home_intro`` — ホームでユーザ本文 ``{{ body }}`` を出します
+* ``maatlog_archive_filter`` — アーカイブの絞り込みツールバーを出します
 
 コンテキスト名前空間
 --------------------
@@ -430,12 +632,14 @@ MaatLog のすべてのテンプレートは、トップレベルの  ``maatlog`
 
 ::
 
-    maatlog.api_version   # "1.9"
+    maatlog.api_version   # "1.16"
     maatlog.version       # MaatLog ディストリビューションのバージョン（例 "0.1.0"）
-    maatlog.page_kind     # "post" | "archive" | "home" | "normal"
+    maatlog.page_kind     # "post" | "archive" | "home" | "normal" | "profile"
     maatlog.post          # PostView | None
     maatlog.posts         # tuple[PostCardView, ...]
     maatlog.archive       # ArchiveView | None
+    maatlog.profile       # AuthorProfileView | None
+    maatlog.author_summaries  # tuple[AuthorSummaryView, ...]
     maatlog.pagination    # PaginationView | None
     maatlog.navigation    # NavigationView
     maatlog.feeds         # tuple[FeedLinkView, ...]
@@ -443,10 +647,11 @@ MaatLog のすべてのテンプレートは、トップレベルの  ``maatlog`
     maatlog.site          # SiteView
 
 **SiteView** のフィールド: ``title``、 ``tagline``、 ``archive_url``、
-``top_image_title_font``。
+``top_image_title_font``、 ``content_width``。
 ``archive_url`` はそのページからアーカイブルート 1 ページ目への相対 URL です。
 ``top_image_title_font`` は ``maatlog_top_image_title_font`` の値で、未設定なら
-``None`` です
+``None`` です。
+``content_width`` は ``maatlog_content_width`` の値で、未設定なら ``None`` です
 
 **PostView** のフィールド: ``title``、 ``slug``、 ``docname``、 ``page_url``、
 ``canonical_url``、 ``external_url``、 ``published_at``、 ``expires_at``、
@@ -488,6 +693,24 @@ MaatLog のすべてのテンプレートは、トップレベルの  ``maatlog`
 いずれも
 ``PostCardView | None`` です
 
+**AuthorProfileView** のフィールド: ``slug``、 ``display_name``、 ``role``、
+``avatar_url``、 ``initials``、 ``bio_short``、 ``interests``、 ``links``、
+``about_html``、 ``featured``、 ``stats``。
+``display_name`` は ``maatlog_authors`` 由来です。
+``about_html`` はプロフィールページ上で再描画された About 文書の HTML で、
+相対 URI はすでに正しい状態です。
+``avatar_url`` があっても ``initials`` は常に埋まるため、テーマはどちらかを選べます。
+``featured`` は **PostCardView** のタプルです。
+``stats`` は **AuthorStatsView** （ ``post_count``、 ``writing_since``、
+``latest_post``）で、published 投稿だけを数えます
+
+**AuthorSummaryView** のフィールド: ``slug``、 ``display_name``、 ``avatar_url``、
+``initials``、 ``bio_short``、 ``links``、 ``profile_url``。
+右ペインが描く著者です。
+記事ページでは ``:maatlog-authors:`` の記述順、
+それ以外のページでは ``maatlog_default_author`` の 1 件、
+プロフィールページでは空です
+
 セマンティッククラスとデータ属性
 --------------------------------
 
@@ -505,7 +728,7 @@ MaatLog のすべてのテンプレートは、トップレベルの  ``maatlog`
 カスタムテーマが別の要素で出した場合、公式テーマのレイアウト規則は適用されません
 
 コンポーネントのルート要素は
-``data-maatlog-component="post|post-card|archive|pagination|sidebar|feed-links"``
+``data-maatlog-component="post|post-card|archive|pagination|sidebar|feed-links|right-rail|author-summary"``
 を公開します。
 MaatLog のコアは必須の JavaScript を同梱しません。
 データ属性は
@@ -545,13 +768,16 @@ MaatLog のコアは必須の JavaScript を同梱しません。
 * ``.maatlog-theme-toggle-label`` — 支援技術向けの可視テキスト（視覚的には隠されます）
 * ``.maatlog-author-links``、 ``.maatlog-author-link-item``、 ``.maatlog-author-link``、
   ``.maatlog-author-link-icon`` — 著者の外部リンクとその内蔵アイコン
+* ``.maatlog-right-rail`` — 右列のコンテナ（``data-maatlog-component="right-rail"``）
+* ``.maatlog-author-summary`` — 著者の簡易プロフィール（``data-maatlog-component="author-summary"``）
+* ``.maatlog-author-summary-card`` — 著者 1 名ぶんの要約
+* ``.maatlog-author-summary-more`` — 3 名以上のときの ``<details>``
 
 著者リンク
 ~~~~~~~~~~
 
-``maatlog-base`` は著者の外部リンクを描画する ``maatlog/components/author-links.html`` を提供します。
-これは必須テンプレートではありません。
-``REQUIRED_TEMPLATES`` には含まれず、Theme API のバージョンも変わりません
+Theme API 1.12 から ``maatlog/components/author-links.html`` は必須テンプレートです。
+``maatlog-base`` は著者の外部リンクを描画する実装を同梱します
 
 コンポーネントは変数 ``maatlog_author_links`` を受け取ります。
 各要素は **AuthorLinkView** （ ``type``、 ``url``、 ``label``、 ``icon``）です。
@@ -672,7 +898,8 @@ Sphinx が出力した通常の pagination がそのまま機能します
 ^^^^^^^^^^^^^^^
 
 Theme API 1.8 から、 ``maatlog-base`` は次に開きそうな同一 origin のページを
-``<link rel="prefetch">`` で事前取得します。 URL の決定（Planner）と
+``<link rel="prefetch">`` で事前取得します。
+URL の決定（Planner）と
 取得（Fetcher）は分離しており、取得方式は将来 Speculation Rules へ差し替えられます
 
 * 自動対象: 記事の ``.maatlog-nav-newer`` / ``.maatlog-nav-older``、
@@ -682,7 +909,8 @@ Theme API 1.8 から、 ``maatlog-base`` は次に開きそうな同一 origin �
   ``download`` 付き、現在ページ自身、 hash だけが異なる同一ページ
 * ``navigator.connection.saveData`` または ``effectiveType`` が
   ``slow-2g`` / ``2g`` のときは抑制する（ API 非対応環境では抑制しない）
-* 同じ URL は一度だけ Prefetch する。失敗しても通常の ``<a href>`` 遷移は維持する
+* 同じ URL は一度だけ Prefetch する。
+  失敗しても通常の ``<a href>`` 遷移は維持する
 * Infinite Scroll が ``maatlog:content-added`` を発火したあとは、
   更新後の ``.maatlog-pagination-next`` を改めて Prefetch 対象にする
 
@@ -702,6 +930,23 @@ CSS カスタムプロパティ
 * ``--maatlog-code-background``、 ``--maatlog-code-text``、 ``--maatlog-code-border``
 * ``--maatlog-card-background``、 ``--maatlog-banner-background``
 * ``--maatlog-sticky-top``
+* ``--maatlog-z-back-to-top`` — 固定 UI 下段のレイヤ番号（既定 30）。
+  Sidebar のドロワー帯（40–42）より必ず小さい値にします
+* ``--maatlog-back-to-top-size`` — Back to Top ボタンの一辺（既定 ``2.75rem``）。
+  タップターゲットの下限 44px を満たす値にします
+* ``--maatlog-profile-main-width`` — テーマ作者向けのトークン。
+  プロフィールページの中央列の望ましい幅を示します。
+  公式 ``maatlog-base`` / ``maatlog-default`` は値を定義しますが、
+  wide-shell レイアウトがすでに grid の ``1fr`` トラックで main を広げるため、
+  ``.maatlog-layout-main`` への ``max-width`` 適用は行いません
+* ``--maatlog-profile-content-width`` — ``section.maatlog-profile`` の行長上限。
+  公式テーマはこのプロパティを ``max-width`` に使います。
+  プロフィールページは ``page_kind="profile"`` のため TOC 列を出さず 2 カラムになり、
+  TOC 付き投稿ページ（3 カラム）より本文領域が広くなります
+
+``--maatlog-content-width`` は ``conf.py`` の ``maatlog_content_width`` で
+サイト単位に上書きできます。
+:doc:`configuration` を参照してください
 
 テーマは使用箇所でフォールバックを用意するべきです。
 名前付きプロパティの意味は、

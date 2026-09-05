@@ -53,8 +53,8 @@ def _layout_metrics(page: Page) -> LayoutMetrics:
               };
               const nav = box('.maatlog-nav');
               const main = box('.maatlog-layout-main');
-              const toc = box('.maatlog-toc');
-              const rightEdge = toc ? toc.right : main.right;
+              const rail = box('.maatlog-right-rail');
+              const rightEdge = rail ? rail.right : main.right;
               return {
                 overflow: document.documentElement.scrollWidth
                   - document.documentElement.clientWidth,
@@ -412,4 +412,76 @@ def test_every_page_kind_stays_within_the_viewport(site: AcceptanceSite, width: 
                 assert overflow == 0, f"{relative}@{width}: overflow {overflow}px"
         finally:
             page.close()
+            browser.close()
+
+
+class ProseMetrics(TypedDict):
+    overflow: int
+    prose_width: int
+    prose_right: int
+    main_right: int
+
+
+def _prose_metrics(page: Page) -> ProseMetrics:
+    return cast(
+        ProseMetrics,
+        page.evaluate(
+            """() => {
+              const prose = document.querySelector('.maatlog-post-body p')
+                ?? document.querySelector('.maatlog-layout-main .body p');
+              const main = document.querySelector('.maatlog-layout-main');
+              const proseBox = prose.getBoundingClientRect();
+              const mainBox = main.getBoundingClientRect();
+              return {
+                overflow: document.documentElement.scrollWidth
+                  - document.documentElement.clientWidth,
+                prose_width: Math.round(proseBox.width),
+                prose_right: Math.round(proseBox.right),
+                main_right: Math.round(mainBox.right),
+              };
+            }"""
+        ),
+    )
+
+
+@pytest.mark.browser
+def test_content_width_100_percent_fills_the_main_column(site: AcceptanceSite) -> None:
+    """Issue #139: maatlog_content_width = "100%" で prose が中央列いっぱいになる。"""
+    result = site.build(config_overrides={"maatlog_content_width": "100%"})
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        try:
+            page = browser.new_page(viewport={"width": 2560, "height": 1440})
+            page.goto(result.path("posts/rst-post.html").resolve().as_uri(), wait_until="load")
+            metrics = _prose_metrics(page)
+        finally:
+            browser.close()
+
+    # 未設定なら 60rem（≒960px）で頭打ちになる。設定が効いていればそれを超える。
+    assert metrics["prose_width"] > PROSE_MAX_PX
+    # 右端は中央列の右端まで届く。差はレイアウトの padding 相当に収まる。
+    assert metrics["main_right"] - metrics["prose_right"] <= MAX_OUTER_GUTTER_PX
+    assert metrics["overflow"] == 0
+
+
+@pytest.mark.browser
+@pytest.mark.parametrize(("width", "height"), WIDTH_POLICY_VIEWPORTS + ((375, 667),))
+def test_content_width_100_percent_never_scrolls_horizontally(
+    site: AcceptanceSite,
+    width: int,
+    height: int,
+) -> None:
+    """行幅を広げても横スクロールは出さない。狭い viewport も含めて確認する。"""
+    result = site.build(config_overrides={"maatlog_content_width": "100%"})
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        try:
+            page = browser.new_page(viewport={"width": width, "height": height})
+            for name in REPRESENTATIVE_PAGES:
+                page.goto(result.path(name).resolve().as_uri(), wait_until="load")
+                metrics = _prose_metrics(page)
+                assert metrics["overflow"] == 0, f"{name} at {width}x{height}"
+        finally:
             browser.close()

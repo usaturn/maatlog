@@ -223,6 +223,10 @@ class HtmlPage:
 @dataclass
 class BuildResult:
     app: Sphinx
+    #: Everything Sphinx wrote to its warning stream during this build.
+    #: ``warningiserror`` does not cover every warning path (``toc.not_included``
+    #: is emitted after the read phase), so assertions read this directly.
+    warnings: str = ""
 
     def domain_snapshot(self, name: str = "maatlog") -> DomainSnapshot:
         domain = self.app.env.get_domain(name)
@@ -307,6 +311,7 @@ class SphinxProject:
         parallel read path so merge is exercised before the safety flag flip.
         """
         self._monkeypatch.setenv("SOURCE_DATE_EPOCH", self.source_date_epoch)
+        warning_stream = StringIO()
         app = Sphinx(
             str(self.srcdir),
             str(self.srcdir),
@@ -314,7 +319,7 @@ class SphinxProject:
             str(self.doctreedir),
             self.builder,
             status=StringIO(),
-            warning=StringIO(),
+            warning=warning_stream,
             warningiserror=True,
             freshenv=not reuse_environment,
             parallel=parallel,
@@ -324,7 +329,7 @@ class SphinxProject:
         if force_parallel_read and "maatlog" in app.extensions:
             app.extensions["maatlog"].parallel_read_safe = True
         app.build()
-        return BuildResult(app=app)
+        return BuildResult(app=app, warnings=warning_stream.getvalue())
 
     def _write_tree(self) -> None:
         self._write_conf()
