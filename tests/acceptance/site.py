@@ -314,13 +314,20 @@ class AcceptanceBuildResult:
 class AcceptanceSite:
     """Self-contained acceptance Sphinx project under a temporary workdir."""
 
-    def __init__(self, workdir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def __init__(
+        self,
+        workdir: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        *,
+        project_root: Path = PROJECT_ROOT,
+    ) -> None:
         self.workdir = workdir
         self.srcdir = workdir / "source"
         self._monkeypatch = monkeypatch
         self._build_counter = 0
+        self._project_root = project_root
         shutil.copytree(
-            PROJECT_ROOT,
+            project_root,
             self.srcdir,
             ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
         )
@@ -391,7 +398,7 @@ class AcceptanceSite:
         if self.srcdir.exists():
             shutil.rmtree(self.srcdir)
         shutil.copytree(
-            PROJECT_ROOT,
+            self._project_root,
             self.srcdir,
             ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
         )

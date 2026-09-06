@@ -37,6 +37,7 @@ from .directives import (
 )
 from .domain import MaatlogDomain
 from .errors import MaatlogBuildError
+from .featured import select_featured_posts
 from .feeds import write_feeds_after_success
 from .html_metadata import (
     absolute_doc_url,
@@ -175,6 +176,13 @@ def finalize_domain(app: Sphinx, env: BuildEnvironment) -> None:
         build_time=build_time,
         known_docnames=set(env.found_docs),
     )
+    posts = cast(dict[str, Post], domain.data["posts_by_docname"])
+    app.__dict__["_maatlog_featured_posts"] = select_featured_posts(
+        config.featured_posts,
+        posts_by_docname=posts,
+        published=index.published,
+        home_docname=resolved_home_docname(app, config),
+    )
     # env.found_docs, the published index, and srcdir are all available only here,
     # so author profile cross-references are resolved once, at this point.
     resolved = ResolvedProfiles(avatars={})
@@ -263,6 +271,7 @@ def inject_maatlog_page_context(
                 ),
                 feeds=_archive_discovery_feeds(app, page_axis=None, taxonomy_id=None, label="Posts"),
                 author_summaries=_author_summaries(app, from_docname=pagename, config=config, linker=linker),
+                featured_posts=resolved_featured_posts(app),
             )
         )
         return HOME_TEMPLATE
@@ -431,6 +440,7 @@ def collect_archive_pages(app: Sphinx) -> Iterator[tuple[str, dict[str, Any], st
                 is_home=is_home,
                 profile=profile_view,
                 author_summaries=summaries,
+                **({"featured_posts": resolved_featured_posts(app)} if is_home else {}),
             )
         )
         yield (
@@ -601,6 +611,12 @@ def resolved_profiles(app: Sphinx) -> ResolvedProfiles:
     """
     value = app.__dict__.get("_maatlog_resolved_profiles")
     return value if isinstance(value, ResolvedProfiles) else ResolvedProfiles(avatars={})
+
+
+def resolved_featured_posts(app: Sphinx) -> tuple[Post, ...] | None:
+    """Return featured posts selected during ``env-updated``, or None for the View default."""
+    value = app.__dict__.get("_maatlog_featured_posts")
+    return cast(tuple[Post, ...], value) if isinstance(value, tuple) else None
 
 
 def resolved_home_docname(app: Sphinx, config: MaatlogConfig) -> str | None:

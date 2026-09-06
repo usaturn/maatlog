@@ -33,6 +33,7 @@ CONFIG_VALUES = {
     "maatlog_page_size": (10, "env"),
     "maatlog_tagline": (None, "html"),
     "maatlog_home_docname": (None, "html"),
+    "maatlog_featured_posts": (None, "env"),
     "maatlog_generate_feeds": (True, "html"),
     "maatlog_feed_taxonomies": (("tag", "category", "author", "month"), "html"),
     "maatlog_feed_limit": (20, "html"),
@@ -69,6 +70,7 @@ class MaatlogConfig(BaseModel):
     page_size: int
     tagline: str | None
     home_docname: str | None
+    featured_posts: tuple[str, ...] | None
     generate_feeds: bool
     feed_taxonomies: tuple[TaxonomyAxis, ...]
     feed_limit: int
@@ -115,6 +117,7 @@ class MaatlogConfig(BaseModel):
         home_docname = _validate_optional_docname(
             "maatlog_home_docname", resolved["maatlog_home_docname"], diagnostics
         )
+        featured_posts = _validate_featured_posts(resolved["maatlog_featured_posts"], diagnostics)
         generate_feeds = _validate_bool("maatlog_generate_feeds", resolved["maatlog_generate_feeds"], diagnostics)
         feed_taxonomies = _validate_feed_taxonomies(resolved["maatlog_feed_taxonomies"], diagnostics)
         feed_limit = _validate_positive_int("maatlog_feed_limit", resolved["maatlog_feed_limit"], diagnostics)
@@ -146,6 +149,7 @@ class MaatlogConfig(BaseModel):
             page_size=page_size,
             tagline=tagline,
             home_docname=home_docname,
+            featured_posts=featured_posts,
             generate_feeds=generate_feeds,
             feed_taxonomies=feed_taxonomies,
             feed_limit=feed_limit,
@@ -266,6 +270,25 @@ def _validate_optional_docname(field: str, value: Any, diagnostics: list[Diagnos
     if value is None:
         return None
     return _validate_docname(field, value, diagnostics)
+
+
+def _validate_featured_posts(value: Any, diagnostics: list[Diagnostic]) -> tuple[str, ...] | None:
+    if value is None:
+        return None
+    if isinstance(value, (str, bytes)) or not isinstance(value, Sequence):
+        _invalid(diagnostics, "maatlog_featured_posts", value, "None or a sequence of non-empty slugs")
+        return None
+    slugs: list[str] = []
+    valid = True
+    for item in cast(Sequence[object], value):
+        if not isinstance(item, str) or not item.strip():
+            _invalid(diagnostics, "maatlog_featured_posts", item, "None or a sequence of non-empty slugs")
+            valid = False
+            continue
+        slugs.append(item.strip())
+    if not valid:
+        return None
+    return tuple(slugs)
 
 
 def _validate_optional_text(field: str, value: Any, diagnostics: list[Diagnostic]) -> str | None:

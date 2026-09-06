@@ -179,6 +179,478 @@ Body of post {n}.
     for n in (1, 2, 3, 4, 5)
 }
 
+MAGAZINE_COLUMN_PROJECT = {
+    f"post{n}.md": f"""---
+maatlog-post: true
+maatlog-slug: post{n}
+maatlog-published-at: 2026-07-2{n}T09:00:00Z
+maatlog-tags: [sphinx]
+---
+# Post {n}
+
+Body of post {n}.
+"""
+    for n in (1, 2, 3, 4, 5, 6)
+}
+
+
+NINE_POST_PROJECT = {
+    f"post{n}.md": f"""---
+maatlog-post: true
+maatlog-slug: post{n}
+maatlog-published-at: 2026-07-{n:02d}T09:00:00Z
+maatlog-tags: [sphinx]
+maatlog-categories: [docs]
+maatlog-authors: [alice]
+---
+# Post {n}
+
+Body of post {n}.
+"""
+    for n in range(1, 10)
+}
+
+
+def _first_row_column_count(metrics: dict[str, object]) -> int:
+    tops = cast("list[int]", metrics["tops"])
+    lefts = cast("list[int]", metrics["lefts"])
+    first_row = [left for left, top in zip(lefts, tops, strict=True) if top == min(tops)]
+    return len(set(first_row))
+
+
+@pytest.mark.browser
+@pytest.mark.parametrize(("width", "height"), [(1920, 1080), (2560, 1440), (3840, 2160)])
+def test_home_latest_stays_three_columns_on_wide_viewports(
+    make_project: ProjectFactory,
+    width: int,
+    height: int,
+) -> None:
+    result = make_project(files=NINE_POST_PROJECT).build()
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page(viewport={"width": width, "height": height})
+        try:
+            page.goto(result.path("blog.html").resolve().as_uri(), wait_until="load")
+            latest = _card_row_metrics(page, '[data-maatlog-component="latest"]')
+            featured = _card_row_metrics(page, '[data-maatlog-component="featured"]')
+            assert latest["count"] == 6, latest
+            assert featured["count"] == 3, featured
+            assert latest["overflow"] == 0, latest
+            assert _first_row_column_count(latest) == 3, latest
+            widths = page.evaluate(
+                """() => Array.from(
+                     document.querySelectorAll(
+                       '[data-maatlog-component="featured"] .maatlog-post-card'
+                     )
+                   ).map((card) => Math.round(card.getBoundingClientRect().width))"""
+            )
+            assert widths[0] > widths[1] == widths[2], widths
+        finally:
+            page.close()
+            browser.close()
+
+
+@pytest.mark.browser
+def test_home_latest_is_two_columns_at_1280_with_six_cards(
+    make_project: ProjectFactory,
+) -> None:
+    result = make_project(files=NINE_POST_PROJECT).build()
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page(viewport={"width": 1280, "height": 800})
+        try:
+            page.goto(result.path("blog.html").resolve().as_uri(), wait_until="load")
+            latest = _card_row_metrics(page, '[data-maatlog-component="latest"]')
+            assert latest["count"] == 6, latest
+            assert latest["overflow"] == 0, latest
+            assert _first_row_column_count(latest) == 2, latest
+        finally:
+            page.close()
+            browser.close()
+
+
+@pytest.mark.browser
+@pytest.mark.parametrize(("width", "height"), [(768, 1024), (390, 844)])
+def test_home_magazine_is_one_column_on_narrow_viewports(
+    make_project: ProjectFactory,
+    width: int,
+    height: int,
+) -> None:
+    result = make_project(files=NINE_POST_PROJECT).build()
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page(viewport={"width": width, "height": height})
+        try:
+            page.goto(result.path("blog.html").resolve().as_uri(), wait_until="load")
+            featured = _card_row_metrics(page, '[data-maatlog-component="featured"]')
+            latest = _card_row_metrics(page, '[data-maatlog-component="latest"]')
+            assert featured["count"] == 3, featured
+            assert latest["count"] == 6, latest
+            assert _first_row_column_count(featured) == 1, featured
+            assert _first_row_column_count(latest) == 1, latest
+            assert featured["overflow"] == 0, featured
+            assert latest["overflow"] == 0, latest
+        finally:
+            page.close()
+            browser.close()
+
+
+PNG_1X1 = bytes.fromhex(
+    "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c489"
+    "0000000a49444154789c63000100000500010d0a2db40000000049454e44ae426082"
+)
+
+
+def _n_posts(count: int, *, extra: dict[str, str] | None = None) -> dict[str, str | bytes]:
+    files: dict[str, str | bytes] = {
+        f"post{n}.md": f"""---
+maatlog-post: true
+maatlog-slug: post{n}
+maatlog-published-at: 2026-07-{n:02d}T09:00:00Z
+maatlog-tags: [sphinx]
+---
+# Post {n}
+
+Body of post {n}.
+"""
+        for n in range(1, count + 1)
+    }
+    if extra:
+        files.update(extra)
+    return files
+
+
+@pytest.mark.browser
+def test_single_featured_card_spans_the_container(make_project: ProjectFactory) -> None:
+    result = make_project(files=_n_posts(1)).build()
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page(viewport={"width": 1440, "height": 900})
+        try:
+            page.goto(result.path("blog.html").resolve().as_uri(), wait_until="load")
+            metrics = page.evaluate(
+                """() => {
+                  const box = (selector) => {
+                    const el = document.querySelector(selector);
+                    return el ? Math.round(el.getBoundingClientRect().width) : null;
+                  };
+                  return {
+                    featured: box('[data-maatlog-component="featured"]'),
+                    card: box('.maatlog-post-card-lead'),
+                    latest: document.querySelector('[data-maatlog-component="latest"]'),
+                  };
+                }"""
+            )
+            assert metrics["featured"] is not None, metrics
+            assert metrics["card"] is not None, metrics
+            assert abs(metrics["card"] - metrics["featured"]) <= 2, metrics
+            assert metrics["latest"] is None
+        finally:
+            page.close()
+            browser.close()
+
+
+@pytest.mark.browser
+def test_two_featured_cards_share_one_row(make_project: ProjectFactory) -> None:
+    result = make_project(files=_n_posts(2)).build()
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page(viewport={"width": 1440, "height": 900})
+        try:
+            page.goto(result.path("blog.html").resolve().as_uri(), wait_until="load")
+            featured = _card_row_metrics(page, '[data-maatlog-component="featured"]')
+            assert featured["count"] == 2, featured
+            assert len(set(cast("list[int]", featured["tops"]))) == 1, featured
+            assert _first_row_column_count(featured) == 2, featured
+        finally:
+            page.close()
+            browser.close()
+
+
+@pytest.mark.browser
+def test_lead_image_uses_four_by_three_cover(make_project: ProjectFactory) -> None:
+    files = _n_posts(3)
+    files["post3.md"] = """---
+maatlog-post: true
+maatlog-slug: post3
+maatlog-published-at: 2026-07-03T09:00:00Z
+maatlog-image: images/cover.png
+---
+# Post 3
+
+Lead with image.
+"""
+    files["images/cover.png"] = PNG_1X1
+    result = make_project(files=files).build()
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page(viewport={"width": 1440, "height": 900})
+        try:
+            page.goto(result.path("blog.html").resolve().as_uri(), wait_until="load")
+            image = page.evaluate(
+                """() => {
+                  const el = document.querySelector(
+                    '.maatlog-post-card-lead .maatlog-post-card-image'
+                  );
+                  if (!el) return null;
+                  const style = getComputedStyle(el);
+                  return {
+                    ratio: style.aspectRatio,
+                    fit: style.objectFit,
+                  };
+                }"""
+            )
+            assert image is not None
+            assert image["ratio"] in {"4 / 3", "1.33333"}, image
+            assert image["fit"] == "cover", image
+        finally:
+            page.close()
+            browser.close()
+
+
+@pytest.mark.browser
+def test_long_titles_do_not_overflow_on_mobile(make_project: ProjectFactory) -> None:
+    files = _n_posts(
+        3,
+        extra={
+            "post3.md": """---
+maatlog-post: true
+maatlog-slug: post3
+maatlog-published-at: 2026-07-03T09:00:00Z
+---
+# 日本語のとても長い見出しでカードから本文がはみ出さないことを確認するためのタイトル
+
+Body.
+""",
+            "post2.md": """---
+maatlog-post: true
+maatlog-slug: post2
+maatlog-published-at: 2026-07-02T09:00:00Z
+---
+# SupercalifragilisticexpialidociousUnusuallyLongEnglishTitleWithoutSpaces
+
+Body.
+""",
+        },
+    )
+    result = make_project(files=files).build()
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page(viewport={"width": 390, "height": 844})
+        try:
+            page.goto(result.path("blog.html").resolve().as_uri(), wait_until="load")
+            metrics = page.evaluate(
+                """() => {
+                  const titles = Array.from(
+                    document.querySelectorAll('.maatlog-post-card-title')
+                  );
+                  return {
+                    overflow: document.documentElement.scrollWidth
+                      - document.documentElement.clientWidth,
+                    nowrap: titles.map((el) => getComputedStyle(el).whiteSpace),
+                  };
+                }"""
+            )
+            assert metrics["overflow"] == 0, metrics
+            assert all(value != "nowrap" for value in metrics["nowrap"]), metrics
+        finally:
+            page.close()
+            browser.close()
+
+
+@pytest.mark.browser
+def test_non_home_archive_is_not_capped_at_three_columns(
+    make_project: ProjectFactory,
+) -> None:
+    result = make_project(
+        files=_home_files(NINE_POST_PROJECT),
+        config={"maatlog_home_docname": "home"},
+    ).build()
+    html = result.path("blog.html").read_text(encoding="utf-8")
+    assert 'data-maatlog-component="latest"' not in html
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page(viewport={"width": 1920, "height": 1080})
+        try:
+            page.goto(result.path("blog.html").resolve().as_uri(), wait_until="load")
+            grid = _card_row_metrics(page, ".maatlog-post-grid")
+            assert grid["count"] == 9, grid
+            assert _first_row_column_count(grid) != 3, grid
+        finally:
+            page.close()
+            browser.close()
+
+
+def _home_files(posts: dict[str, str]) -> dict[str, str]:
+    return {
+        **posts,
+        "home.md": "# Home\n\nWelcome.\n",
+    }
+
+
+def test_archive_home_emits_theme_api_lead_markup(
+    make_project: ProjectFactory,
+) -> None:
+    result = make_project(files=MAGAZINE_COLUMN_PROJECT).build()
+    html = result.path("blog.html").read_text(encoding="utf-8")
+    assert 'data-maatlog-component="featured"' in html
+    assert 'data-maatlog-component="latest"' in html
+    assert "maatlog-post-card-lead" in html
+    assert "maatlog-post-card-secondary" in html
+    assert 'data-maatlog-card-variant="latest"' in html
+
+
+@pytest.mark.browser
+def test_home_type_scale_is_lead_then_secondary_then_latest(
+    make_project: ProjectFactory,
+) -> None:
+    result = make_project(files=MAGAZINE_COLUMN_PROJECT).build()
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page(viewport={"width": 1440, "height": 900})
+        try:
+            page.goto(result.path("blog.html").resolve().as_uri(), wait_until="load")
+            sizes = page.evaluate(
+                """() => {
+                  const px = (selector) => {
+                    const el = document.querySelector(selector);
+                    return el ? parseFloat(getComputedStyle(el).fontSize) : null;
+                  };
+                  return {
+                    lead: px('.maatlog-post-card-lead .maatlog-post-card-title'),
+                    secondary: px('.maatlog-post-card-secondary .maatlog-post-card-title'),
+                    latest: px('[data-maatlog-card-variant="latest"] .maatlog-post-card-title'),
+                  };
+                }"""
+            )
+            assert sizes["lead"] is not None, sizes
+            assert sizes["secondary"] is not None, sizes
+            assert sizes["latest"] is not None, sizes
+            assert sizes["lead"] > sizes["secondary"] > sizes["latest"], sizes
+        finally:
+            page.close()
+            browser.close()
+
+
+@pytest.mark.browser
+def test_dedicated_home_keeps_magazine_layout(make_project: ProjectFactory) -> None:
+    result = make_project(
+        files=_home_files(MAGAZINE_COLUMN_PROJECT),
+        config={"maatlog_home_docname": "home"},
+    ).build()
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page(viewport={"width": 1440, "height": 900})
+        try:
+            page.goto(result.path("home.html").resolve().as_uri(), wait_until="load")
+            featured = _card_row_metrics(page, '[data-maatlog-component="featured"]')
+            latest = _card_row_metrics(page, '[data-maatlog-component="latest"]')
+            assert featured["count"] == 3, featured
+            assert latest["count"] == 3, latest
+            widths = page.evaluate(
+                """() => Array.from(
+                     document.querySelectorAll(
+                       '[data-maatlog-component="featured"] .maatlog-post-card'
+                     )
+                   ).map((card) => Math.round(card.getBoundingClientRect().width))"""
+            )
+            assert widths[0] > widths[1], widths
+            assert widths[1] == widths[2], widths
+            tops = cast("list[int]", latest["tops"])
+            lefts = cast("list[int]", latest["lefts"])
+            first_row = [left for left, top in zip(lefts, tops, strict=True) if top == min(tops)]
+            assert len(set(first_row)) >= 2, latest
+        finally:
+            page.close()
+            browser.close()
+
+
+def _card_row_metrics(page: Page, container: str) -> dict[str, object]:
+    return cast(
+        "dict[str, object]",
+        page.evaluate(
+            """(container) => {
+              const cards = Array.from(
+                document.querySelectorAll(container + ' .maatlog-post-card')
+              );
+              return {
+                count: cards.length,
+                lefts: cards.map((card) => Math.round(card.getBoundingClientRect().left)),
+                tops: cards.map((card) => Math.round(card.getBoundingClientRect().top)),
+                overflow: document.documentElement.scrollWidth
+                  - document.documentElement.clientWidth,
+              };
+            }""",
+            container,
+        ),
+    )
+
+
+@pytest.mark.browser
+def test_home_latest_is_three_columns_on_wide_desktop(
+    make_project: ProjectFactory,
+) -> None:
+    result = make_project(files=MAGAZINE_COLUMN_PROJECT).build()
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page(viewport={"width": 1920, "height": 1080})
+        try:
+            page.goto(result.path("blog.html").resolve().as_uri(), wait_until="load")
+            metrics = _card_row_metrics(page, ".maatlog-post-grid")
+            assert metrics["count"] == 3, metrics
+            assert metrics["overflow"] == 0, metrics
+            tops = cast("list[int]", metrics["tops"])
+            lefts = cast("list[int]", metrics["lefts"])
+            first_row = [left for left, top in zip(lefts, tops, strict=True) if top == min(tops)]
+            assert len(set(first_row)) == 3, metrics
+        finally:
+            page.close()
+            browser.close()
+
+
+@pytest.mark.browser
+def test_home_latest_is_two_columns_at_1280(
+    make_project: ProjectFactory,
+) -> None:
+    result = make_project(files=MAGAZINE_COLUMN_PROJECT).build()
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page(viewport={"width": 1280, "height": 800})
+        try:
+            page.goto(result.path("blog.html").resolve().as_uri(), wait_until="load")
+            metrics = _card_row_metrics(page, ".maatlog-post-grid")
+            assert metrics["count"] == 3, metrics
+            assert metrics["overflow"] == 0, metrics
+            tops = cast("list[int]", metrics["tops"])
+            lefts = cast("list[int]", metrics["lefts"])
+            first_row = [left for left, top in zip(lefts, tops, strict=True) if top == min(tops)]
+            assert len(set(first_row)) == 2, metrics
+        finally:
+            page.close()
+            browser.close()
+
+
+@pytest.mark.browser
+def test_home_magazine_is_one_column_at_768(
+    make_project: ProjectFactory,
+) -> None:
+    result = make_project(files=MAGAZINE_COLUMN_PROJECT).build()
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page(viewport={"width": 768, "height": 1024})
+        try:
+            page.goto(result.path("blog.html").resolve().as_uri(), wait_until="load")
+            featured = _card_row_metrics(page, ".maatlog-post-featured")
+            latest = _card_row_metrics(page, ".maatlog-post-grid")
+            assert featured["count"] == 3, featured
+            assert latest["count"] == 3, latest
+            assert len(set(cast("list[int]", featured["lefts"]))) == 1, featured
+            assert len(set(cast("list[int]", latest["lefts"]))) == 1, latest
+            assert featured["overflow"] == 0
+        finally:
+            page.close()
+            browser.close()
+
 
 @pytest.mark.browser
 def test_home_featured_lead_card_is_wider_than_its_neighbours(

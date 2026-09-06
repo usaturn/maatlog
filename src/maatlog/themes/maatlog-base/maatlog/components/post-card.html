@@ -6,10 +6,40 @@
 {%- else -%}<span class="maatlog-taxonomy-link">{{ link.label|e }}</span>{%- endif -%}
 {%- endfor -%}
 {%- endmacro -%}
-<article class="maatlog-post-card{% if card_variant is defined and card_variant == 'featured' %} maatlog-post-card-featured{% endif %}" data-maatlog-component="post-card"{% if card_anchor is defined and card_anchor %} id="maatlog-post-{{ card_anchor|e }}"{% endif %}{% if card.slug %} data-slug="{{ card.slug|e }}"{% endif %}{% if card.published_at %} data-maatlog-published-at="{{ card.published_at.isoformat() }}"{% endif %} data-maatlog-tags='{{ card.taxonomies.tags | map(attribute="id") | list | maatlog_json }}' data-maatlog-categories='{{ card.taxonomies.categories | map(attribute="id") | list | maatlog_json }}' data-maatlog-authors='{{ card.taxonomies.authors | map(attribute="id") | list | maatlog_json }}'>
+{%- set variant = card_variant if card_variant is defined else "" -%}
+{%- set home_layout = variant in ["lead", "secondary", "latest"] -%}
+<article class="maatlog-post-card{% if variant == 'featured' %} maatlog-post-card-featured{% elif variant == 'lead' %} maatlog-post-card-featured maatlog-post-card-lead{% elif variant == 'secondary' %} maatlog-post-card-featured maatlog-post-card-secondary{% endif %}" data-maatlog-component="post-card"{% if variant %} data-maatlog-card-variant="{{ variant|e }}"{% endif %}{% if card_anchor is defined and card_anchor %} id="maatlog-post-{{ card_anchor|e }}"{% endif %}{% if card.slug %} data-slug="{{ card.slug|e }}"{% endif %}{% if card.published_at %} data-maatlog-published-at="{{ card.published_at.isoformat() }}"{% endif %} data-maatlog-tags='{{ card.taxonomies.tags | map(attribute="id") | list | maatlog_json }}' data-maatlog-categories='{{ card.taxonomies.categories | map(attribute="id") | list | maatlog_json }}' data-maatlog-authors='{{ card.taxonomies.authors | map(attribute="id") | list | maatlog_json }}'>
   {%- if card.image_url -%}
   <img class="maatlog-post-card-image" src="{{ card.image_url|e }}" alt="" />
   {%- endif -%}
+  {%- if home_layout -%}
+  {%- if card.taxonomies.categories -%}
+  <p class="maatlog-post-card-eyebrow"><span class="maatlog-post-card-categories">{{ taxonomy_links(card.taxonomies.categories) }}</span></p>
+  {%- endif -%}
+  <h2 class="maatlog-post-card-title">
+    {%- if card.external_url -%}
+    <a class="maatlog-external-link" href="{{ card.external_url|e }}" rel="noopener noreferrer">{{ card.title|e }}</a>
+    {%- else -%}
+    <a href="{{ card.page_url|e }}">{{ card.title|e }}</a>
+    {%- endif -%}
+  </h2>
+  {%- if card.excerpt -%}
+  <p class="maatlog-post-card-excerpt">{{ card.excerpt|e }}</p>
+  {%- endif -%}
+  {%- if card.published_at or card.taxonomies.tags -%}
+  <p class="maatlog-post-card-meta">
+    {%- if card.published_at -%}
+    <time class="maatlog-post-card-date" datetime="{{ card.published_at.isoformat() }}">{{ card.published_at.strftime('%Y-%m-%d') }}</time>
+    {%- endif -%}
+    {%- if card.taxonomies.tags -%}
+    <span class="maatlog-post-card-tags">{{ taxonomy_links(card.taxonomies.tags) }}</span>
+    {%- endif -%}
+  </p>
+  {%- endif -%}
+  {%- if card.taxonomies.authors -%}
+  <p class="maatlog-post-card-authors">{{ taxonomy_links(card.taxonomies.authors) }}</p>
+  {%- endif -%}
+  {%- else -%}
   <h2 class="maatlog-post-card-title">
     {%- if card.external_url -%}
     <a class="maatlog-external-link" href="{{ card.external_url|e }}" rel="noopener noreferrer">{{ card.title|e }}</a>
@@ -35,5 +65,6 @@
     <span class="maatlog-post-card-authors">{{ taxonomy_links(card.taxonomies.authors) }}</span>
     {%- endif -%}
   </p>
+  {%- endif -%}
   {%- endif -%}
 </article>

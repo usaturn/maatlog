@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass
 from datetime import datetime
-from typing import Any, Literal, Self, cast
+from typing import Any, Final, Literal, Self, cast
 
 from jinja2 import TemplateNotFound
 from sphinx.application import Sphinx
@@ -20,6 +20,8 @@ from .urls import is_absolute_http_url, post_urls
 from .version import PACKAGE_VERSION
 
 PageKind = Literal["normal", "post", "archive", "home", "profile"]
+
+FEATURED_LIMIT: Final = 3
 
 
 @dataclass(frozen=True, slots=True)
@@ -210,6 +212,8 @@ class MaatlogTemplateContext:
     page_kind: PageKind = "normal"
     post: PostView | None = None
     posts: tuple[PostCardView, ...] = ()
+    featured: tuple[PostCardView, ...] = ()
+    latest: tuple[PostCardView, ...] = ()
     archive: ArchiveView | None = None
     pagination: PaginationView | None = None
     navigation: NavigationView = NavigationView(None, None)
@@ -428,6 +432,7 @@ def archive_context(
     is_home: bool = False,
     profile: AuthorProfileView | None = None,
     author_summaries: tuple[AuthorSummaryView, ...] = (),
+    featured_posts: Sequence[Post] | None = None,
 ) -> MaatlogTemplateContext:
     """Build a ``page_kind="archive"`` template context for *page*.
 
@@ -452,9 +457,26 @@ def archive_context(
         )
         for post in page.posts
     )
+    featured: tuple[PostCardView, ...] = ()
+    latest: tuple[PostCardView, ...] = ()
+    if is_home:
+        featured_cards = None
+        if featured_posts is not None:
+            featured_cards = tuple(
+                post_card_view(
+                    item,
+                    page_url=relative_page_url_for(builder, page.docname, item.docname),
+                    image_url=image_url_for(builder, page.docname, item.image_uri),
+                    taxonomies=linker(item) if linker is not None else None,
+                )
+                for item in featured_posts
+            )
+        featured, latest = project_featured_latest(cards, featured=featured_cards)
     return MaatlogTemplateContext(
         page_kind="profile" if profile is not None else "archive",
         posts=cards,
+        featured=featured,
+        latest=latest,
         archive=archive_view(page, is_home=is_home),
         pagination=pagination_view(page, builder, all_pages=pages),
         feeds=feeds,
@@ -463,6 +485,21 @@ def archive_context(
         profile=profile,
         author_summaries=author_summaries,
     )
+
+
+def project_featured_latest(
+    eligible: Sequence[PostCardView],
+    *,
+    featured: Sequence[PostCardView] | None = None,
+    latest_limit: int | None = None,
+) -> tuple[tuple[PostCardView, ...], tuple[PostCardView, ...]]:
+    """Split *eligible* into displayed featured cards and the leftover latest column."""
+    chosen = tuple(eligible[:FEATURED_LIMIT] if featured is None else featured[:FEATURED_LIMIT])
+    chosen_slugs = {card.slug for card in chosen if card.slug is not None}
+    rest = tuple(card for card in eligible if card.slug not in chosen_slugs)
+    if latest_limit is not None:
+        rest = rest[:latest_limit]
+    return chosen, rest
 
 
 def home_context(
@@ -477,26 +514,42 @@ def home_context(
     taxonomies: TaxonomyNavigationView | None = None,
     feeds: tuple[FeedLinkView, ...] = (),
     author_summaries: tuple[AuthorSummaryView, ...] = (),
+    featured_posts: Sequence[Post] | None = None,
 ) -> MaatlogTemplateContext:
     """Build a ``page_kind="home"`` context for the blog home page.
 
-    The home page has no pagination: it lists the newest *page_size* posts and
-    hands the reader on to the archive root via ``site.archive_url``. Archive
+    The home page has no pagination: it shows up to ``FEATURED_LIMIT`` featured
+    cards plus up to ``page_size`` latest cards (``posts == featured + latest``)
+    and directs the reader to the archive root via ``site.archive_url``. Archive
     projection (:func:`project_archives`) is deliberately not used.
     """
-    visible_posts = tuple(post for post in published if post.docname != docname)
-    cards = tuple(
-        post_card_view(
-            post,
-            page_url=relative_page_url_for(builder, docname, post.docname),
-            image_url=image_url_for(builder, docname, post.image_uri),
-            taxonomies=linker(post) if linker is not None else None,
+
+    def _to_card(item: Post) -> PostCardView:
+        return post_card_view(
+            item,
+            page_url=relative_page_url_for(builder, docname, item.docname),
+            image_url=image_url_for(builder, docname, item.image_uri),
+            taxonomies=linker(item) if linker is not None else None,
         )
-        for post in visible_posts[:page_size]
+
+    visible_posts = tuple(item for item in published if item.docname != docname)
+    # Only build cards for the window the projection can consume: featured (max
+    # ``FEATURED_LIMIT``) plus up to ``page_size`` latest cards.
+    eligible_cards = tuple(_to_card(item) for item in visible_posts[: FEATURED_LIMIT + page_size])
+    featured_cards = None
+    if featured_posts is not None:
+        featured_cards = tuple(_to_card(item) for item in featured_posts if item.docname != docname)
+    featured, latest = project_featured_latest(
+        eligible_cards,
+        featured=featured_cards,
+        latest_limit=page_size,
     )
+    cards = featured + latest
     return MaatlogTemplateContext(
         page_kind="home",
         posts=cards,
+        featured=featured,
+        latest=latest,
         archive=ArchiveView(
             kind="all",
             id=None,
