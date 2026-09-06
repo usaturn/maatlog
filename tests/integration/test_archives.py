@@ -297,13 +297,14 @@ def test_home_features_three_posts(make_project: ProjectFactory) -> None:
     featured = page.select(".maatlog-post-featured .maatlog-post-card")
     assert len(featured) == 3
     assert all("maatlog-post-card-featured" in card["class"] for card in featured)
-    assert "Older posts" in page
+    assert '<h2 class="maatlog-post-list-heading">Latest articles</h2>' in page
+    assert "maatlog-post-card-lead" in featured[0]["class"]
     # The 4th post is outside the featured grid.
     assert len(page.select(".maatlog-post-list .maatlog-post-card")) == 4
 
 
 def test_home_with_three_posts_has_no_older_heading(make_project: ProjectFactory) -> None:
-    """With three or fewer posts there is nothing left to put under 'Older posts'."""
+    """With three or fewer posts there is no Latest articles heading."""
     files = {name: body for name, body in FOUR_POST_PROJECT.items() if name != "post1.md"}
     result = make_project(files=files).build()
     page = result.html("blog.html")

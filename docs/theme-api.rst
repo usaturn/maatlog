@@ -9,15 +9,17 @@ MaatLog のテーマは Sphinx の HTML テーマに小さな契約を加えた�
 API バージョン
 --------------
 
-Theme API の現在のバージョンは **1.16** です。
+Theme API の現在のバージョンは **1.18** です。
 ``api = "1.0"`` を宣言する ``inherits-base`` のテーマは
 引き続き受理されます。
-``standalone`` のテーマは ``api = "1.16"`` を宣言し、
+``standalone`` のテーマは ``api = "1.18"`` を宣言し、
 1.12 追加分と 1.16 追加分の必須テンプレートを自前で同梱する必要があります
 （詳細は下記「1.11 から 1.12 で追加された契約」と
 「1.15 から 1.16 で追加された契約」を参照してください）。
 1.13 から 1.15 は任意契約だけを足すため、必須テンプレートと必須ブロックは 1.12 のままでした。
-1.16 は必須テンプレートを 2 件足します
+1.16 は必須テンプレートを 2 件足します。
+1.17 は任意契約だけを足すため、必須テンプレートと必須ブロックは 1.16 のままです
+1.18 も任意契約だけを足すため、必須セットは 1.16 のままです
 
 開発が安定するまでの間、Theme API の更新は下位互換しない破壊的変更です。
 新しいコアは、以前の ``api`` を宣言するテーマを受理し続けることを約束しません。
@@ -30,7 +32,7 @@ Theme API の現在のバージョンは **1.16** です。
 コアはメジャー ``1`` を実装するテーマを受け入れます。
 テーマがコアの提供するマイナー
 より高いバージョンを要求する場合、検証は失敗します。
-現在の 1.16 コアは 1.0 / 1.1 / 1.2 / 1.3 / 1.4 / 1.5 / 1.6 / 1.7 / 1.8 / 1.9 / 1.10 / 1.11 / 1.12 / 1.13 / 1.14 / 1.15 テーマを受理しますが、次の Theme API 更新が
+現在の 1.18 コアは 1.0 / 1.1 / 1.2 / 1.3 / 1.4 / 1.5 / 1.6 / 1.7 / 1.8 / 1.9 / 1.10 / 1.11 / 1.12 / 1.13 / 1.14 / 1.15 / 1.16 / 1.17 テーマを受理しますが、次の Theme API 更新が
 同じ約束を引き継ぐとは限りません
 
 1.0 から 1.1 で追加された任意の契約:
@@ -357,12 +359,70 @@ enhancer はこの 2 つをクラスで取得し、どちらかが欠けると�
   ``maatlog_right_rail`` へ名前を変えてください
 - ``.maatlog-toc`` は ``<aside>`` から ``<nav>`` に変わりました
 
+1.16 から 1.17 で追加された任意の契約:
+
+* **任意クラス** — ``.maatlog-copy-link-status``
+* **任意属性** — ``data-maatlog-copy-state``、 ``data-maatlog-copy-label``
+
+記事本文の見出しに Sphinx が出力する permalink （ ``a.headerlink`` ）を、
+単一 runtime の ``heading-copy-link`` enhancer が「ジャンプ + コピー」の
+コントロールへ昇格させます。
+対象は ``.maatlog-post-body`` 配下の h2 / h3 / h4 だけで、記事タイトルの h1、
+記事以外のページ、 ``dt`` / ``caption`` / ``figcaption`` の permalink は対象外です。
+コピーする URL は ``link[rel="canonical"]`` （絶対 URL のときのみ）または
+``location.href`` からフラグメントを落としたものに、permalink の ``href`` が持つ
+Sphinx 生成のアンカーを足したものです。
+テーマ runtime は独自の slug を作らないので、配布される URL は必ずページ内の
+既存アンカーと一致します。
+
+新しいマークアップは出力しません。
+昇格は ``title`` と ``aria-label`` の書き換えとイベントリスナの登録だけなので、
+JavaScript が無効な読者には Sphinx 既定の permalink がそのまま残り、
+見出しあたりのコントロールは常に 1 つです。
+
+コピー結果は 2 経路で通知します。
+runtime は ``role="status"`` と ``aria-live="polite"`` を持つ
+``.maatlog-copy-link-status`` を**ページに 1 つだけ**生成し、
+``Copied`` または ``Copy failed`` を書きます。
+同時にアンカーへ ``data-maatlog-copy-state`` と ``data-maatlog-copy-label`` を立てるので、
+テーマは ``content: attr(data-maatlog-copy-label)`` で視覚的なバブルを描けます。
+属性は 1600 ミリ秒で外れます。
+``.maatlog-copy-link-status`` を隠すのはテーマの責務で、公式テーマは
+``.maatlog-visually-hidden`` を併用します
+
+``basic.css`` の ``visibility`` と公式 default の ``opacity`` は、どちらも見出しの
+hover でしか permalink を開きません。
+``maatlog-base`` は ``@media (hover: none)`` で両方を上書きし、
+タッチだけの読者にもコントロールを見せます
+
+1.17 から 1.18 で追加された任意の契約:
+
+* **任意キー** — ``maatlog.featured``、 ``maatlog.latest`` （いずれも
+  ``tuple[PostCardView, ...]``。キーは常に存在し、非 Home では空タプル）
+* **任意クラス** — ``.maatlog-post-card-lead``、
+  ``.maatlog-post-card-secondary``
+* **任意属性** — ``data-maatlog-card-variant`` （``lead`` / ``secondary`` /
+  ``latest`` / ``featured``）、 ``data-maatlog-component`` の値 ``featured`` と
+  ``latest``
+
+専用 Home では ``maatlog.posts`` は ``featured + latest`` である。
+アーカイブがトップを兼ねるページでは ``maatlog.posts`` は時系列のページ窓のまま
+で、 ``featured`` / ``latest`` はその表示投影である。
+``FEATURED_LIMIT`` は 3。4 件目以降の指定記事は表示 Featured に出ないことだけを
+理由に Latest から除外しない。
+公式テーマのマークアップ更新は任意であり、旧テーマは ``posts`` と
+``featured_count`` スライスを使い続けてよい。
+``featured`` は最大 3 件である。
+上位の選択処理は不足分を最新公開記事で補完した列を
+``featured_posts`` 接続口へ渡す（設定 ``maatlog_featured_posts``）。
+選択処理の補完なしで 3 件未満を接続口へ直接渡した場合の旧テーマ互換は約束しない。
+
 1.0 から 1.11 までの必須テンプレートと必須ブロックは変わっていませんでした。
 ``implementation = "inherits-base"`` のテーマは、宣言する API が ``"1.0"`` から
-``"1.16"`` のどれでも引き続き検証を通ります（``maatlog-base`` の継承チェーン経由で
+``"1.18"`` のどれでも引き続き検証を通ります（``maatlog-base`` の継承チェーン経由で
 1.12 追加分と 1.16 追加分の必須テンプレート／ブロックを取得するため）。
 1.16 で追加される必須ブロックはありません。
-``implementation = "standalone"`` のテーマは ``api = "1.16"`` を宣言し、
+``implementation = "standalone"`` のテーマは ``api = "1.18"`` を宣言し、
 1.12 追加分の必須テンプレートと必須ブロック、および 1.16 追加分の必須テンプレートを
 自前で持つ必要があります。
 ``"1.11"`` 以下のままでは ``template-missing`` / ``block-missing`` で、
@@ -399,6 +459,13 @@ enhancer はこの 2 つをクラスで取得し、どちらかが欠けると�
 
 * ``maatlog-base`` — 契約の実装（Sphinx の ``basic`` を継承）
 * ``maatlog-default`` — すぐに使えるテーマ（ ``maatlog-base`` を継承）
+
+公式テーマは ``api = "1.18"`` を宣言します。
+``maatlog-base`` は ``standalone``、 ``maatlog-default`` は ``inherits-base`` です。
+第三者の ``inherits-base`` テーマは ``"1.0"`` から ``"1.18"`` のどれでも検証を通ります。
+旧テーマは ``maatlog.posts`` と ``featured_count`` スライスを使い続けてよい。
+``maatlog/home.html`` が無いときは ``maatlog.theme.home-template-missing`` を警告し、
+アーカイブルート 1 ページ目がトップを兼ねます。
 
 デフォルトテーマは次のように有効化します::
 
@@ -562,7 +629,9 @@ Theme API 1.2 から、 ``maatlog/components/sidebar.html`` の出力はレイ�
   このときブログのトップは
   アーカイブルートの 1 ページ目が引き受け、その  ``is_home`` が真になります
 * ``maatlog/components/post-grid.html`` — featured グリッドと通常カード一覧。
-  ``cards`` と任意の ``featured_count`` を受け取り、 ``maatlog`` 名前空間は読みません
+  ``cards`` と任意の ``featured_count`` に加え、任意の ``featured_cards`` /
+  ``latest_cards`` / ``latest_heading`` を受け取ります。分離変数が定義されて
+  いればそちらを優先します。 ``maatlog`` 名前空間は読みません
 * ``maatlog/components/search.html`` — 検索フォーム。
   ``banner.html`` から
   ``include`` されます
@@ -632,11 +701,13 @@ MaatLog のすべてのテンプレートは、トップレベルの  ``maatlog`
 
 ::
 
-    maatlog.api_version   # "1.16"
+    maatlog.api_version   # "1.18"
     maatlog.version       # MaatLog ディストリビューションのバージョン（例 "0.1.0"）
     maatlog.page_kind     # "post" | "archive" | "home" | "normal" | "profile"
     maatlog.post          # PostView | None
     maatlog.posts         # tuple[PostCardView, ...]
+    maatlog.featured      # tuple[PostCardView, ...]  Home の Featured。非 Home では ()
+    maatlog.latest        # tuple[PostCardView, ...]  Home の Latest。非 Home では ()
     maatlog.archive       # ArchiveView | None
     maatlog.profile       # AuthorProfileView | None
     maatlog.author_summaries  # tuple[AuthorSummaryView, ...]
@@ -728,8 +799,9 @@ MaatLog のすべてのテンプレートは、トップレベルの  ``maatlog`
 カスタムテーマが別の要素で出した場合、公式テーマのレイアウト規則は適用されません
 
 コンポーネントのルート要素は
-``data-maatlog-component="post|post-card|archive|pagination|sidebar|feed-links|right-rail|author-summary"``
+``data-maatlog-component="post|post-card|archive|pagination|sidebar|feed-links|right-rail|author-summary|featured|latest"``
 を公開します。
+``featured`` と ``latest`` は Theme API 1.18 の任意属性です。
 MaatLog のコアは必須の JavaScript を同梱しません。
 データ属性は
 プログレッシブエンハンスメントのための安定したフックです
@@ -743,9 +815,12 @@ MaatLog のコアは必須の JavaScript を同梱しません。
   持ちます
 * ``.maatlog-hero-title``、 ``.maatlog-hero-tagline``、 ``.maatlog-hero-meta``、
   ``.maatlog-hero-updated``
-* ``.maatlog-post-featured`` — トップで先頭 3 件を並べるグリッド
+* ``.maatlog-post-featured`` — トップの Featured 容器（最大 3 件）
+* ``.maatlog-post-card-lead`` — Featured 1 件目のカード
+* ``.maatlog-post-card-secondary`` — Featured 2・3 件目のカード
 * ``.maatlog-post-card-featured`` — featured として描画された投稿カード
-* ``.maatlog-post-list-heading`` — featured の下に続く一覧の見出し
+* ``.maatlog-post-card-eyebrow`` — Home カードでタイトルの上に出すカテゴリ
+* ``.maatlog-post-list-heading`` — featured の下に続く一覧の見出し（Home では `Latest articles`）
 * ``.maatlog-post-grid`` — featured 以外のカードを並べるグリッド
 * ``.maatlog-post-eyebrow`` — タイトルの上に出るカテゴリ
 * ``.maatlog-post-tagline`` — タイトルの下に出る抜粋

@@ -111,7 +111,7 @@ def test_core_is_compatible_with_equal_or_lower_minor() -> None:
 
 
 def test_core_theme_api_is_the_current_contract_version() -> None:
-    assert CORE_THEME_API == ThemeApiVersion(major=1, minor=16)
+    assert CORE_THEME_API == ThemeApiVersion(major=1, minor=18)
 
 
 def test_load_maatlog_section_reads_toml() -> None:
@@ -161,14 +161,24 @@ def test_theme_models_are_frozen_pydantic() -> None:
 
 
 @pytest.mark.parametrize("theme_name", ["maatlog-base", "maatlog-default"])
-def test_bundled_theme_manifest_requires_api_1_8(theme_name: str) -> None:
+def test_bundled_theme_manifest_declares_core_api(theme_name: str) -> None:
     manifest_path = (
         Path(__file__).resolve().parents[2] / "src" / "maatlog" / "themes" / theme_name / "maatlog-theme.toml"
     )
     section = load_maatlog_section(manifest_path.read_text(encoding="utf-8"))
     manifest = parse_and_validate_manifest(section, core_api=CORE_THEME_API)
 
-    assert manifest.api == ThemeApiVersion(major=1, minor=8)  # manifest pins to 1.8
+    assert manifest.api == CORE_THEME_API
+
+
+def test_inherits_base_theme_at_1_8_is_accepted_by_current_core() -> None:
+    manifest = parse_and_validate_manifest(
+        {"api": "1.8", "implementation": "inherits-base"},
+        core_api=CORE_THEME_API,
+    )
+
+    assert manifest.api == ThemeApiVersion(major=1, minor=8)
+    assert manifest.implementation is ThemeImplementation.INHERITS_BASE
 
 
 def test_required_contract_constants() -> None:
@@ -180,7 +190,7 @@ def test_required_contract_constants() -> None:
 
 
 def test_core_theme_api_renders_as_a_dotted_string() -> None:
-    assert str(CORE_THEME_API) == "1.16"
+    assert str(CORE_THEME_API) == "1.18"
 
 
 def test_older_theme_api_versions_stay_compatible() -> None:
@@ -200,6 +210,9 @@ def test_older_theme_api_versions_stay_compatible() -> None:
     assert is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=13))
     assert is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=14))
     assert is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=15))
+    assert is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=16))
+    assert is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=17))
+    assert is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=18))
     assert not is_compatible(CORE_THEME_API, ThemeApiVersion(major=2, minor=0))
 
 
@@ -453,8 +466,13 @@ def test_core_theme_api_is_bumped_for_the_share_contract() -> None:
 
 
 def test_core_theme_api_is_bumped_for_the_right_rail_contract() -> None:
-    # Issue #102 の right rail は 1.16 の必須契約。
-    assert (CORE_THEME_API.major, CORE_THEME_API.minor) == (1, 16)
+    # Issue #102 の right rail は 1.16 の必須契約。以降のマイナーがそれを包含する。
+    assert (CORE_THEME_API.major, CORE_THEME_API.minor) >= (1, 16)
+
+
+def test_core_theme_api_is_bumped_for_the_heading_copy_contract() -> None:
+    # Issue #59 の見出しコピーは 1.17 の任意契約。以降のマイナーがそれを包含する。
+    assert (CORE_THEME_API.major, CORE_THEME_API.minor) >= (1, 17)
 
 
 def test_profile_templates_are_required() -> None:
@@ -475,7 +493,12 @@ def test_right_rail_components_are_required_templates() -> None:
     assert "maatlog/components/author-summary.html" in REQUIRED_TEMPLATES
 
 
-def test_core_api_is_one_sixteen() -> None:
+def test_core_api_is_one_eighteen() -> None:
     from maatlog.theme_api import CORE_THEME_API
 
-    assert str(CORE_THEME_API) == "1.16"
+    assert str(CORE_THEME_API) == "1.18"
+
+
+def test_core_theme_api_is_bumped_for_the_magazine_home_contract() -> None:
+    # Issue #177 の featured/latest キーは 1.18 の任意契約。
+    assert (CORE_THEME_API.major, CORE_THEME_API.minor) >= (1, 18)

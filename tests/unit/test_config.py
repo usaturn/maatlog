@@ -367,3 +367,27 @@ def test_content_width_rejects_non_strings(value: object) -> None:
         MaatlogConfig.from_values({"maatlog_content_width": value})
 
     assert error.value.diagnostics[0].field == "maatlog_content_width"
+
+
+def test_featured_posts_default_to_none() -> None:
+    assert CONFIG_VALUES["maatlog_featured_posts"] == (None, "env")
+    assert MaatlogConfig.from_values({}).featured_posts is None
+
+
+def test_featured_posts_accept_a_slug_sequence() -> None:
+    config = MaatlogConfig.from_values({"maatlog_featured_posts": [" lead ", "two"]})
+    assert config.featured_posts == ("lead", "two")
+
+
+def test_featured_posts_accept_an_empty_sequence() -> None:
+    assert MaatlogConfig.from_values({"maatlog_featured_posts": []}).featured_posts == ()
+
+
+@pytest.mark.parametrize("value", ["lead", b"lead", {"lead": "Lead"}, {"lead"}, 1, True, [""], ["  "], [1]])
+def test_featured_posts_reject_invalid_shapes(value: object) -> None:
+    with pytest.raises(MaatlogBuildError) as caught:
+        MaatlogConfig.from_values({"maatlog_featured_posts": value})
+    diagnostic = caught.value.diagnostics[0]
+    assert diagnostic.code == "maatlog.config.invalid"
+    assert diagnostic.field == "maatlog_featured_posts"
+    assert diagnostic.expected == "None or a sequence of non-empty slugs"

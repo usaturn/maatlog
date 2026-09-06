@@ -20,6 +20,7 @@ from maatlog.authors import AuthorProfile
 from maatlog.config import TaxonomyAxis
 from maatlog.domain import MaatlogDomain
 from maatlog.errors import Diagnostic, MaatlogBuildError, format_diagnostic, safe_value
+from maatlog.featured import select_featured_posts
 from maatlog.feeds import write_feeds_after_success
 from maatlog.model import Post, PublicationStatus
 from maatlog.outputs import safe_owned_path
@@ -67,6 +68,10 @@ FATAL_CODE_INVENTORY: frozenset[str] = frozenset(
         "maatlog.datetime.invalid",
         "maatlog.datetime.order",
         "maatlog.config.invalid",
+        "maatlog.featured.unknown",
+        "maatlog.featured.unpublished",
+        "maatlog.featured.duplicate",
+        "maatlog.featured.self",
         "maatlog.author.link-invalid",
         "maatlog.author.profile-unknown",
         "maatlog.author.featured-unknown",
@@ -380,6 +385,42 @@ DIAGNOSTIC_CASES: dict[str, dict[str, Any]] = {
         "code": "maatlog.generated-docname.conflict",
         "field": "docname",
     },
+    "featured-unknown": {
+        "files": {
+            "post.rst": _post_rst(extra_fields=":maatlog-published-at: 2026-07-01T00:00:00Z"),
+        },
+        "config": {"maatlog_featured_posts": ["ghost"]},
+        "code": "maatlog.featured.unknown",
+        "field": "maatlog_featured_posts",
+    },
+    "featured-unpublished": {
+        "files": {"post.rst": _post_rst()},
+        "config": {"maatlog_featured_posts": ["valid"]},
+        "code": "maatlog.featured.unpublished",
+        "field": "maatlog_featured_posts",
+    },
+    "featured-duplicate": {
+        "files": {
+            "post.rst": _post_rst(
+                slug="lead",
+                extra_fields=":maatlog-published-at: 2026-07-01T00:00:00Z",
+            ),
+        },
+        "config": {"maatlog_featured_posts": ["lead", "lead"]},
+        "code": "maatlog.featured.duplicate",
+        "field": "maatlog_featured_posts",
+    },
+    "featured-self": {
+        "files": {
+            "post.rst": _post_rst(
+                slug="welcome",
+                extra_fields=":maatlog-published-at: 2026-07-01T00:00:00Z",
+            ),
+        },
+        "config": {"maatlog_home_docname": "post", "maatlog_featured_posts": ["welcome"]},
+        "code": "maatlog.featured.self",
+        "field": "maatlog_featured_posts",
+    },
 }
 
 
@@ -422,6 +463,7 @@ def test_fatal_diagnostic_has_location_field_and_expected(
             "maatlog_author_profiles.alice.links[0].url",
             "SOURCE_DATE_EPOCH",
             "docname",
+            "maatlog_featured_posts",
         }
     )
 
@@ -577,6 +619,10 @@ UNIT_FATAL_CASES: tuple[tuple[str, str, str], ...] = (
         "featured-foreign",
     ),
     ("maatlog.author.about-unknown", "maatlog_author_profiles.alice.about_docname", "about-unknown"),
+    ("maatlog.featured.unknown", "maatlog_featured_posts", "featured-slug-unknown"),
+    ("maatlog.featured.unpublished", "maatlog_featured_posts", "featured-slug-unpublished"),
+    ("maatlog.featured.duplicate", "maatlog_featured_posts", "featured-slug-duplicate"),
+    ("maatlog.featured.self", "maatlog_featured_posts", "featured-slug-self"),
 )
 
 
@@ -641,8 +687,43 @@ def _raise_unit_fatal(
         return _raise_profile_diagnostic({"bob": AuthorProfile(featured_posts=("only",))}, tmp_path=tmp_path)
     if kind == "about-unknown":
         return _raise_profile_diagnostic({"alice": AuthorProfile(about_docname="authors/absent")}, tmp_path=tmp_path)
+    if kind in {
+        "featured-slug-unknown",
+        "featured-slug-unpublished",
+        "featured-slug-duplicate",
+        "featured-slug-self",
+    }:
+        return _raise_featured_slug_fatal(kind)
     msg = f"unknown unit fatal kind: {kind}"
     raise AssertionError(msg)
+
+
+def _raise_featured_slug_fatal(kind: str) -> MaatlogBuildError:
+    home_docname: str | None = None
+    if kind == "featured-slug-unknown":
+        configured: tuple[str, ...] = ("ghost",)
+        posts: tuple[Post, ...] = ()
+    elif kind == "featured-slug-unpublished":
+        configured = ("draft",)
+        posts = (_unit_post(slug="draft").model_copy(update={"status": PublicationStatus.DRAFT}),)
+    elif kind == "featured-slug-duplicate":
+        configured = ("lead", "lead")
+        posts = (_unit_post(slug="lead", docname="lead"),)
+    elif kind == "featured-slug-self":
+        configured = ("welcome",)
+        posts = (_unit_post(slug="welcome", docname="index"),)
+        home_docname = "index"
+    else:
+        msg = f"unknown featured slug kind: {kind}"
+        raise AssertionError(msg)
+    with pytest.raises(MaatlogBuildError) as caught:
+        select_featured_posts(
+            configured,
+            posts_by_docname={item.docname: item for item in posts},
+            published=tuple(item for item in posts if item.status is PublicationStatus.PUBLISHED),
+            home_docname=home_docname,
+        )
+    return caught.value
 
 
 @pytest.mark.parametrize(("code", "field", "kind"), UNIT_FATAL_CASES)

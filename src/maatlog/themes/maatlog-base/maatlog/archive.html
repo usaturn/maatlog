@@ -86,11 +86,18 @@
 
   {%- block maatlog_archive_items -%}
   <div class="maatlog-post-list">
-    {%- with cards=maatlog.posts, featured_count=(3 if maatlog.archive and maatlog.archive.is_home else 0) -%}
+    {%- if maatlog.archive and maatlog.archive.is_home -%}
+    {%- with featured_cards=maatlog.featured, latest_cards=maatlog.latest, latest_heading="Latest articles" -%}
     {%- include "maatlog/components/post-grid.html" -%}
     {%- endwith -%}
+    {%- else -%}
+    {%- with cards=maatlog.posts -%}
+    {%- include "maatlog/components/post-grid.html" -%}
+    {%- endwith -%}
+    {%- endif -%}
   </div>
   {%- endblock maatlog_archive_items -%}
+
 
   {%- block maatlog_post_header -%}{%- endblock maatlog_post_header -%}
   {%- block maatlog_post_meta -%}{%- endblock maatlog_post_meta -%}

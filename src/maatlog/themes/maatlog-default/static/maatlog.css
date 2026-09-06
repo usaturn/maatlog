@@ -243,6 +243,15 @@ section.maatlog-profile {
   text-transform: uppercase;
 }
 
+.maatlog-post-card-eyebrow {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--maatlog-color-muted);
+}
+
 .maatlog-post-header h1 {
   margin: 0;
   max-width: var(--maatlog-content-width, 42rem);
@@ -775,12 +784,30 @@ section.maatlog-profile {
   margin-bottom: var(--maatlog-space-xl, 3rem);
 }
 
+[data-maatlog-component="featured"] {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  gap: var(--maatlog-space-md, 1rem);
+  margin-bottom: var(--maatlog-space-xl, 3rem);
+}
+
 /* Latest: a plain responsive card grid. */
 .maatlog-post-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
   gap: var(--maatlog-space-md, 1rem);
   margin-bottom: var(--maatlog-space-lg, 2rem);
+}
+
+/* Home Latest uses wider tracks so 1920px lands on three columns and
+   1280px on two. The archive grid above keeps its 17rem tracks. */
+.maatlog-layout-page-home .maatlog-post-grid,
+.maatlog-post-featured ~ .maatlog-post-grid,
+[data-maatlog-component="latest"] {
+  grid-template-columns: repeat(
+    auto-fill,
+    minmax(max(20rem, calc((100% - 2 * var(--maatlog-space-md, 1rem)) / 3)), 1fr)
+  );
 }
 
 .maatlog-post-featured .maatlog-post-card,
@@ -793,8 +820,16 @@ section.maatlog-profile {
   grid-column: 1 / -1;
 }
 
+.maatlog-post-featured .maatlog-post-card-lead:only-child {
+  grid-column: 1 / -1;
+}
+
 /* Exactly three: the first card owns the left column across both rows. */
 .maatlog-post-featured .maatlog-post-card:first-child:nth-last-child(3) {
+  grid-row: span 2;
+}
+
+.maatlog-post-featured .maatlog-post-card-lead:nth-last-child(3) {
   grid-row: span 2;
 }
 
@@ -802,9 +837,52 @@ section.maatlog-profile {
   font-size: 1.35rem;
 }
 
-.maatlog-post-featured .maatlog-post-card:first-child:nth-last-child(3) .maatlog-post-card-title {
-  font-size: 1.75rem;
-  letter-spacing: -0.025em;
+/* stylelint-disable no-descending-specificity -- lead title overrides follow the shared card title rules. */
+.maatlog-post-featured .maatlog-post-card:first-child:nth-last-child(3) .maatlog-post-card-title,
+[data-maatlog-card-variant="lead"] .maatlog-post-card-title,
+.maatlog-post-card-lead .maatlog-post-card-title {
+  font-size: 2rem;
+  line-height: 1.25;
+  letter-spacing: -0.03em;
+}
+/* stylelint-enable no-descending-specificity */
+
+/* stylelint-disable no-descending-specificity -- lead box must follow the featured placement rules. */
+[data-maatlog-card-variant="lead"],
+.maatlog-post-card-lead {
+  padding: var(--maatlog-space-lg, 2rem);
+  min-height: 16rem;
+}
+/* stylelint-enable no-descending-specificity */
+
+/* stylelint-disable no-descending-specificity -- secondary title overrides follow the shared card title rules. */
+[data-maatlog-card-variant="secondary"] .maatlog-post-card-title,
+.maatlog-post-card-secondary .maatlog-post-card-title {
+  font-size: 1.2rem;
+}
+/* stylelint-enable no-descending-specificity */
+
+[data-maatlog-card-variant="lead"] .maatlog-post-card-excerpt,
+.maatlog-post-card-lead .maatlog-post-card-excerpt {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  overflow: hidden;
+}
+
+[data-maatlog-card-variant="secondary"] .maatlog-post-card-excerpt,
+.maatlog-post-card-secondary .maatlog-post-card-excerpt {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+[data-maatlog-card-variant="latest"] .maatlog-post-card-excerpt {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
 }
 
 .maatlog-post-list-heading {
@@ -821,6 +899,12 @@ section.maatlog-profile {
   aspect-ratio: 16 / 9;
   object-fit: cover;
   border-radius: var(--maatlog-radius-md);
+}
+
+[data-maatlog-card-variant="lead"] .maatlog-post-card-image,
+.maatlog-post-card-lead .maatlog-post-card-image {
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
 }
 
 .maatlog-post-hero-image {
@@ -882,6 +966,15 @@ img {
   .maatlog-post-grid {
     grid-template-columns: minmax(0, 1fr);
   }
+
+  [data-maatlog-component="featured"] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Home の 1 列上書きはここに置かない。width <= 48rem では 64rem ブロックも
+     一致し、同 specificity では後の宣言が勝つため、64rem より前の 1 列は
+     Home 2 列に負ける。Home 用は 64rem より後ろの narrow ブロックに置く。
+     このブロックに layout 接頭辞の語を足さない（判定ヘルパーが最初の一致を返す）。 */
 }
 
 /* Category と tag は同じ surface を共有する。区別は tag の "#" 接頭辞が担う。 */
@@ -902,6 +995,30 @@ img {
     color var(--maatlog-motion-fast) ease;
 }
 
+/* Home の tag は category の塗り pill より一段 quiet にする。Archive の
+   pill 自体は変えない。テストが引く featured セレクタをグループ末尾に置く。 */
+.maatlog-layout-page-home .maatlog-post-card-tags .maatlog-taxonomy-link,
+[data-maatlog-component="featured"] .maatlog-post-card-tags .maatlog-taxonomy-link,
+[data-maatlog-component="latest"] .maatlog-post-card-tags .maatlog-taxonomy-link,
+.maatlog-post-featured .maatlog-post-card-tags .maatlog-taxonomy-link {
+  background: transparent;
+  color: var(--maatlog-color-muted);
+  border: 1px solid var(--maatlog-color-border);
+}
+
+.maatlog-layout-page-home .maatlog-post-card-authors,
+[data-maatlog-component="featured"] .maatlog-post-card-authors,
+[data-maatlog-component="latest"] .maatlog-post-card-authors,
+.maatlog-post-featured .maatlog-post-card-authors {
+  color: var(--maatlog-color-muted);
+}
+
+.maatlog-post-card-lead .maatlog-post-card-categories .maatlog-taxonomy-link,
+[data-maatlog-card-variant="lead"] .maatlog-post-card-categories .maatlog-taxonomy-link {
+  font-size: 0.85rem;
+}
+
+/* stylelint-disable-next-line no-descending-specificity -- generic hover follows the Home quiet tag overrides. */
 .maatlog-taxonomy-link:hover {
   background: var(--maatlog-color-surface-hover);
   color: var(--maatlog-color-link);
@@ -921,6 +1038,7 @@ img {
 }
 
 /* カードの著者リンクにはクラスが付かないので、ラッパ側から打ち消す。 */
+/* stylelint-disable-next-line no-descending-specificity -- card author links opt out after the Home tag overrides. */
 .maatlog-post-card-authors .maatlog-taxonomy-link {
   padding: 0;
   background: none;
@@ -930,6 +1048,15 @@ img {
   text-decoration: underline;
   text-decoration-thickness: 0.1em;
   text-underline-offset: 0.15em;
+}
+
+/* Home では著者も tag と同じく quiet にする。Archive の著者リンク色は変えない。 */
+/* stylelint-disable-next-line no-descending-specificity -- Home author override follows the generic card author rule. */
+.maatlog-layout-page-home .maatlog-post-card-authors .maatlog-taxonomy-link,
+[data-maatlog-component="featured"] .maatlog-post-card-authors .maatlog-taxonomy-link,
+[data-maatlog-component="latest"] .maatlog-post-card-authors .maatlog-taxonomy-link,
+.maatlog-post-featured .maatlog-post-card-authors .maatlog-taxonomy-link {
+  color: var(--maatlog-color-muted);
 }
 
 .maatlog-home-intro {
@@ -1474,11 +1601,25 @@ img {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  [data-maatlog-component="featured"] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .maatlog-post-grid {
     grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
   }
 
+  .maatlog-layout-page-home .maatlog-post-grid,
+  .maatlog-post-featured ~ .maatlog-post-grid,
+  [data-maatlog-component="latest"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .maatlog-post-featured .maatlog-post-card:first-child:nth-last-child(3) {
+    grid-row: auto;
+  }
+
+  .maatlog-post-featured .maatlog-post-card-lead:nth-last-child(3) {
     grid-row: auto;
   }
 }
@@ -1537,6 +1678,14 @@ img {
   .maatlog-search,
   .maatlog-search-input {
     width: 100%;
+  }
+
+  /* Home Latest も 1 列にする。このブロックは 64rem ブロックより後ろにあるため、
+     同 specificity の Home 2 列指定に narrow 1 列が勝つ。 */
+  .maatlog-layout-page-home .maatlog-post-grid,
+  .maatlog-post-featured ~ .maatlog-post-grid,
+  [data-maatlog-component="latest"] {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -1939,4 +2088,51 @@ html.maatlog-sidebar-open .maatlog-back-to-top {
 .maatlog-share-status {
   font-size: 0.9rem;
   color: var(--maatlog-color-muted, #5f6b7a);
+}
+
+/* 見出しリンクのコピー — Issue #59。テーマごとに maatlog.css は 1 枚だけ
+   出力される（default は base の CSS を読まない）ため、base と同じ構造規則を
+   ここにも置く。`.maatlog-share` と同じ二重持ちで、配色と浮き方は default
+   固有の値を与える。 */
+/* stylelint-disable-next-line no-descending-specificity -- 上の hover 露出規則は opacity だけを変え、こことプロパティ集合が交わらない。 */
+.maatlog-post-body :is(h2, h3, h4) > a.headerlink {
+  position: relative;
+
+  /* ¶ 自体は選択させない。見出しテキストの選択は妨げない。 */
+  user-select: none;
+}
+
+/* 結果バブル。文言は data 属性で JS から渡し、CSS には埋め込まない。 */
+.maatlog-post-body :is(h2, h3, h4) > a.headerlink[data-maatlog-copy-state]::after {
+  content: attr(data-maatlog-copy-label);
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: 100%;
+  margin-inline-start: 0.4em;
+  padding: 0.1em 0.5em;
+  border: 1px solid var(--maatlog-color-border, #d0d0d0);
+  border-radius: 0.25rem;
+  background: var(--maatlog-color-surface, #f8fafc);
+  box-shadow: 0 1px 3px rgb(15 23 42 / 12%);
+  color: var(--maatlog-color-muted, #475569);
+  font-size: 0.75rem;
+  font-weight: 400;
+  white-space: nowrap;
+
+  /* 通常フローの外に置き、隣の文字のクリックも奪わない。 */
+  pointer-events: none;
+}
+
+.maatlog-post-body :is(h2, h3, h4) > a.headerlink[data-maatlog-copy-state="failed"]::after {
+  color: var(--maatlog-color-text, #0f172a);
+}
+
+/* hover を持たない環境では permalink を常時可視にする。テーマごとに
+   maatlog.css は 1 枚だけ出力される（default は base の CSS を読まない）ため、
+   base と同じ規則をここにも置く。`.maatlog-share` と同じ二重持ちである。 */
+@media (hover: none) {
+  .maatlog-post-body :is(h2, h3, h4) > a.headerlink {
+    visibility: visible;
+    opacity: 1;
+  }
 }

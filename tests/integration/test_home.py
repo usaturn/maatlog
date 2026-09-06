@@ -122,13 +122,32 @@ def test_archive_root_keeps_hero_when_home_is_not_configured(make_project: Proje
     assert home.select_one(".maatlog-hero") is None
 
 
-def test_home_respects_page_size(make_project: ProjectFactory) -> None:
+def test_home_page_size_caps_latest_not_featured(make_project: ProjectFactory) -> None:
+    files = {
+        "index.rst": "Example Blog\n============\n\nWelcome to the blog.\n",
+        **{
+            f"post{n}.md": f"""---
+maatlog-post: true
+maatlog-slug: post{n}
+maatlog-published-at: 2026-07-2{n}T09:00:00Z
+---
+# Post {n}
+
+Body {n}.
+"""
+            for n in (1, 2, 3, 4, 5)
+        },
+    }
     result = make_project(
-        files=HOME_PROJECT,
+        files=files,
         config={"maatlog_home_docname": "index", "maatlog_page_size": 1},
     ).build()
     home = result.html("index.html")
-    assert len(home.select(".maatlog-post-card")) == 1
+    featured = home.select(".maatlog-post-featured .maatlog-post-card")
+    latest = home.select(".maatlog-post-grid .maatlog-post-card")
+    assert len(featured) == 3
+    assert len(latest) == 1
+    assert len(home.select(".maatlog-post-card")) == 4
 
 
 def test_home_that_is_also_a_post_still_captures_feed_body(make_project: ProjectFactory) -> None:

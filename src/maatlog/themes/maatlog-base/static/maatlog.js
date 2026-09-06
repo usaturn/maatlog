@@ -1452,6 +1452,169 @@
     apply: enhanceShare,
   });
 
+  // ---------------------------------------------------------------------------
+  // Heading copy link — Issue #59
+  // ---------------------------------------------------------------------------
+
+  /**
+   * ``title`` と ``aria-label`` に置く操作名。
+   *
+   * Sphinx 既定の "Link to this heading" はジャンプしか説明しない。昇格後の
+   * permalink は「コピーもする」ので、その主目的を名前にする。``title`` は
+   * hover 時のツールチップとして機能の発見手段も兼ねる。
+   */
+  const HEADING_COPY_LABEL = "Copy link to this heading";
+
+  /** How long the "Copied" bubble stays on the heading, in milliseconds. */
+  const HEADING_COPY_FEEDBACK_MS = 1600;
+
+  /** The single live region heading copy results are announced through. */
+  let headingCopyStatusElement = /** @type {HTMLElement | null} */ (null);
+
+  /** Pending bubble timers, one per heading anchor. @type {WeakMap<Element, number>} */
+  const headingCopyTimers = new WeakMap();
+
+  /**
+   * The same-document fragment *anchor* points at, or null.
+   *
+   * Sphinx' permalink always carries the section's own anchor, so the fragment
+   * is read straight off the element: the runtime never invents a slug of its
+   * own and can never disagree with the anchors already in the page.
+   *
+   * @param {Element} anchor
+   * @returns {string | null}
+   */
+  function headingCopyFragment(anchor) {
+    const href = anchor.getAttribute("href") ?? "";
+    if (!href.startsWith("#") || href.length < 2) {
+      return null;
+    }
+    return href;
+  }
+
+  /**
+   * The absolute URL a heading press should put on the clipboard.
+   *
+   * Base comes from the same place the share button uses: the canonical link
+   * when it is absolute, the address bar otherwise. Dropping the base's own
+   * fragment is not optional — the press itself moves ``location.href`` to the
+   * heading, and a reader may have opened the page on another anchor, so
+   * without the cut the result would carry two fragments.
+   *
+   * @param {string} fragment A same-document fragment, "#" included.
+   * @returns {string}
+   */
+  function headingCopyUrl(fragment) {
+    return resolveShareUrl().split("#")[0] + fragment;
+  }
+
+  /**
+   * The one live region this feature announces through.
+   *
+   * A page has many headings but must have exactly one live region: several
+   * regions updating at once make screen readers talk over themselves. The
+   * element is created on the first press, so JavaScript-less readers get no
+   * stray markup at all.
+   *
+   * @returns {HTMLElement}
+   */
+  function headingCopyStatus() {
+    if (headingCopyStatusElement !== null && headingCopyStatusElement.isConnected) {
+      return headingCopyStatusElement;
+    }
+    const status = document.createElement("span");
+    status.className = "maatlog-copy-link-status maatlog-visually-hidden";
+    status.setAttribute("role", "status");
+    status.setAttribute("aria-live", "polite");
+    document.body.append(status);
+    headingCopyStatusElement = status;
+    return status;
+  }
+
+  /**
+   * Report one copy attempt through both channels.
+   *
+   * Visually the anchor grows a bubble driven by ``data-maatlog-copy-label``;
+   * non-visually the live region says the same thing. Neither channel is the
+   * only one, so the result never depends on seeing the page.
+   *
+   * @param {HTMLAnchorElement} anchor
+   * @param {"copied" | "failed"} state
+   * @returns {void}
+   */
+  function showHeadingCopyResult(anchor, state) {
+    const label = state === "copied" ? "Copied" : "Copy failed";
+    headingCopyStatus().textContent = label;
+    anchor.dataset.maatlogCopyState = state;
+    anchor.dataset.maatlogCopyLabel = label;
+
+    const pending = headingCopyTimers.get(anchor);
+    if (pending !== undefined) {
+      // 連打しても最後の押下から所定時間だけ出す。
+      window.clearTimeout(pending);
+    }
+    headingCopyTimers.set(
+      anchor,
+      window.setTimeout(() => {
+        headingCopyTimers.delete(anchor);
+        delete anchor.dataset.maatlogCopyState;
+        delete anchor.dataset.maatlogCopyLabel;
+      }, HEADING_COPY_FEEDBACK_MS),
+    );
+  }
+
+  /**
+   * Upgrade one heading permalink into a "jump and copy" control.
+   *
+   * Progressive enhancement: without JavaScript the element stays the plain
+   * permalink Sphinx emitted, which is the whole contract. No new control is
+   * added, so a heading can never end up with two permalink affordances.
+   *
+   * @param {Element} anchor
+   * @returns {void}
+   */
+  function enhanceHeadingCopyLink(anchor) {
+    if (!(anchor instanceof HTMLAnchorElement)) {
+      return;
+    }
+    const fragment = headingCopyFragment(anchor);
+    if (fragment === null) {
+      return;
+    }
+    anchor.title = HEADING_COPY_LABEL;
+    anchor.setAttribute("aria-label", HEADING_COPY_LABEL);
+
+    anchor.addEventListener("click", (event) => {
+      // 修飾キーや副ボタンの押下は「新しいタブで開く」等のブラウザ本来の操作。
+      // クリップボードを書き換えて奪わない。
+      if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) {
+        return;
+      }
+      // preventDefault は呼ばない。ジャンプはブラウザに任せ、コピーだけを足す。
+      const url = headingCopyUrl(fragment);
+      // 直前の押下の結果を先に捨てる。live region は「今押した結果」だけを述べるので、
+      // 残したままだと同じ文字列の再代入になり aria-live が読み直さない。
+      headingCopyStatus().textContent = "";
+      void (async () => {
+        try {
+          await copyToClipboard(url);
+          showHeadingCopyResult(anchor, "copied");
+        } catch {
+          // 非 https や権限なしでも例外を出さない。ジャンプは済んでおり、
+          // アドレスバーに同じ URL が入っているので読者には手段が残る。
+          showHeadingCopyResult(anchor, "failed");
+        }
+      })();
+    });
+  }
+
+  registerEnhancer("heading-copy-link", {
+    // 記事本文の見出しだけ。h1 は記事タイトルなので除く。子結合子により
+    // dt / caption / figcaption の permalink も自然に外れる。
+    selector: ".maatlog-post-body :is(h2, h3, h4) > a.headerlink",
+    apply: enhanceHeadingCopyLink,
+  });
+
   document.documentElement.classList.add("maatlog-js");
   applyTheme(readStoredTheme());
 

@@ -1,25 +1,47 @@
-{# Post grid component. Expects ``cards`` (sequence of PostCardView mappings) and
-   an optional ``featured_count``. Never reads the ``maatlog`` namespace so that
-   it can be included from any render path. #}
-{%- set featured = featured_count if featured_count is defined else 0 -%}
-{%- if cards -%}
-{%- if featured -%}
-<div class="maatlog-post-featured">
-  {%- for card in cards[:featured] -%}
+{# Post grid component. Never reads the ``maatlog`` namespace. #}
+{%- set heading = latest_heading if latest_heading is defined else "Older posts" -%}
+{%- if featured_cards is defined or latest_cards is defined -%}
+{%- set featured_list = featured_cards if featured_cards is defined else [] -%}
+{%- set latest_list = latest_cards if latest_cards is defined else [] -%}
+{%- if featured_list -%}
+<div class="maatlog-post-featured" data-maatlog-component="featured">
+  {%- for card in featured_list -%}
+  {%- with card=card, card_variant=("lead" if loop.first else "secondary"), card_anchor=card.slug -%}
+  {%- include "maatlog/components/post-card.html" -%}
+  {%- endwith -%}
+  {%- endfor -%}
+</div>
+{%- endif -%}
+{%- if latest_list -%}
+<h2 class="maatlog-post-list-heading">{{ heading|e }}</h2>
+<div class="maatlog-post-grid" data-maatlog-component="latest">
+  {%- for card in latest_list -%}
+  {%- with card=card, card_variant="latest", card_anchor=card.slug -%}
+  {%- include "maatlog/components/post-card.html" -%}
+  {%- endwith -%}
+  {%- endfor -%}
+</div>
+{%- endif -%}
+{%- if not featured_list and not latest_list -%}
+<p class="maatlog-archive-empty">No posts yet. Add a document with maatlog metadata to see it listed here.</p>
+{%- endif -%}
+{%- elif cards -%}
+{%- set featured_n = featured_count if featured_count is defined else 0 -%}
+{%- if featured_n -%}
+<div class="maatlog-post-featured" data-maatlog-component="featured">
+  {%- for card in cards[:featured_n] -%}
   {%- with card=card, card_variant="featured", card_anchor=card.slug -%}
   {%- include "maatlog/components/post-card.html" -%}
   {%- endwith -%}
   {%- endfor -%}
 </div>
-{%- if cards|length > featured -%}
-<h2 class="maatlog-post-list-heading">Older posts</h2>
+{%- if cards|length > featured_n -%}
+<h2 class="maatlog-post-list-heading">{{ heading|e }}</h2>
 {%- endif -%}
 {%- endif -%}
-{#- The rest ride in their own grid container so the hero, the featured block
-    and the heading above stay out of the card grid. -#}
-{%- if cards[featured:] -%}
-<div class="maatlog-post-grid">
-  {%- for card in cards[featured:] -%}
+{%- if cards[featured_n:] -%}
+<div class="maatlog-post-grid"{% if featured_n %} data-maatlog-component="latest"{% endif %}>
+  {%- for card in cards[featured_n:] -%}
   {%- with card=card, card_anchor=card.slug -%}
   {%- include "maatlog/components/post-card.html" -%}
   {%- endwith -%}

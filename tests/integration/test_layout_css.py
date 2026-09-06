@@ -680,6 +680,50 @@ def test_default_post_card_image_has_a_fixed_aspect_ratio(make_project: ProjectF
     assert "object-fit: contain" not in rule
 
 
+def test_default_lead_card_uses_magazine_type_and_image_ratio(
+    make_project: ProjectFactory,
+) -> None:
+    css = _stylesheet(make_project, "maatlog-default")
+    title = _css_rule(css, ".maatlog-post-card-lead .maatlog-post-card-title")
+    image = _css_rule(css, ".maatlog-post-card-lead .maatlog-post-card-image")
+    lead = _css_rule(css, ".maatlog-post-card-lead")
+
+    assert "font-size: 2rem" in title
+    assert "aspect-ratio: 4 / 3" in image
+    assert "object-fit: cover" in image
+    assert "padding: var(--maatlog-space-lg" in lead
+    assert "min-height: 16rem" in lead
+
+
+def test_default_secondary_card_stays_compact(make_project: ProjectFactory) -> None:
+    css = _stylesheet(make_project, "maatlog-default")
+    title = _css_rule(css, ".maatlog-post-card-secondary .maatlog-post-card-title")
+    excerpt = _css_rule(css, ".maatlog-post-card-secondary .maatlog-post-card-excerpt")
+
+    assert "font-size: 1.2rem" in title
+    assert "-webkit-line-clamp: 2" in excerpt
+
+
+def test_default_latest_excerpt_clamps_to_three_lines(
+    make_project: ProjectFactory,
+) -> None:
+    css = _stylesheet(make_project, "maatlog-default")
+    excerpt = _css_rule(css, '[data-maatlog-card-variant="latest"] .maatlog-post-card-excerpt')
+    lead_excerpt = _css_rule(css, ".maatlog-post-card-lead .maatlog-post-card-excerpt")
+
+    assert "-webkit-line-clamp: 3" in excerpt
+    assert "-webkit-line-clamp: 4" in lead_excerpt
+
+
+def test_default_generic_card_image_stays_sixteen_by_nine(
+    make_project: ProjectFactory,
+) -> None:
+    css = _stylesheet(make_project, "maatlog-default")
+    rule = _css_rule(css, ".maatlog-post-card-image")
+
+    assert "aspect-ratio: 16 / 9" in rule
+
+
 @pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
 def test_card_taxonomy_groups_use_flex_gap(make_project: ProjectFactory, theme: str) -> None:
     # 区切りが読み上げ専用になった分、視覚的な間隔は gap が担う。
@@ -779,6 +823,73 @@ def test_default_author_links_are_not_badges(make_project: ProjectFactory) -> No
     assert "text-decoration: underline" in card_rule
 
 
+def test_home_card_tags_are_quieter_than_categories(
+    make_project: ProjectFactory,
+) -> None:
+    css = _stylesheet(make_project, "maatlog-default")
+    tag = _css_rule(
+        css,
+        ".maatlog-post-featured .maatlog-post-card-tags .maatlog-taxonomy-link",
+    )
+    author = _css_rule(css, ".maatlog-post-featured .maatlog-post-card-authors")
+
+    assert "background: transparent" in tag
+    assert "color: var(--maatlog-color-muted" in tag
+    assert "border: 1px solid var(--maatlog-color-border" in tag
+    assert "color: var(--maatlog-color-muted" in author
+
+
+def test_medium_breakpoint_collapses_featured_data_component(
+    make_project: ProjectFactory,
+) -> None:
+    block = _media_block_containing(
+        _stylesheet(make_project, "maatlog-default"),
+        "width <= 64rem",
+        '[data-maatlog-component="featured"]',
+    )
+    rule = _css_rule(block, '[data-maatlog-component="featured"]')
+    assert "grid-template-columns: minmax(0, 1fr);" in _normalise(rule)
+
+
+def test_narrow_breakpoint_collapses_featured_data_component(
+    make_project: ProjectFactory,
+) -> None:
+    block = _media_block_containing(
+        _stylesheet(make_project, "maatlog-default"),
+        "width <= 48rem",
+        '[data-maatlog-component="featured"]',
+    )
+    rule = _css_rule(block, '[data-maatlog-component="featured"]')
+    assert "grid-template-columns: minmax(0, 1fr);" in _normalise(rule)
+
+
+def test_home_card_eyebrow_is_a_quiet_kicker(make_project: ProjectFactory) -> None:
+    css = _stylesheet(make_project, "maatlog-default")
+    rule = _css_rule(css, ".maatlog-post-card-eyebrow")
+    assert "text-transform: uppercase" in rule
+    assert "font-size: 0.78rem" in rule
+    assert "color: var(--maatlog-color-muted" in rule
+
+
+def test_home_card_author_links_are_muted(make_project: ProjectFactory) -> None:
+    css = _stylesheet(make_project, "maatlog-default")
+    rule = _css_rule(
+        css,
+        ".maatlog-post-featured .maatlog-post-card-authors .maatlog-taxonomy-link",
+    )
+    assert "color: var(--maatlog-color-muted" in rule
+
+
+def test_archive_taxonomy_pills_keep_badge_fill(
+    make_project: ProjectFactory,
+) -> None:
+    css = _stylesheet(make_project, "maatlog-default")
+    rule = _css_rule(css, ".maatlog-taxonomy-link")
+
+    assert "background: var(--maatlog-badge-background)" in rule
+    assert "color: var(--maatlog-badge-text)" in rule
+
+
 def test_default_focus_outline_reaches_pill_badges(make_project: ProjectFactory) -> None:
     # pill は角丸なので、outline も同じ半径で回らないと角が欠けて見える。
     css = _stylesheet(make_project, "maatlog-default")
@@ -806,12 +917,45 @@ def test_default_featured_block_is_a_bento(make_project: ProjectFactory) -> None
     assert "grid-column: 1 / -1" in solo
 
 
+def test_default_featured_accepts_theme_api_lead_selectors(
+    make_project: ProjectFactory,
+) -> None:
+    css = _stylesheet(make_project, "maatlog-default")
+
+    assert '[data-maatlog-component="featured"]' in css
+    assert ".maatlog-post-card-lead:only-child" in css
+    assert ".maatlog-post-card-lead:nth-last-child(3)" in css
+    lead_span = _css_rule(css, ".maatlog-post-featured .maatlog-post-card-lead:nth-last-child(3)")
+    assert "grid-row: span 2" in lead_span
+    solo = _css_rule(css, ".maatlog-post-featured .maatlog-post-card-lead:only-child")
+    assert "grid-column: 1 / -1" in solo
+    # Task 2 adds a bare-lead box rule (padding/min-height only). It must
+    # never carry grid placement, or 2-item featured rows would break.
+    try:
+        bare_lead = _css_rule(css, ".maatlog-post-card-lead")
+    except ValueError:
+        bare_lead = ""
+    assert "grid-row" not in bare_lead
+    assert "grid-column" not in bare_lead
+
+
 def test_default_latest_cards_use_an_auto_fill_grid(make_project: ProjectFactory) -> None:
     css = _stylesheet(make_project, "maatlog-default")
     rule = _css_rule(css, ".maatlog-post-grid")
 
     assert "display: grid" in rule
     assert "repeat(auto-fill,minmax(17rem,1fr))" in _compact(rule)
+
+
+def test_home_latest_grid_uses_wider_tracks_than_archive(
+    make_project: ProjectFactory,
+) -> None:
+    css = _stylesheet(make_project, "maatlog-default")
+    home = _css_rule(css, '[data-maatlog-component="latest"]')
+
+    assert "repeat(auto-fill,minmax(max(20rem,calc((100%-2*var(--maatlog-space-md,1rem))/3)),1fr))" in _compact(home)
+    archive = _css_rule(css, ".maatlog-post-grid")
+    assert "repeat(auto-fill,minmax(17rem,1fr))" in _compact(archive)
 
 
 def test_default_grid_cards_drop_their_stacking_margin(make_project: ProjectFactory) -> None:
@@ -846,6 +990,39 @@ def test_medium_breakpoint_collapses_the_bento(make_project: ProjectFactory) -> 
         block, ".maatlog-post-featured .maatlog-post-card:first-child:nth-last-child(3)"
     )
     assert "repeat(auto-fill,minmax(15rem,1fr))" in _compact(_css_rule(block, ".maatlog-post-grid"))
+
+
+def test_medium_breakpoint_puts_home_latest_on_two_columns(
+    make_project: ProjectFactory,
+) -> None:
+    block = _media_block_containing(
+        _stylesheet(make_project, "maatlog-default"),
+        "width <= 64rem",
+        '[data-maatlog-component="latest"]',
+    )
+    home = _css_rule(block, '[data-maatlog-component="latest"]')
+    archive = _css_rule(block, ".maatlog-post-grid")
+
+    assert "repeat(2,minmax(0,1fr))" in _compact(home)
+    assert "repeat(auto-fill,minmax(15rem,1fr))" in _compact(archive)
+
+
+def test_narrow_breakpoint_collapses_home_latest_to_one_column(
+    make_project: ProjectFactory,
+) -> None:
+    css = _stylesheet(make_project, "maatlog-default")
+    block = _media_block_containing(
+        css,
+        "width <= 48rem",
+        '[data-maatlog-component="latest"]',
+    )
+    rule = _css_rule(block, '[data-maatlog-component="latest"]')
+    assert "grid-template-columns: minmax(0, 1fr);" in _normalise(rule)
+    # 64rem の Home 2 列より後ろに narrow 1 列が来ること。
+    # 同 specificity では後の宣言が勝つため、順序が逆だと 48rem 幅で 2 列になる。
+    home_rules = _css_rules(css, '[data-maatlog-component="latest"]')
+    assert "minmax(0,1fr)" in _compact(home_rules[-1])
+    assert "repeat(2,minmax(0,1fr))" in _compact(home_rules[-2])
 
 
 def test_narrow_breakpoint_collapses_featured_and_grid(make_project: ProjectFactory) -> None:

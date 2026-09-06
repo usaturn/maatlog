@@ -503,6 +503,18 @@ a {
   z-index: 1;
 }
 
+/* stylelint-disable-next-line no-descending-specificity -- category links must sit above the title stretched-link overlay. */
+.maatlog-post-card-categories a {
+  position: relative;
+  z-index: 1;
+}
+
+/* stylelint-disable-next-line no-descending-specificity -- author links must sit above the title stretched-link overlay. */
+.maatlog-post-card-authors a {
+  position: relative;
+  z-index: 1;
+}
+
 .maatlog-post-featured {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
@@ -1024,4 +1036,42 @@ a {
 /* ドロワー展開中はページをスクロールできず、backdrop とも重なるため出さない。 */
 html.maatlog-sidebar-open .maatlog-back-to-top {
   display: none;
+}
+
+/* 見出しリンクのコピー — Issue #59.
+   Sphinx が出力済みの permalink を runtime が「ジャンプ + コピー」へ昇格させる。
+   新しいコントロールは足さないので、見出しの操作子は常に 1 つのままである。 */
+.maatlog-post-body :is(h2, h3, h4) > a.headerlink {
+  position: relative;
+
+  /* ¶ 自体は選択させない。見出しテキストの選択は妨げない。 */
+  user-select: none;
+}
+
+/* 結果バブル。文言は data 属性で JS から渡し、CSS には埋め込まない。 */
+.maatlog-post-body :is(h2, h3, h4) > a.headerlink[data-maatlog-copy-state]::after {
+  content: attr(data-maatlog-copy-label);
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: 100%;
+  margin-inline-start: 0.4em;
+  padding: 0.1em 0.5em;
+  border: 1px solid var(--maatlog-color-border, #d0d0d0);
+  border-radius: 0.25rem;
+  background: var(--maatlog-color-surface, #f5f5f5);
+  color: var(--maatlog-color-text, #1b1b1b);
+  font-size: 0.75rem;
+  white-space: nowrap;
+
+  /* 通常フローの外に置き、隣の文字のクリックも奪わない。 */
+  pointer-events: none;
+}
+
+/* hover を持たない環境では basic.css の visibility も default の opacity も
+   permalink を隠したままにする。タッチだけの読者に操作手段を残す。 */
+@media (hover: none) {
+  .maatlog-post-body :is(h2, h3, h4) > a.headerlink {
+    visibility: visible;
+    opacity: 1;
+  }
 }

@@ -71,6 +71,8 @@ def test_empty_context_has_all_public_keys() -> None:
         "page_kind",
         "post",
         "posts",
+        "featured",
+        "latest",
         "archive",
         "pagination",
         "navigation",
@@ -80,7 +82,7 @@ def test_empty_context_has_all_public_keys() -> None:
         "profile",
         "author_summaries",
     )
-    assert context.api_version == "1.16"
+    assert context.api_version == "1.18"
     assert context.site == SiteView(title="", tagline=None, archive_url="")
 
 
@@ -95,10 +97,12 @@ def test_context_exposes_the_maatlog_distribution_version() -> None:
 
 def test_empty_context_defaults() -> None:
     context = empty_context()
-    assert context.api_version == "1.16"
+    assert context.api_version == "1.18"
     assert context.page_kind == "normal"
     assert context.post is None
     assert context.posts == ()
+    assert context.featured == ()
+    assert context.latest == ()
     assert context.archive is None
     assert context.pagination is None
     assert context.navigation.newer_post is None
@@ -157,7 +161,7 @@ def test_build_post_context_sets_page_kind(post: PostFactory) -> None:
     assert context.post.page_url == "hello.html"
     assert context.post.body_html == "<p>x</p>"
     mapping = as_template_mapping(context)
-    assert mapping["api_version"] == "1.16"
+    assert mapping["api_version"] == "1.18"
     assert mapping["page_kind"] == "post"
     assert mapping["post"]["body_html"] == "<p>x</p>"
 
@@ -170,6 +174,8 @@ def test_as_template_mapping_preserves_public_key_order() -> None:
         "page_kind",
         "post",
         "posts",
+        "featured",
+        "latest",
         "archive",
         "pagination",
         "navigation",
@@ -219,9 +225,15 @@ def test_post_card_view_uses_supplied_taxonomies(post: PostFactory) -> None:
 
 def test_home_context_shape(post: PostFactory) -> None:
     published = tuple(
-        post(docname=f"p{n}", slug=f"p{n}", title=f"P{n}", published_at=datetime(2026, 8, n + 1, tzinfo=UTC))
+        post(
+            docname=f"p{n}",
+            slug=f"p{n}",
+            title=f"P{n}",
+            published_at=datetime(2026, 8, 5 - n, tzinfo=UTC),
+        )
         for n in range(5)
     )
+    # p0 が 8/5 で最新 → 列は p0, p1, p2, p3, p4
     builder = MagicMock()
 
     def _relative_uri(_from: str, to: str) -> str:
@@ -235,8 +247,11 @@ def test_home_context_shape(post: PostFactory) -> None:
     assert context.page_kind == "home"
     assert context.pagination is None
     assert context.site == site
-    assert len(context.posts) == 3
+    assert [card.slug for card in context.featured] == ["p0", "p1", "p2"]
+    assert [card.slug for card in context.latest] == ["p3", "p4"]
+    assert [card.slug for card in context.posts] == ["p0", "p1", "p2", "p3", "p4"]
     assert context.posts[0].page_url == "p0.html"
+    assert len(context.posts) == 5
     assert context.archive is not None
     assert context.archive.is_home is True
     assert context.archive.kind == "all"
@@ -309,7 +324,7 @@ def test_normal_page_context_keeps_page_kind_normal() -> None:
     context = normal_page_context(site=site, taxonomies=taxonomies, feeds=feeds)
 
     assert context.page_kind == "normal"
-    assert context.api_version == "1.16"
+    assert context.api_version == "1.18"
     assert context.post is None
     assert context.posts == ()
     assert context.archive is None

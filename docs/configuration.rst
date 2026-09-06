@@ -52,6 +52,10 @@
      - 相対 docname の ``str | None``
      - ``None``
      - ``html``
+   * - ``maatlog_featured_posts``
+     - slug のシーケンスまたは ``None``
+     - ``None``
+     - ``env``
    * - ``maatlog_generate_feeds``
      - ``bool``
      - ``True``
@@ -264,18 +268,20 @@
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 著者を特定できないページ（トップページ、タグ・カテゴリ・アーカイブ・検索結果など）で
-右ペインに表示する著者の ID です。既定値は ``None`` で、未設定のときはそれらのページに
-Author Summary を表示しません。
+右ペインに表示する著者の ID です。
+既定値は ``None`` で、未設定のときはそれらのページに
+Author Summary を表示しません
 
 .. code-block:: python
 
    maatlog_default_author = "alice"
 
 ``maatlog_authors`` を設定している場合、そこに無い ID を指定するとビルドが
-``maatlog.config.invalid`` で失敗します。``maatlog_authors`` を設定していない場合、
-著者 ID は記事から動的に登録されるため、この照合は行いません。
+``maatlog.config.invalid`` で失敗します。
+``maatlog_authors`` を設定していない場合、
+著者 ID は記事から動的に登録されるため、この照合は行いません
 
-``maatlog_authors`` の先頭要素が暗黙に選ばれることはありません。
+``maatlog_authors`` の先頭要素が暗黙に選ばれることはありません
 
 アーカイブのルート
 ------------------
@@ -303,13 +309,55 @@ Sphinx ドキュメント名でなければなりません
 ユーザは導入文をそのドキュメントに書き、その下にテーマが
 投稿一覧を描画します
 
-* ホームに並ぶ件数は ``maatlog_page_size`` と同じです。
+``maatlog_featured_posts`` で Featured に出す投稿の slug 列を指定します。
+``None`` または空のシーケンスは未指定と同じです。
+このとき最新の公開投稿から最大 3 件を Featured にします
+
+* 1 件または 2 件を指定したときは、記述順の指定を先頭に置き、
+  足りない分を最新の公開投稿で補完します（重複なし）。
+* 3 件を指定したときは、記述順のまま表示します。
+* 4 件以上を指定したときは全件を検証し、表示は先頭 3 件だけです。
+  4 件目以降は Featured に出ませんが、それだけを理由に Latest や
+  時系列のページ窓から除外しません。
+* 専用ホームの Latest Articles の件数上限は ``maatlog_page_size`` です。
+  Featured は別枠で最大 3 件です。
+* アーカイブ先頭ページがトップを兼ねるときは、 ``maatlog_page_size`` は
+  これまでどおり時系列のページ窓です。
 * ホームはページ送りを持たず、末尾の「All posts」からアーカイブルートへ送ります。
 * ホームが有効なとき、アーカイブルート 1 ページ目の hero は出ません。
 * 指定した docname が存在しないときは ``maatlog.home.docname-unknown`` を警告して
   ホーム化を無効にします。
 * テーマが ``maatlog/home.html`` を持たないときは
   ``maatlog.theme.home-template-missing`` を警告し、通常のページとして描画します
+
+診断
+~~~~
+
+設定の型が不正なときは ``maatlog.config.invalid`` です。
+slug の存在・公開状態・重複・自己指定は公開状態の再計算後に検証し、
+問題があればビルドを失敗させます
+
+.. list-table::
+   :header-rows: 1
+   :widths: 32 68
+
+   * - コード
+     - 条件
+   * - ``maatlog.featured.unknown``
+     - 指定 slug が投稿として存在しない
+   * - ``maatlog.featured.unpublished``
+     - 指定 slug が published ではない
+   * - ``maatlog.featured.duplicate``
+     - 同じ slug が重複している
+   * - ``maatlog.featured.self``
+     - 専用ホーム自身の slug を明示した
+
+例
+~~
+
+::
+
+    maatlog_featured_posts = ["older-slug"]
 
 フィード
 --------
@@ -332,7 +380,8 @@ Sphinx ドキュメント名でなければなりません
 prose（段落・リスト・引用。見出しは対象外）の最大行幅を指定します。
 値は CSS の ``max-width`` として使える宣言値です
 
-* 既定は ``None`` です。このときテーマの既定値
+* 既定は ``None`` です。
+  このときテーマの既定値
   ``clamp(42rem, 24rem + 16vw, 60rem)`` をそのまま使います
 * ``"100%"`` を指定すると、本文が中央列いっぱいまで広がります。
   ウルトラワイドや 4K で本文の右端と右目次の間に空白が残るのを解消できます
@@ -360,7 +409,8 @@ CSS として無効な値を指定したときの挙動はブラウザに依存�
 
 この設定は ``maatlog-base`` を継承したテーマで有効です。
 継承しないテーマは ``maatlog_config_style`` ブロックを実装した場合にだけ
-反映します。 :doc:`theme-api` を参照してください
+反映します。
+:doc:`theme-api` を参照してください
 
 タイムゾーンとビルド時刻
 ------------------------
@@ -407,6 +457,7 @@ CSS として無効な値を指定したときの挙動はブラウザに依存�
     }
     maatlog_archive_docname = "blog"
     maatlog_page_size = 10
+    maatlog_featured_posts = ["older-slug"]
     maatlog_generate_feeds = True
     maatlog_feed_taxonomies = ("tag", "category", "author", "month")
     maatlog_feed_limit = 20
