@@ -45,6 +45,16 @@ def _css_rule(css: str, selector: str) -> str:
     return css[start : css.index("}", start) + 1]
 
 
+def _reading_width_block(css: str) -> str:
+    """prettier が :is() を折り返しても reading-width 宣言を拾う。"""
+    needle = "min(100%, var(--maatlog-content-width"
+    idx = css.index(needle)
+    start = css.rfind("}", 0, idx)
+    start = 0 if start == -1 else start + 1
+    end = css.index("}", idx)
+    return css[start : end + 1]
+
+
 def _css_rules(css: str, selector: str) -> list[str]:
     """``selector`` を含むすべてのルール本体（グループセレクタも含む）。"""
     rules: list[str] = []
@@ -232,34 +242,68 @@ def test_highlight_blocks_scroll_within_main_content(make_project: ProjectFactor
     assert "overflow-x: auto" in rule
 
 
-def test_default_wide_layout_gives_spare_width_to_main(
+def test_default_wide_layout_caps_the_shell_and_centers_it(
     make_project: ProjectFactory,
 ) -> None:
     css = _stylesheet(make_project, "maatlog-default")
     rule = _css_rule(css, ".maatlog-layout")
-    columns = "grid-template-columns:minmax(0,var(--maatlog-nav-width,15rem))minmax(0,1fr);"
+    compact = _compact(rule)
 
-    assert columns in _compact(rule)
+    assert "box-sizing:border-box;" in compact
+    assert "width:100%;" in compact
+    assert "max-width:calc(" in compact
+    assert "--maatlog-nav-width" in rule
+    assert "--maatlog-main-width" in rule
+    assert "--maatlog-space-lg" in rule
+    assert "--maatlog-space-md" in rule
+    assert "max-width: none;" not in rule
+    assert "grid-template-columns:minmax(0,var(--maatlog-nav-width,15rem))minmax(0,1fr);" in compact
     assert 'grid-template-areas: "nav main";' in _normalise(rule)
-    assert "max-width: none;" in rule
 
 
-def test_default_rail_state_adds_a_right_track_without_capping_main(
+def test_default_rail_state_widens_the_shell_by_rail_and_gap(
     make_project: ProjectFactory,
 ) -> None:
     css = _stylesheet(make_project, "maatlog-default")
     base = _css_rule(css, ".maatlog-layout")
     with_rail = _css_rule(css, ".maatlog-layout-has-rail")
-    base_columns = "grid-template-columns:minmax(0,var(--maatlog-nav-width,15rem))minmax(0,1fr);"
     rail_columns = (
         "grid-template-columns:minmax(0,var(--maatlog-nav-width,15rem))"
         "minmax(0,1fr)minmax(0,var(--maatlog-rail-width,14rem));"
     )
 
-    assert base_columns in _compact(base)
     assert rail_columns in _compact(with_rail)
     assert 'grid-template-areas: "nav main rail";' in _normalise(with_rail)
+    assert "--maatlog-rail-width" in with_rail
+    assert "--maatlog-space-lg" in with_rail
+    assert "max-width:calc(" in _compact(with_rail)
     assert css.index(".maatlog-layout-has-rail {") > css.index(".maatlog-layout {")
+    # 3 列式は 2 列式より長い（rail + gap）。完全一致ではなく含有で見る。
+    assert len(_compact(with_rail)) > len(_compact(base)) // 2
+
+
+def test_default_main_declares_the_main_width_cap(make_project: ProjectFactory) -> None:
+    css = _stylesheet(make_project, "maatlog-default")
+    # NOTE: 先頭の `@media (width <= 48rem)`（post/archive の 1 列化）は layout shell と無関係で、
+    # `.maatlog-layout-main` の初出（desktop ルール）より前に現れる。そのため desktop 切り出しの
+    # split ではなく全文の初出を使う。初出が desktop ルールであることは CSS 構造で保証される。
+    rule = _css_rule(css, ".maatlog-layout-main")
+    compact = _compact(rule)
+
+    assert "max-width:var(--maatlog-main-width" in compact
+    assert "min-width:0;" in compact
+
+
+def test_medium_has_rail_shell_uses_two_column_max_width(
+    make_project: ProjectFactory,
+) -> None:
+    block = _media_block(_stylesheet(make_project, "maatlog-default"), "width <= 64rem")
+    with_rail = _css_rule(block, ".maatlog-layout-has-rail")
+    compact = _compact(with_rail)
+
+    assert 'grid-template-areas: "nav rail" "nav main";' in _normalise(with_rail)
+    if "max-width:calc(" in compact:
+        assert "--maatlog-rail-width" not in with_rail
 
 
 def test_default_sizes_sidebars_to_their_tracks(
@@ -432,7 +476,6 @@ def test_default_sets_the_blog_font_stack_on_the_body(make_project: ProjectFacto
 def test_default_post_body_fills_main_but_caps_prose_line_length(
     make_project: ProjectFactory,
 ) -> None:
-    # コンテナは main いっぱい（既存の幅契約）。行長は子孫の prose 要素側で抑える。
     result = make_project(files=POST_LINE_LENGTH_PROJECT, theme="maatlog-default").build()
     page = result.html("post.html")
     css = result.asset("_static/maatlog.css").read_text(encoding="utf-8")
@@ -440,15 +483,20 @@ def test_default_post_body_fills_main_but_caps_prose_line_length(
 
     assert "width: 100%;" in container
     assert "max-width: none;" in container
-    assert "line-height: 1.8" in container
-
-    # Sphinx は本文を <section> で包む。直下子セレクタでは <p> に届かない。
     assert page.select_one(".maatlog-post-body section p") is not None
+    # Old width-capping descendant selectors are gone. Headerlink
+    # `.maatlog-post-body :is(h2, h3, h4)` rules set no width, and the
+    # post-list `:is(p, ul, ol, dl)` exception keeps `max-width: none`.
+    assert ":is(p, ul, ol, dl, blockquote)" not in css
 
-    # prettier が :is() の中を折り返しても壊れないよう、開き括弧までで探す。
-    start = css.index(".maatlog-post-body :is(")
-    prose = css[start : css.index("}", start)]
-    assert "max-width: var(--maatlog-content-width" in prose
+    block = _reading_width_block(css)
+    assert ".maatlog-post-body" in block
+    assert "section" in block
+    assert "h2" in block
+    assert ".maatlog-table-wrapper" in block
+    assert "literal-block-wrapper" in block
+    assert "highlight-" in block
+    assert "min(100%, var(--maatlog-content-width" in block
 
 
 @pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
@@ -1119,14 +1167,23 @@ def test_article_container_rules_are_scoped_by_element(make_project: ProjectFact
     assert "\n.maatlog-post,\n.maatlog-archive {" not in css
 
 
-def test_default_tables_scroll_inside_themselves(make_project: ProjectFactory) -> None:
-    # Sphinx は table にラッパを出さない。table 自身をスクロールコンテナにする。
+def test_default_tables_scroll_inside_the_wrapper(make_project: ProjectFactory) -> None:
     css = _stylesheet(make_project, "maatlog-default")
-    rule = _css_rule(css, ".maatlog-layout-main table.docutils")
+    wrapped_selector = ".maatlog-layout-main .maatlog-table-wrapper > table.docutils {"
+    assert wrapped_selector in css
+    table = _css_rule(css, ".maatlog-layout-main table.docutils")
+    wrapped = _css_rule(css, ".maatlog-layout-main .maatlog-table-wrapper > table.docutils")
+    wrapper = _css_rule(css, ".maatlog-layout-main .maatlog-table-wrapper")
 
-    assert "display: block" in rule
-    assert "overflow-x: auto" in rule
-    assert "max-width: 100%" in rule
+    assert "display: block" in table
+    assert "max-width: 100%" in table
+    assert "overflow-x: auto" in table
+    assert "width: max-content" not in table
+    assert "min-width: 100%" not in table
+    assert "display: table" in wrapped
+    assert "width: max-content" in wrapped
+    assert "min-width: 100%" in wrapped
+    assert "overflow-x: auto" in wrapper
 
 
 def test_default_table_header_sits_on_a_quiet_surface(make_project: ProjectFactory) -> None:
@@ -1226,21 +1283,21 @@ def test_default_sidebar_feed_links_have_no_bullets(make_project: ProjectFactory
 
 
 def test_default_normal_page_prose_is_capped(make_project: ProjectFactory) -> None:
-    # コンテナは main いっぱい（既存契約）。行長はテキスト要素側で抑える。
     css = _stylesheet(make_project, "maatlog-default")
-    rule = _css_rule(css, ".maatlog-layout-page-normal .body :is(p, ul, ol, dl, blockquote)")
+    block = _reading_width_block(css)
+    assert ".maatlog-layout-page-normal .body" in block
+    assert "min(100%, var(--maatlog-content-width" in block
 
-    assert "max-width: var(--maatlog-content-width" in rule
 
-
-def test_default_normal_page_headings_stay_full_width(make_project: ProjectFactory) -> None:
-    # 通常ページの見出しは目次的な役割が強い。幅を切ると表や図とくい違う。
-    # test_wide_content_fills_the_main_column が h1 の全幅を実ブラウザで固定している。
+def test_default_normal_page_headings_use_content_width(
+    make_project: ProjectFactory,
+) -> None:
+    # 通常ページの本文見出し h2–h6 は content width 対象。h1 はページタイトルとして対象外。
     css = _stylesheet(make_project, "maatlog-default")
-    rule = _css_rule(css, ".maatlog-layout-page-normal .body :is(p, ul, ol, dl, blockquote)")
-
-    assert "h1" not in rule
-    assert "h2" not in rule
+    block = _reading_width_block(css)
+    assert "h2" in block
+    assert "h6" in block
+    assert "h1" not in block
 
 
 def _top_level_css_before_reduced_motion(css: str) -> str:

@@ -136,9 +136,14 @@ def test_lead_is_visually_stronger_than_secondary_and_latest(magazine_site: Acce
             lead, secondary = featured[0], featured[1]
             first_latest = latest[0]
 
+            # NOTE (Issue #204, parent ruling (a)): under the capped main the
+            # 2-column latest cards outweigh the secondary featured cards, so the
+            # contract keeps "lead strongest overall" instead of the old
+            # secondary-above-latest area order. Font hierarchy is unchanged.
             assert lead["width"] * lead["height"] > secondary["width"] * secondary["height"]
-            assert secondary["width"] * secondary["height"] > first_latest["width"] * first_latest["height"]
+            assert lead["width"] * lead["height"] > first_latest["width"] * first_latest["height"]
             assert lead["font_size"] >= secondary["font_size"] >= first_latest["font_size"]
+            assert horizontal_overflow(page) == 0
         finally:
             browser.close()
 

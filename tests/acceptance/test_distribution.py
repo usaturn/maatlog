@@ -23,8 +23,8 @@ from maatlog.version import PACKAGE_VERSION
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ACCEPTANCE_SOURCE = REPO_ROOT / "tests" / "acceptance" / "project"
 DIST_DIR = REPO_ROOT / "dist"
-WHEEL_NAME = "maatlog-0.4.0-py3-none-any.whl"
-SDIST_NAME = "maatlog-0.4.0.tar.gz"
+WHEEL_NAME = "maatlog-0.4.1-py3-none-any.whl"
+SDIST_NAME = "maatlog-0.4.1.tar.gz"
 EXPECTED_DESCRIPTION = "A Sphinx extension that turns documentation projects into static blogs."
 EXPECTED_CLASSIFIERS = (
     "Development Status :: 3 - Alpha",
@@ -259,7 +259,7 @@ def test_pyproject_declares_pypi_release_metadata() -> None:
     data = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     project = data["project"]
     assert project["name"] == "maatlog"
-    assert project["version"] == "0.4.0"
+    assert project["version"] == "0.4.1"
     assert project["description"] == EXPECTED_DESCRIPTION
     assert project["authors"] == [{"name": "usaturn"}]
     assert project["classifiers"] == list(EXPECTED_CLASSIFIERS)
@@ -273,16 +273,16 @@ def test_pyproject_declares_pypi_release_metadata() -> None:
     assert data["build-system"]["requires"] == ["uv_build>=0.12.0,<0.13.0"]
 
 
-def test_uv_lock_root_package_version_is_0_4_0() -> None:
+def test_uv_lock_root_package_version_is_0_4_1() -> None:
     data = tomllib.loads((REPO_ROOT / "uv.lock").read_text(encoding="utf-8"))
     package = next(item for item in data["package"] if item["name"] == "maatlog")
-    assert package["version"] == "0.4.0"
+    assert package["version"] == "0.4.1"
     assert package["source"] == {"editable": "."}
 
 
 def test_docs_release_matches_distribution_version() -> None:
     text = (REPO_ROOT / "docs" / "conf.py").read_text(encoding="utf-8")
-    assert 'release = "0.4.0"' in text
+    assert 'release = "0.4.1"' in text
     assert 'release = "0.5.0"' not in text
 
 
@@ -304,12 +304,12 @@ def test_twine_check_strict_passes(built_wheel: Path) -> None:
     assert completed.returncode == 0, f"{completed.stdout}\n{completed.stderr}"
 
 
-def test_wheel_core_metadata_is_0_4_0(built_wheel: Path) -> None:
+def test_wheel_core_metadata_is_0_4_1(built_wheel: Path) -> None:
     with zipfile.ZipFile(built_wheel) as archive:
         metadata_name = next(name for name in archive.namelist() if name.endswith(".dist-info/METADATA"))
         metadata = archive.read(metadata_name).decode("utf-8")
     assert "Name: maatlog\n" in metadata
-    assert "Version: 0.4.0\n" in metadata
+    assert "Version: 0.4.1\n" in metadata
     assert f"Summary: {EXPECTED_DESCRIPTION}\n" in metadata
     assert "Author: usaturn\n" in metadata
     assert "Project-URL: Homepage, https://github.com/usaturn/maatlog\n" in metadata
@@ -317,14 +317,14 @@ def test_wheel_core_metadata_is_0_4_0(built_wheel: Path) -> None:
         assert f"Classifier: {classifier}\n" in metadata
 
 
-def test_sdist_core_metadata_is_0_4_0(built_wheel: Path) -> None:
+def test_sdist_core_metadata_is_0_4_1(built_wheel: Path) -> None:
     del built_wheel
     with tarfile.open(_sdist(), "r:gz") as archive:
-        pkg_info = archive.extractfile("maatlog-0.4.0/PKG-INFO")
+        pkg_info = archive.extractfile("maatlog-0.4.1/PKG-INFO")
         assert pkg_info is not None
         metadata = pkg_info.read().decode("utf-8")
     assert "Name: maatlog\n" in metadata
-    assert "Version: 0.4.0\n" in metadata
+    assert "Version: 0.4.1\n" in metadata
     assert f"Summary: {EXPECTED_DESCRIPTION}\n" in metadata
 
 
@@ -345,13 +345,13 @@ def _isolated_version(tmp_path: Path, package: Path) -> str:
     return completed.stdout.strip()
 
 
-def test_wheel_isolated_install_reports_version_0_4_0(tmp_path: Path, built_wheel: Path) -> None:
-    assert _isolated_version(tmp_path, built_wheel) == "0.4.0"
+def test_wheel_isolated_install_reports_version_0_4_1(tmp_path: Path, built_wheel: Path) -> None:
+    assert _isolated_version(tmp_path, built_wheel) == "0.4.1"
 
 
-def test_sdist_isolated_install_reports_version_0_4_0(tmp_path: Path, built_wheel: Path) -> None:
+def test_sdist_isolated_install_reports_version_0_4_1(tmp_path: Path, built_wheel: Path) -> None:
     del built_wheel
-    assert _isolated_version(tmp_path, _sdist()) == "0.4.0"
+    assert _isolated_version(tmp_path, _sdist()) == "0.4.1"
 
 
 def test_wheel_contains_themes_and_package_data(built_wheel: Path) -> None:

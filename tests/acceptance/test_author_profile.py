@@ -42,13 +42,6 @@ def _overflow(page: Page) -> int:
     )
 
 
-def _element_width(page: Page, selector: str) -> int:
-    return cast(
-        int,
-        page.locator(selector).evaluate("element => Math.round(element.getBoundingClientRect().width)"),
-    )
-
-
 def test_profile_page_embeds_the_about_document(site: AcceptanceSite) -> None:
     result = site.build("html", theme="maatlog-default")
 
@@ -136,18 +129,33 @@ def test_every_profile_link_is_reachable_by_keyboard(site: AcceptanceSite) -> No
 
 
 @pytest.mark.browser
-def test_profile_main_is_wider_than_a_post_main(site: AcceptanceSite) -> None:
+def test_profile_main_shares_the_main_width_cap(site: AcceptanceSite) -> None:
     result = site.build("html", theme="maatlog-default")
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch()
         page = browser.new_page(viewport={"width": 1920, "height": 1080})
         try:
-            page.goto(result.path(POST_PATH).resolve().as_uri(), wait_until="load")
-            post_width = _element_width(page, ".maatlog-layout-main")
-            page.goto(result.path(PROFILE_PATH).resolve().as_uri(), wait_until="load")
-            profile_width = _element_width(page, ".maatlog-layout-main")
 
-            assert profile_width > post_width
+            def cap_and_width(path: str) -> tuple[int, int]:
+                page.goto(result.path(path).resolve().as_uri(), wait_until="load")
+                return cast(
+                    tuple[int, int],
+                    page.evaluate(
+                        """() => {
+                          const main = document.querySelector('.maatlog-layout-main');
+                          const cap = parseFloat(getComputedStyle(main).maxWidth);
+                          return [
+                            Math.round(main.getBoundingClientRect().width),
+                            Number.isFinite(cap) ? Math.round(cap) : 0,
+                          ];
+                        }"""
+                    ),
+                )
+
+            post_width, post_cap = cap_and_width(POST_PATH)
+            profile_width, profile_cap = cap_and_width(PROFILE_PATH)
+            assert post_width <= post_cap + 2
+            assert profile_width <= profile_cap + 2
         finally:
             page.close()
             browser.close()

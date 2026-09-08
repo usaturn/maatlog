@@ -111,7 +111,7 @@ def test_core_is_compatible_with_equal_or_lower_minor() -> None:
 
 
 def test_core_theme_api_is_the_current_contract_version() -> None:
-    assert CORE_THEME_API == ThemeApiVersion(major=1, minor=18)
+    assert CORE_THEME_API == ThemeApiVersion(major=1, minor=21)
 
 
 def test_load_maatlog_section_reads_toml() -> None:
@@ -190,7 +190,7 @@ def test_required_contract_constants() -> None:
 
 
 def test_core_theme_api_renders_as_a_dotted_string() -> None:
-    assert str(CORE_THEME_API) == "1.18"
+    assert str(CORE_THEME_API) == "1.21"
 
 
 def test_older_theme_api_versions_stay_compatible() -> None:
@@ -213,6 +213,9 @@ def test_older_theme_api_versions_stay_compatible() -> None:
     assert is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=16))
     assert is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=17))
     assert is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=18))
+    assert is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=19))
+    assert is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=20))
+    assert is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=21))
     assert not is_compatible(CORE_THEME_API, ThemeApiVersion(major=2, minor=0))
 
 
@@ -493,10 +496,10 @@ def test_right_rail_components_are_required_templates() -> None:
     assert "maatlog/components/author-summary.html" in REQUIRED_TEMPLATES
 
 
-def test_core_api_is_one_eighteen() -> None:
+def test_core_api_is_one_twenty_one() -> None:
     from maatlog.theme_api import CORE_THEME_API
 
-    assert str(CORE_THEME_API) == "1.18"
+    assert str(CORE_THEME_API) == "1.21"
 
 
 def test_core_theme_api_is_bumped_for_the_magazine_home_contract() -> None:

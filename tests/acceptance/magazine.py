@@ -115,7 +115,9 @@ FEATURED_VARIANTS: tuple[str, str, str] = ("lead", "secondary", "secondary")
 LATEST_VARIANT = "latest"
 PALETTES: tuple[str | None, ...] = (None, "github", "neon", "nord", "solarized")
 LATEST_COLUMNS_EXACT: dict[int, int] = {1280: 2, 768: 1, 390: 1}
-LATEST_COLUMNS_MIN: dict[int, int] = {3840: 3, 2560: 3, 1920: 3}
+# NOTE (Issue #204, parent ruling (a)): the capped main fits 2 latest columns
+# at 1920 (~826px) / 2560 (~941px); 3 columns return at 3840 (~1152px).
+LATEST_COLUMNS_MIN: dict[int, int] = {3840: 3, 2560: 2, 1920: 2}
 
 
 def featured_boxes(boxes: Sequence[CardBox]) -> list[CardBox]:
