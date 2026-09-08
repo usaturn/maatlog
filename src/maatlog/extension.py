@@ -65,6 +65,7 @@ from .profiles import (
     register_avatars,
     resolve_profiles,
 )
+from .table_layout import setup_table_layout
 from .taxonomy import DomainIndex
 from .theme_api import resolve_palette, resolve_pygments_style, validate_selected_theme
 from .version import PACKAGE_VERSION
@@ -885,6 +886,8 @@ def setup(app: Sphinx) -> ExtensionMetadata:
         man=(_visit_maattop, None),
         texinfo=(_visit_maattop, None),
     )
+    # Theme API 1.19: docutils 表のスクロール wrapper（完全 HTML ビルドのみ）。
+    setup_table_layout(app)
     register_config(app)
     _register_bundled_themes(app)
     app.connect("config-inited", initialize_build_time)

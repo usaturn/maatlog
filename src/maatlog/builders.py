@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Any
+from typing import Any, Final
 
 from sphinx.application import Sphinx
 from sphinx.builders import Builder
 from sphinx.util import logging
 
 logger = logging.getLogger(__name__)
+
+#: 完全 HTML 機能面の builder 名。builder_capability と表 wrapper の
+#: 宣言的ゲート（table_layout.TableWrapperPostTransform）が共有する正本。
+FULL_HTML_BUILDERS: Final[tuple[str, ...]] = ("html", "dirhtml")
 
 PARTIAL_SUPPORT_CODE = "maatlog.builder.partial-support"
 _PARTIAL_WARNED_ATTR = "_maatlog_partial_support_warned"
@@ -38,7 +42,7 @@ class BuilderCapability(StrEnum):
 def builder_capability(builder: Builder) -> BuilderCapability:
     """Classify *builder* into a MaatLog capability tier."""
     name = getattr(builder, "name", None)
-    if name in {"html", "dirhtml"}:
+    if name in FULL_HTML_BUILDERS:
         return BuilderCapability.FULL_HTML
     if getattr(builder, "format", None) != "html":
         return BuilderCapability.DOCUMENT_ONLY

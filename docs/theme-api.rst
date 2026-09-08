@@ -9,10 +9,10 @@ MaatLog のテーマは Sphinx の HTML テーマに小さな契約を加えた�
 API バージョン
 --------------
 
-Theme API の現在のバージョンは **1.18** です。
+Theme API の現在のバージョンは **1.21** です。
 ``api = "1.0"`` を宣言する ``inherits-base`` のテーマは
 引き続き受理されます。
-``standalone`` のテーマは ``api = "1.18"`` を宣言し、
+``standalone`` のテーマは ``api = "1.21"`` を宣言し、
 1.12 追加分と 1.16 追加分の必須テンプレートを自前で同梱する必要があります
 （詳細は下記「1.11 から 1.12 で追加された契約」と
 「1.15 から 1.16 で追加された契約」を参照してください）。
@@ -20,6 +20,9 @@ Theme API の現在のバージョンは **1.18** です。
 1.16 は必須テンプレートを 2 件足します。
 1.17 は任意契約だけを足すため、必須テンプレートと必須ブロックは 1.16 のままです
 1.18 も任意契約だけを足すため、必須セットは 1.16 のままです
+1.19 も任意契約だけを足すため、必須セットは 1.16 のままです
+1.20 も任意契約だけを足すため、必須セットは 1.16 のままです
+1.21 も任意契約だけを足すため、必須セットは 1.16 のままです
 
 開発が安定するまでの間、Theme API の更新は下位互換しない破壊的変更です。
 新しいコアは、以前の ``api`` を宣言するテーマを受理し続けることを約束しません。
@@ -32,7 +35,7 @@ Theme API の現在のバージョンは **1.18** です。
 コアはメジャー ``1`` を実装するテーマを受け入れます。
 テーマがコアの提供するマイナー
 より高いバージョンを要求する場合、検証は失敗します。
-現在の 1.18 コアは 1.0 / 1.1 / 1.2 / 1.3 / 1.4 / 1.5 / 1.6 / 1.7 / 1.8 / 1.9 / 1.10 / 1.11 / 1.12 / 1.13 / 1.14 / 1.15 / 1.16 / 1.17 テーマを受理しますが、次の Theme API 更新が
+現在の 1.21 コアは 1.0 / 1.1 / 1.2 / 1.3 / 1.4 / 1.5 / 1.6 / 1.7 / 1.8 / 1.9 / 1.10 / 1.11 / 1.12 / 1.13 / 1.14 / 1.15 / 1.16 / 1.17 / 1.18 / 1.19 / 1.20 テーマを受理しますが、次の Theme API 更新が
 同じ約束を引き継ぐとは限りません
 
 1.0 から 1.1 で追加された任意の契約:
@@ -417,12 +420,51 @@ hover でしか permalink を開きません。
 ``featured_posts`` 接続口へ渡す（設定 ``maatlog_featured_posts``）。
 選択処理の補完なしで 3 件未満を接続口へ直接渡した場合の旧テーマ互換は約束しない。
 
+1.18 から 1.19 で追加された任意の契約:
+
+* **任意クラス** — ``.maatlog-table-wrapper`` （本文の docutils 表を包む
+  スクロールコンテナ）
+* **DOM 契約** — 完全 HTML ビルド（``html`` / ``dirhtml``）では、本文のすべての
+  docutils 表（list-table / csv-table / RST の simple・grid 表 / MyST パイプ表）が
+  ``<div class="maatlog-table-wrapper" tabindex="0">`` で包まれます。
+  caption、 ``:name:`` の id、 ``colgroup`` （列幅）、 ``align-*`` クラス、
+  結合セルは ``<table>`` 側にそのまま残ります。
+  行番号用の ``table.highlighttable``、 ``hlist``、citation は包まれません。
+  セル内の入れ子表はそれぞれ独立に包まれ、同じ表が二重に包まれることはありません
+* ``tabindex="0"`` はビルド時構造であり、JavaScript 無効でも wrapper をキーボードフォーカスできます
+* 1.21 の ``maatlog-default`` では ``.maatlog-table-wrapper`` が横スクロールの実体です（``table.docutils`` の ``display: block`` 自己スクロールは 1.21 で解除されました）
+* スタイルは任意です。未定義のテーマでは素の block div として描画に影響しません。
+  公式 ``maatlog-default`` は ``overflow-x: auto`` と ``:focus-visible`` アウトライン
+  を付け、 ``maatlog-base`` はスタイルを付けません
+* ``singlehtml`` 等の部分対応 builder と非 HTML builder の出力は変わりません
+
+1.19 から 1.20 で追加された任意の契約:
+
+* 公式 ``maatlog-default`` は ``--maatlog-main-width`` を中央列
+  ``.maatlog-layout-main`` の最大幅として適用します
+* wide の layout shell は nav + gap + その上限（rail があるときはさらに
+  gap + rail）+ 左右 padding を border-box の ``max-width`` とし、
+  ``margin: 0 auto`` で中央寄せします。
+  上限到達後の余剰 viewport は shell の外側余白になります
+* rail が無いページは 2 列の合計だけを使い、空の 3 列目を確保しません
+* DOM と必須テンプレートは 1.19 のままです。``maatlog-base`` の CSS は
+  この上限を適用しません
+
+1.20 から 1.21 で変わった契約:
+
+* ``default`` の ``--maatlog-content-width`` の対象が、本文見出し（通常ページの
+  ``h2``–``h6`` を含む）・表の wrapper 外形・コード外形に広がりました
+* ``%`` は本文の参照ボックスで一度だけ解決します。
+  入れ子や表セル内で重ねて適用しません
+* ``table.docutils`` の ``display: block`` による自己スクロールをやめ、
+  横スクロールは ``.maatlog-table-wrapper`` が担います
+
 1.0 から 1.11 までの必須テンプレートと必須ブロックは変わっていませんでした。
 ``implementation = "inherits-base"`` のテーマは、宣言する API が ``"1.0"`` から
-``"1.18"`` のどれでも引き続き検証を通ります（``maatlog-base`` の継承チェーン経由で
+``"1.21"`` のどれでも引き続き検証を通ります（``maatlog-base`` の継承チェーン経由で
 1.12 追加分と 1.16 追加分の必須テンプレート／ブロックを取得するため）。
 1.16 で追加される必須ブロックはありません。
-``implementation = "standalone"`` のテーマは ``api = "1.18"`` を宣言し、
+``implementation = "standalone"`` のテーマは ``api = "1.21"`` を宣言し、
 1.12 追加分の必須テンプレートと必須ブロック、および 1.16 追加分の必須テンプレートを
 自前で持つ必要があります。
 ``"1.11"`` 以下のままでは ``template-missing`` / ``block-missing`` で、
@@ -460,9 +502,9 @@ hover でしか permalink を開きません。
 * ``maatlog-base`` — 契約の実装（Sphinx の ``basic`` を継承）
 * ``maatlog-default`` — すぐに使えるテーマ（ ``maatlog-base`` を継承）
 
-公式テーマは ``api = "1.18"`` を宣言します。
+公式テーマは ``api = "1.21"`` を宣言します。
 ``maatlog-base`` は ``standalone``、 ``maatlog-default`` は ``inherits-base`` です。
-第三者の ``inherits-base`` テーマは ``"1.0"`` から ``"1.18"`` のどれでも検証を通ります。
+第三者の ``inherits-base`` テーマは ``"1.0"`` から ``"1.21"`` のどれでも検証を通ります。
 旧テーマは ``maatlog.posts`` と ``featured_count`` スライスを使い続けてよい。
 ``maatlog/home.html`` が無いときは ``maatlog.theme.home-template-missing`` を警告し、
 アーカイブルート 1 ページ目がトップを兼ねます。
@@ -516,12 +558,14 @@ Theme API
 上限を置くための任意プロパティです。
 公式テーマは両方を ``clamp()`` で定義し、viewport が広がるにつれて
 下限（従来の固定値）から上限まで fluid に伸ばします。
-``content-width`` は prose（段落・見出し・リスト等）の最大行長、
-``main-width`` は派生テーマが中央列の望ましい幅を示すためのトークンです。
-公式 default の wide layout は中央列を ``1fr``
-にし、余剰の viewport 幅を main へ渡します。
+``content-width`` は prose（段落・本文見出し・リスト等）と通常の表・コード外形の最大行長、
+``main-width`` は公式 default の中央列 ``.maatlog-layout-main`` の最大幅です。
+公式 default の wide layout は nav + gap + その上限（rail があれば gap + rail）
++ 左右 padding を shell の ``max-width`` とし、余剰の viewport 幅を
+shell の外側余白へ渡します。
 常に ``main-width`` の計算値は ``content-width`` より大きく、
-コード・表・図は prose より広い main を使えます。
+表とコードの外形は content-width に収まり、
+figure・hero・カード一覧は prose より広い main を使えます。
 投稿・アーカイブ外枠、カード一覧、
 通常ページ本文、投稿本文はいずれも main 幅を使います。
 左右 nav/TOC の最大幅は
@@ -701,7 +745,7 @@ MaatLog のすべてのテンプレートは、トップレベルの  ``maatlog`
 
 ::
 
-    maatlog.api_version   # "1.18"
+    maatlog.api_version   # "1.21"
     maatlog.version       # MaatLog ディストリビューションのバージョン（例 "0.1.0"）
     maatlog.page_kind     # "post" | "archive" | "home" | "normal" | "profile"
     maatlog.post          # PostView | None

@@ -75,37 +75,60 @@ def _element_width(page: Page, selector: str) -> int:
     )
 
 
-def _assert_outer_gutters_stay_padding_sized(metrics: LayoutMetrics, relative: str) -> None:
-    right_gutter = metrics["viewport_width"] - metrics["content_right"]
-    assert metrics["overflow"] == 0, relative
-    assert metrics["nav_left"] <= MAX_OUTER_GUTTER_PX, f"{relative}: left gutter {metrics['nav_left']}px"
-    assert right_gutter <= MAX_OUTER_GUTTER_PX, f"{relative}: right gutter {right_gutter}px"
-
-
 @pytest.mark.browser
-def test_wide_shell_fills_the_viewport_instead_of_growing_side_rails(
+def test_wide_shell_sends_surplus_viewport_to_outer_gutters(
     site: AcceptanceSite,
 ) -> None:
     result = site.build("html", theme="maatlog-default")
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch()
         try:
-            widths_by_page: dict[str, list[int]] = {relative: [] for relative in REPRESENTATIVE_PAGES}
-            for width, height in WIDE_VIEWPORTS:
+            gutters_by_width: dict[int, int] = {}
+            mains_by_width: dict[int, int] = {}
+            for width, height in ((1280, 720), (1920, 1080), (2560, 1440), (3840, 2160)):
                 page = browser.new_page(viewport={"width": width, "height": height})
                 try:
-                    for relative in REPRESENTATIVE_PAGES:
-                        page.goto(result.path(relative).resolve().as_uri(), wait_until="load")
-                        metrics = _layout_metrics(page)
-                        _assert_outer_gutters_stay_padding_sized(metrics, f"{relative}@{width}")
-                        assert metrics["main_width"] > 600, relative
-                        widths_by_page[relative].append(metrics["main_width"])
+                    page.goto(result.path("posts/rst-post.html").resolve().as_uri(), wait_until="load")
+                    metrics = page.evaluate(
+                        """() => {
+                          const layout = document.querySelector('.maatlog-layout');
+                          const main = document.querySelector('.maatlog-layout-main');
+                          const nav = document.querySelector('.maatlog-nav');
+                          const rail = document.querySelector('.maatlog-right-rail');
+                          const layoutBox = layout.getBoundingClientRect();
+                          const mainBox = main.getBoundingClientRect();
+                          const cap = parseFloat(getComputedStyle(main).maxWidth);
+                          return {
+                            overflow: document.documentElement.scrollWidth
+                              - document.documentElement.clientWidth,
+                            viewport: document.documentElement.clientWidth,
+                            layoutLeft: Math.round(layoutBox.left),
+                            layoutRight: Math.round(layoutBox.right),
+                            layoutWidth: Math.round(layoutBox.width),
+                            mainWidth: Math.round(mainBox.width),
+                            navWidth: nav ? Math.round(nav.getBoundingClientRect().width) : 0,
+                            railWidth: rail ? Math.round(rail.getBoundingClientRect().width) : 0,
+                            mainCap: Number.isFinite(cap) ? Math.round(cap) : null,
+                          };
+                        }"""
+                    )
+                    assert metrics["overflow"] <= 1, metrics
+                    left = metrics["layoutLeft"]
+                    right = metrics["viewport"] - metrics["layoutRight"]
+                    assert abs(left - right) <= 2, metrics
+                    if metrics["mainCap"] is not None:
+                        assert metrics["mainWidth"] <= metrics["mainCap"] + 2, metrics
+                    gutters_by_width[width] = left
+                    mains_by_width[width] = metrics["mainWidth"]
                 finally:
                     page.close()
-
-            for relative, widths in widths_by_page.items():
-                assert widths[1] > widths[0], relative
-                assert widths[2] > widths[1], relative
+            assert gutters_by_width[1280] <= 64, gutters_by_width
+            assert gutters_by_width[1920] > gutters_by_width[1280], gutters_by_width
+            assert gutters_by_width[3840] > gutters_by_width[1920], gutters_by_width
+            # 2560→3840 の main は clamp の preferred に従い 72rem 天井まで伸びる
+            # （Spec §1.6: 941px → 1152px）。天井超過の禁止が契約の意味。
+            assert mains_by_width[3840] <= 1152 + 2, mains_by_width
+            assert mains_by_width[3840] >= mains_by_width[2560], mains_by_width
         finally:
             browser.close()
 
@@ -236,7 +259,12 @@ def test_home_latest_stays_three_columns_on_wide_viewports(
             assert latest["count"] == 6, latest
             assert featured["count"] == 3, featured
             assert latest["overflow"] == 0, latest
-            assert _first_row_column_count(latest) == 3, latest
+            # NOTE (Issue #204, parent ruling (a)): the wide shell is capped at
+            # --maatlog-main-width (mains ~826px@1920, ~941px@2560, ~1152px@3840
+            # per Spec §1.6), so the latest grid fits 2 columns at 1920/2560
+            # and returns to 3 at 3840. Counts and overflow are unchanged.
+            expected_columns = 3 if width == 3840 else 2
+            assert _first_row_column_count(latest) == expected_columns, latest
             widths = page.evaluate(
                 """() => Array.from(
                      document.querySelectorAll(
@@ -602,7 +630,10 @@ def test_home_latest_is_three_columns_on_wide_desktop(
             tops = cast("list[int]", metrics["tops"])
             lefts = cast("list[int]", metrics["lefts"])
             first_row = [left for left, top in zip(lefts, tops, strict=True) if top == min(tops)]
-            assert len(set(first_row)) == 3, metrics
+            # NOTE (Issue #204, parent ruling (a)): at 1920 the capped main is
+            # ~826px (Spec §1.6), so the grid fits 2 columns instead of 3.
+            # Count and overflow are unchanged.
+            assert len(set(first_row)) == 2, metrics
         finally:
             page.close()
             browser.close()
@@ -765,20 +796,20 @@ def test_wide_tables_scroll_without_widening_the_page(site: AcceptanceSite) -> N
             page.goto(result.path("guide.html").resolve().as_uri(), wait_until="load")
             metrics = page.evaluate(
                 """() => {
-                  const table = document.querySelector('.maatlog-layout-main table.docutils');
+                  const wrapper = document.querySelector('.maatlog-layout-main .maatlog-table-wrapper');
                   return {
                     page_overflow: document.documentElement.scrollWidth
                       - document.documentElement.clientWidth,
-                    table_width: table ? Math.round(table.getBoundingClientRect().width) : null,
-                    table_scrolls: table ? table.scrollWidth > table.clientWidth : null,
+                    wrapper_width: wrapper ? Math.round(wrapper.getBoundingClientRect().width) : null,
+                    wrapper_scrolls: wrapper ? wrapper.scrollWidth > wrapper.clientWidth : null,
                     viewport: document.documentElement.clientWidth,
                   };
                 }"""
             )
-            assert metrics["table_width"] is not None, "guide.html renders no table"
+            assert metrics["wrapper_width"] is not None, "guide.html renders no table"
             assert metrics["page_overflow"] == 0, metrics
-            assert metrics["table_width"] <= metrics["viewport"], metrics
-            assert metrics["table_scrolls"] is True, metrics
+            assert metrics["wrapper_width"] <= metrics["viewport"], metrics
+            assert metrics["wrapper_scrolls"] is True, metrics
         finally:
             page.close()
             browser.close()
@@ -825,15 +856,17 @@ def test_prose_grows_with_wide_viewports_but_stays_below_main(site: AcceptanceSi
                         """() => {
                           const main = document.querySelector('.maatlog-layout-main');
                           const prose = document.querySelector('.maatlog-post-body p');
-                          const highlight = document.querySelector('.maatlog-post-body .highlight');
+                          const codeOuter = document.querySelector(
+                            ".maatlog-post-body .literal-block-wrapper, .maatlog-post-body div[class*='highlight-']"
+                          );
                           if (!main || !prose) return null;
                           return {
                             overflow: document.documentElement.scrollWidth
                               - document.documentElement.clientWidth,
                             main: Math.round(main.getBoundingClientRect().width),
                             prose: Math.round(prose.getBoundingClientRect().width),
-                            code: highlight
-                              ? Math.round(highlight.getBoundingClientRect().width)
+                            code: codeOuter
+                              ? Math.round(codeOuter.getBoundingClientRect().width)
                               : null,
                           };
                         }"""
@@ -843,7 +876,8 @@ def test_prose_grows_with_wide_viewports_but_stays_below_main(site: AcceptanceSi
                     assert PROSE_MIN_PX <= metrics["prose"] <= PROSE_MAX_PX, metrics
                     assert metrics["main"] > metrics["prose"], metrics
                     if metrics["code"] is not None:
-                        assert metrics["code"] > metrics["prose"], metrics
+                        assert abs(metrics["code"] - metrics["prose"]) <= 2, metrics
+                        assert metrics["code"] <= metrics["main"], metrics
                     prose_by_width[width] = metrics["prose"]
                 finally:
                     page.close()
@@ -892,6 +926,7 @@ class ProseMetrics(TypedDict):
     prose_width: int
     prose_right: int
     main_right: int
+    main_width: int
 
 
 def _prose_metrics(page: Page) -> ProseMetrics:
@@ -910,6 +945,7 @@ def _prose_metrics(page: Page) -> ProseMetrics:
                 prose_width: Math.round(proseBox.width),
                 prose_right: Math.round(proseBox.right),
                 main_right: Math.round(mainBox.right),
+                main_width: Math.round(mainBox.width),
               };
             }"""
         ),
@@ -930,11 +966,11 @@ def test_content_width_100_percent_fills_the_main_column(site: AcceptanceSite) -
         finally:
             browser.close()
 
-    # 未設定なら 60rem（≒960px）で頭打ちになる。設定が効いていればそれを超える。
-    assert metrics["prose_width"] > PROSE_MAX_PX
+    assert metrics["overflow"] == 0
+    assert metrics["prose_width"] <= metrics["main_width"] + 2
+    assert metrics["prose_width"] <= metrics["main_right"]
     # 右端は中央列の右端まで届く。差はレイアウトの padding 相当に収まる。
     assert metrics["main_right"] - metrics["prose_right"] <= MAX_OUTER_GUTTER_PX
-    assert metrics["overflow"] == 0
 
 
 @pytest.mark.browser

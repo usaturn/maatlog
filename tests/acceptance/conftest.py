@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 import pytest
 from acceptance.magazine import MAGAZINE_PROJECT_ROOT
 from acceptance.site import AcceptanceSite
+from acceptance.width_contract import WIDTH_CONTRACT_PROJECT_ROOT
 
 if TYPE_CHECKING:
     import importlib.util
@@ -19,7 +20,7 @@ if TYPE_CHECKING:
     _spec.loader.exec_module(_module)
     ProjectFactory = _module.ProjectFactory
 
-__all__ = ["AcceptanceSite", "magazine_site", "site"]
+__all__ = ["AcceptanceSite", "magazine_site", "site", "width_contract_site"]
 
 
 @pytest.fixture
@@ -31,3 +32,9 @@ def site(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AcceptanceSite:
 def magazine_site(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AcceptanceSite:
     """Magazine 専用 fixture プロジェクトのビルドドライバ。"""
     return AcceptanceSite(tmp_path / "magazine", monkeypatch, project_root=MAGAZINE_PROJECT_ROOT)
+
+
+@pytest.fixture
+def width_contract_site(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AcceptanceSite:
+    """幅契約共有 fixture プロジェクトのビルドドライバ（Issue #202 で凍結）。"""
+    return AcceptanceSite(tmp_path / "width-contract", monkeypatch, project_root=WIDTH_CONTRACT_PROJECT_ROOT)

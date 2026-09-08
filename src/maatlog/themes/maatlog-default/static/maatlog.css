@@ -361,9 +361,46 @@ section.maatlog-profile {
   letter-spacing: 0.01em;
 }
 
-/* 行長はテキスト要素側で抑える。図・コード・表は main 幅いっぱいを使う。 */
-.maatlog-post-body :is(p, ul, ol, dl, blockquote, h2, h3, h4, h5, h6) {
-  max-width: var(--maatlog-content-width, 42rem);
+/* 行長は参照ボックス直下と section 直下だけに付ける。子孫へ % を再適用しない。
+   表は wrapper 外形、コードは caption 付き literal-block-wrapper /
+   caption なし highlight-* が外形（Issue 203 / Theme API 1.21）。 */
+:is(.maatlog-post-body, .maatlog-layout-page-normal .body)
+  > :is(
+    p,
+    ul,
+    ol,
+    dl,
+    blockquote,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6,
+    .maatlog-table-wrapper,
+    .literal-block-wrapper,
+    div[class*="highlight-"]
+  ),
+:is(.maatlog-post-body, .maatlog-layout-page-normal .body)
+  section
+  > :is(
+    p,
+    ul,
+    ol,
+    dl,
+    blockquote,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6,
+    .maatlog-table-wrapper,
+    .literal-block-wrapper,
+    div[class*="highlight-"]
+  ) {
+  max-width: min(100%, var(--maatlog-content-width, 42rem));
+
+  /* 外形比較のため border-box。list/quote の padding を含めて本文幅に揃える。 */
+  box-sizing: border-box;
 }
 
 /* An explicit scale: basic.css leaves h2 and h3 nearly the same size. */
@@ -408,14 +445,6 @@ section.maatlog-profile {
   width: 100%;
   max-width: none;
   margin-inline: 0;
-}
-
-/* 記事本文と同じ方針を通常ページにも当てる。コンテナの max-width: none は
-   既存契約なので触らず、テキスト要素側で行長を抑える。table / .highlight /
-   img / figure は対象外なので main 幅いっぱいを使える。見出しも対象外
-   ——通常ページの見出しは目次的な役割が強く、幅を切ると図とくい違う。 */
-.maatlog-layout-page-normal .body :is(p, ul, ol, dl, blockquote) {
-  max-width: var(--maatlog-content-width, 42rem);
 }
 
 /* maatlog:post-list の中のカードは自分の幅を持つ。行長キャップを持ち込まない。 */
@@ -1187,17 +1216,23 @@ img {
   border-color: var(--maatlog-color-primary);
 }
 
-/* Wide shell: nav/TOC keep their max width; spare viewport width goes to main. */
+/* Wide shell: nav and rail keep token max width. Main is capped by
+   --maatlog-main-width; leftover viewport becomes outer gutters. */
 .maatlog-layout {
   display: grid;
+  box-sizing: border-box;
   grid-template-columns:
     minmax(0, var(--maatlog-nav-width, 15rem))
     minmax(0, 1fr);
   grid-template-areas: "nav main";
   gap: var(--maatlog-space-lg, 2rem);
   align-items: start;
-  max-width: none;
-  margin: 0;
+  width: 100%;
+  max-width: calc(
+    var(--maatlog-nav-width, 15rem) + var(--maatlog-space-lg, 2rem) + var(--maatlog-main-width) + 2 *
+      var(--maatlog-space-md, 1rem)
+  );
+  margin: 0 auto;
   padding: var(--maatlog-space-md, 1rem);
 }
 
@@ -1208,6 +1243,10 @@ img {
     minmax(0, 1fr)
     minmax(0, var(--maatlog-rail-width, 14rem));
   grid-template-areas: "nav main rail";
+  max-width: calc(
+    var(--maatlog-nav-width, 15rem) + var(--maatlog-space-lg, 2rem) + var(--maatlog-main-width) +
+      var(--maatlog-space-lg, 2rem) + var(--maatlog-rail-width, 14rem) + 2 * var(--maatlog-space-md, 1rem)
+  );
 }
 
 .maatlog-nav {
@@ -1265,6 +1304,9 @@ img {
 
 .maatlog-layout-main {
   grid-area: main;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: var(--maatlog-main-width);
   min-width: 0;
 }
 
@@ -1310,10 +1352,22 @@ img {
   font-size: 1em;
 }
 
-/* Sphinx emits no wrapper around ``table.docutils``, so the table itself has to
-   be the scroll container. ``display: block`` is what makes overflow work here;
-   the cost is that columns no longer size themselves against each other. Not
-   breaking the mobile layout is worth that. */
+/* 表の横スクロールは wrapper が担う（Theme API 1.21、Issue 203）。
+   reading-width セレクタが content-width を上書きする。スクロールは wrapper。
+   包まれない表（singlehtml 等の部分対応 builder）は 1.19 相当の自己スクロール。 */
+.maatlog-layout-main .maatlog-table-wrapper {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.maatlog-layout-main .maatlog-table-wrapper:focus-visible {
+  outline: 2px solid var(--maatlog-color-link);
+  outline-offset: 2px;
+  border-radius: var(--maatlog-radius-sm);
+}
+
+/* 包まれない table.docutils は自身がスクロール容器になる。display: block が
+   overflow を有効にする。完全 HTML では直後の子セレクタがこれを上書きする。 */
 .maatlog-layout-main table.docutils {
   display: block;
   max-width: 100%;
@@ -1322,6 +1376,17 @@ img {
   border: 1px solid var(--maatlog-color-border, #e2e8f0);
   border-radius: var(--maatlog-radius-md, 0.75rem);
   font-size: 0.92rem;
+}
+
+/* 通常表は table 本来のレイアウトを保ち、横スクロールは .maatlog-table-wrapper
+   が担う。短表は min-width: 100% で wrapper を満たし、幅広表は max-content
+   の実幅で wrapper 内だけスクロールする。 */
+.maatlog-layout-main .maatlog-table-wrapper > table.docutils {
+  display: table;
+  width: max-content;
+  min-width: 100%;
+  max-width: none;
+  overflow-x: visible;
 }
 
 .maatlog-layout-main table.docutils th,
@@ -1575,6 +1640,10 @@ img {
     grid-template-areas:
       "nav rail"
       "nav main";
+    max-width: calc(
+      var(--maatlog-nav-width, 15rem) + var(--maatlog-space-lg, 2rem) + var(--maatlog-main-width) + 2 *
+        var(--maatlog-space-md, 1rem)
+    );
   }
 
   .maatlog-right-rail {
