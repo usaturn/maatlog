@@ -1,0 +1,3 @@
+[maatlog]
+api = "1.0"
+implementation = "standalone"

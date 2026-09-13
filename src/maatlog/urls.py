@@ -39,13 +39,41 @@ def is_absolute_http_url(value: str) -> bool:
 
     ``validate_baseurl()`` は ``html_baseurl`` 専用の厳格な検証なので流用しない。
     プロフィールリンクや canonical は query と fragment を持ちうるため、
-    scheme と host だけを要求する。
+    それらは許可したまま host の実在だけを要求する。
+
+    ``netloc`` が空でないことだけでは不十分で、``https://example.test:not-a-port/x``
+    や host に空白を含む値まで通ってしまう。crawler 向けの URL も canonical も
+    プロフィールリンクも、解析できない port を持つ値は出力してはいけないので、
+    ``hostname`` の実在・``port`` の解析成功・空白の不在をここで揃えて弾く。
     """
+    value = value.strip()
     try:
-        parts = urlsplit(value.strip())
+        parts = urlsplit(value)
+        _ = parts.port
     except ValueError:
         return False
-    return parts.scheme in {"http", "https"} and bool(parts.netloc)
+    return (
+        parts.scheme in {"http", "https"}
+        and bool(parts.netloc)
+        and bool(parts.hostname)
+        and not any(character.isspace() for character in value)
+    )
+
+
+def resolve_crawler_url(value: str | None, *, page_url: str | None = None) -> str | None:
+    """Resolve a crawler-facing HTTP(S) URL, preserving query and fragment."""
+    if not isinstance(value, str) or not value.strip():
+        return None
+    candidate = value.strip()
+    if is_absolute_http_url(candidate):
+        return candidate
+    if page_url is None or not is_absolute_http_url(page_url):
+        return None
+    try:
+        candidate = urljoin(page_url, candidate)
+    except ValueError:
+        return None
+    return candidate if is_absolute_http_url(candidate) else None
 
 
 def is_relative_docname(value: object) -> bool:

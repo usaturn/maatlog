@@ -3,15 +3,6 @@
    so the header, About, Interests, Stats and Featured sections appear exactly once. #}
 {%- extends "layout.html" -%}
 
-{%- block extrahead -%}
-  {{ super() }}
-  {%- block maatlog_head -%}
-  {%- for feed in maatlog.feeds -%}
-  <link rel="alternate" type="application/atom+xml" title="{{ feed.title|e }}" href="{{ feed.url|e }}" />
-  {%- endfor -%}
-  {%- endblock maatlog_head -%}
-{%- endblock extrahead -%}
-
 {%- block body -%}
 <section class="maatlog-profile" data-maatlog-component="profile">
   {%- block maatlog_profile_header -%}

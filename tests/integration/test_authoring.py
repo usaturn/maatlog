@@ -287,6 +287,38 @@ maatlog-slug: valid
     assert [item.code for item in error.value.diagnostics] == expected_codes
 
 
+@pytest.mark.parametrize(
+    ("field", "attribute"),
+    [
+        ("maatlog-canonical-url", "canonical_url"),
+        ("maatlog-external-url", "external_url"),
+    ],
+)
+def test_absolute_metadata_url_preserves_query_and_fragment(
+    make_sphinx: SphinxFactory,
+    field: str,
+    attribute: str,
+) -> None:
+    expected = "https://example.com/articles/42?utm=maatlog#section"
+    app = make_sphinx(
+        files={
+            "post.md": f"""---
+maatlog-post: true
+maatlog-slug: valid
+maatlog-excerpt: External-safe summary.
+{field}: {expected}
+---
+# Title
+"""
+        }
+    )
+
+    app.build()
+
+    post = app.env.get_domain("maatlog").data["posts_by_docname"]["post"]
+    assert getattr(post, attribute) == expected
+
+
 def test_build_replaces_existing_domain_entry_by_docname(make_sphinx: SphinxFactory) -> None:
     app = make_sphinx(
         files={

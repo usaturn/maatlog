@@ -111,7 +111,44 @@ def test_core_is_compatible_with_equal_or_lower_minor() -> None:
 
 
 def test_core_theme_api_is_the_current_contract_version() -> None:
-    assert CORE_THEME_API == ThemeApiVersion(major=1, minor=21)
+    assert CORE_THEME_API == ThemeApiVersion(major=1, minor=22)
+
+
+def test_theme_api_one_twenty_two_documents_social_metadata_contract() -> None:
+    documentation = (Path(__file__).resolve().parents[2] / "docs" / "theme-api.rst").read_text(encoding="utf-8")
+    section = documentation.partition("1.21 から 1.22 で追加された任意の仕様:")[2].partition(
+        "1.0 から 1.11 までの必須テンプレート"
+    )[0]
+    for token in (
+        "maatlog.metadata",
+        "SocialMetadataView",
+        "OpenGraphPropertyView",
+        "TwitterCardPropertyView",
+        "maatlog_social_metadata",
+        "maatlog/components/social-metadata.html",
+    ):
+        assert token in section
+
+
+def test_social_metadata_documentation_matches_completed_projectors() -> None:
+    root = Path(__file__).resolve().parents[2]
+    theme_text = (root / "docs" / "theme-api.rst").read_text(encoding="utf-8")
+    configuration_text = (root / "docs" / "configuration.rst").read_text(encoding="utf-8")
+
+    assert "投稿とプロフィールの projector は空の View を返すまま" not in theme_text
+    for expected in ("BlogPosting", "ProfilePage", "WebSite", "maatlog_social_metadata"):
+        assert expected in theme_text
+    for expected in ("Open Graph", "X/Twitter Card", "JSON-LD", "html_baseurl", "maatlog-canonical-url"):
+        assert expected in configuration_text
+
+
+def test_authoring_canonical_url_rule_allows_query_and_fragment() -> None:
+    authoring = (Path(__file__).resolve().parents[2] / "docs" / "authoring.rst").read_text(encoding="utf-8")
+    canonical = authoring.partition("``maatlog-canonical-url``")[2].partition("``maatlog-external-url``")[0]
+
+    assert "フラグメントは不可" not in canonical
+    for expected in ("query", "fragment"):
+        assert expected in canonical
 
 
 def test_load_maatlog_section_reads_toml() -> None:
@@ -169,6 +206,7 @@ def test_bundled_theme_manifest_declares_core_api(theme_name: str) -> None:
     manifest = parse_and_validate_manifest(section, core_api=CORE_THEME_API)
 
     assert manifest.api == CORE_THEME_API
+    assert str(manifest.api) == "1.22"
 
 
 def test_inherits_base_theme_at_1_8_is_accepted_by_current_core() -> None:
@@ -190,7 +228,7 @@ def test_required_contract_constants() -> None:
 
 
 def test_core_theme_api_renders_as_a_dotted_string() -> None:
-    assert str(CORE_THEME_API) == "1.21"
+    assert str(CORE_THEME_API) == "1.22"
 
 
 def test_older_theme_api_versions_stay_compatible() -> None:
@@ -216,6 +254,8 @@ def test_older_theme_api_versions_stay_compatible() -> None:
     assert is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=19))
     assert is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=20))
     assert is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=21))
+    assert is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=22))
+    assert not is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=23))
     assert not is_compatible(CORE_THEME_API, ThemeApiVersion(major=2, minor=0))
 
 
@@ -496,12 +536,18 @@ def test_right_rail_components_are_required_templates() -> None:
     assert "maatlog/components/author-summary.html" in REQUIRED_TEMPLATES
 
 
-def test_core_api_is_one_twenty_one() -> None:
+def test_core_api_is_one_twenty_two() -> None:
     from maatlog.theme_api import CORE_THEME_API
 
-    assert str(CORE_THEME_API) == "1.21"
+    assert str(CORE_THEME_API) == "1.22"
 
 
 def test_core_theme_api_is_bumped_for_the_magazine_home_contract() -> None:
     # Issue #177 の featured/latest キーは 1.18 の任意契約。
     assert (CORE_THEME_API.major, CORE_THEME_API.minor) >= (1, 18)
+
+
+def test_social_metadata_template_and_block_are_optional() -> None:
+    assert "maatlog/components/social-metadata.html" not in REQUIRED_TEMPLATES
+    assert "maatlog_social_metadata" not in REQUIRED_BLOCKS
+    assert len(REQUIRED_BLOCKS) == 11

@@ -124,7 +124,7 @@
 
 テーマが提供しない名前や、パレット非対応のテーマへの指定はビルドを失敗させ、
 利用できる名前を列挙します。
-パレットの契約は :doc:`theme-api` を参照してください
+パレットの仕様は :doc:`theme-api` を参照してください
 
 タクソノミー辞書
 ----------------
@@ -372,6 +372,68 @@ slug の存在・公開状態・重複・自己指定は公開状態の再計算
 
 ``maatlog_generate_feeds = False`` を設定すると、フィード生成とディスカバリリンクを
 スキップします
+
+ソーシャルメタデータ
+--------------------
+
+MaatLog はビルド時に Open Graph、X/Twitter Card、JSON-LD を ``<head>`` に出力します。
+JavaScript による後付けの注入は行いません。
+専用の設定キーはなく、値はすべて既存のサイト・投稿・プロフィール・canonical・
+画像・タクソノミーの設定から組み立てます。
+
+ページ種別ごとの出力は次のとおりです
+
+* **内部投稿** — ``og:type=article`` に ``article:published_time``、
+  繰り返しの ``article:tag`` / ``article:section``、 ``BlogPosting`` の
+  JSON-LD をちょうど 1 件出します
+* **外部投稿** (``maatlog-external-url`` あり) — ``og:type=website`` の summary
+  だけで、 ``BlogPosting`` は出しません。
+  ``og:url`` は外部の公開先 URL (query と fragment を保持) を指し、
+  ``<link rel="canonical">`` はローカルの MaatLog ページのままです
+* **プロフィール 1 ページ目** — ``og:type=profile``、
+  ``twitter:card=summary``、 ``mainEntity`` が ``Person`` の ``ProfilePage`` を
+  ちょうど 1 件出します
+* **ブログトップ** — ``WebSite`` の JSON-LD をちょうど 1 件出します。
+  ``maatlog_home_docname`` を設定しているときはその Home が、
+  未設定のときはアーカイブルートがブログトップです。
+  サイト全体で ``WebSite`` を持つのはこの 1 ページだけです
+* **その他のアーカイブ** (ページ送りの 2 ページ目以降を含む) — website summary の
+  ソーシャルタグだけで、JSON-LD は出しません
+* **通常ページ** (投稿・プロフィール・アーカイブのいずれでもない) —
+  ソーシャルメタデータは出しません
+
+値の出所は既存の設定だけです。
+サイト名 (``project``) とタグライン (``maatlog_tagline``)、
+投稿のタイトル・抜粋・公開日時・著者・タグ・カテゴリ、
+canonical、代表画像 (``maatlog-image``) と ``maattop``、
+プロフィールの表示名・bio・アバター・外部リンクを使います
+
+画像は代表画像が ``maattop`` に優先します。
+``alt`` は選択された画像に紐づくものだけを出し、
+代表画像が選ばれたときは ``alt`` を出しません。
+画像が無いときにプレースホルダは出しません
+
+クローラ向けの URL は絶対の HTTP(S) だけを出します。
+絶対化できないローカル URL は、空の ``content`` や相対 URL のまま出さず、
+そのプロパティごと省略します。
+``html_baseurl`` はこの機能のために新たに必須になるわけではありません。
+``html_baseurl`` が空でフィードも無効な場合、URL に依存しないメタデータと
+正当な JSON-LD は残り、クローラ URL のプロパティだけが消えます。
+``maatlog-external-url`` のような絶対の外部 URL はそのまま使えます
+
+``maatlog-canonical-url`` と ``maatlog-external-url`` は絶対の HTTP(S) で、
+ホスト名が必須、userinfo・空白は不可、ポートは解析可能でなければなりません。
+query と fragment は持つことができ、バイト列のまま保持されます。
+``<link rel="canonical">`` とメタデータの識別子
+(``og:url`` や JSON-LD の ``url``) に反映されます
+
+このリリースで出さないもの (非ゴール) は次のとおりです
+
+* ソーシャルメタデータ専用の上書き・オプトアウトのフィールド
+* 更新日時の推測 (``article:modified_time`` など) とプロフィールの日付
+* 画像の寸法・MIME、 ``og:locale``、X アカウント
+* アーカイブのグラフ (``CollectionPage`` / ``ItemList``)
+* OGP 画像の生成
 
 本文の幅
 --------

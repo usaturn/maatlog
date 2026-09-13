@@ -160,27 +160,46 @@ quality_targets=(src tests)
 if [[ -d tools/public_sync ]]; then
   quality_targets+=(tools)
 fi
+# .agents is parent-only (see sync/public-files.toml) and absent from the
+# public layout, so it is added here with the same existence guard.
+# The shared pyproject.toml must keep only paths present in both layouts.
+if [[ -d .agents ]]; then
+  quality_targets+=(.agents)
+fi
 # The shared pyproject.toml only lists test paths present in both layouts;
 # the parent-side sync tests are added here where they exist.
 pytest_targets=(tests)
 if [[ -d tools/public_sync/tests ]]; then
   pytest_targets+=(tools/public_sync/tests)
 fi
+if [[ -d .agents ]]; then
+  pytest_targets+=(.agents)
+fi
+# The static checks shared by `full`, `static` and `quick` (issue #264). One
+# definition, so adding a tool or changing the targets is a single edit.
+# Fail-fast order (issue #148): these cost seconds, so every profile runs them
+# before its pytest invocation and a lint or type error surfaces immediately
+# instead of after the suite. `npm ci` must precede `npm run check`, which needs
+# node_modules (eslint / prettier / tsc / stylelint). `set -e` applies inside
+# the body and every call site below is a plain command, so the first failing
+# check still aborts the whole script.
+run_static_checks() {
+  uv run --no-sync ruff check "${quality_targets[@]}"
+  uv run --no-sync ruff format --check "${quality_targets[@]}"
+  uv run --no-sync pyright "${quality_targets[@]}"
+  npm ci
+  npm run check
+}
+
 uv lock --check
 uv sync --locked --all-groups
 
 case "$profile" in
   full)
-    # Fail-fast (issue #148): cheap static checks (seconds) run before the
-    # ~7-minute pytest suite and the distribution build, so a lint/type error
-    # is caught immediately instead of after the whole suite has run.
-    # `npm ci` must still precede pytest: tests/acceptance/test_accessibility.py
-    # requires the installed node_modules/axe-core/axe.min.js fixture.
-    uv run --no-sync ruff check "${quality_targets[@]}"
-    uv run --no-sync ruff format --check "${quality_targets[@]}"
-    uv run --no-sync pyright "${quality_targets[@]}"
-    npm ci
-    npm run check
+    # `npm ci`, inside run_static_checks, must also precede pytest here:
+    # tests/acceptance/test_accessibility.py requires the installed
+    # node_modules/axe-core/axe.min.js fixture.
+    run_static_checks
     uv run --no-sync pytest -v "${pytest_targets[@]}"
     uv build --out-dir dist --clear
     uvx twine check --strict dist/*
@@ -188,6 +207,27 @@ case "$profile" in
     if [[ -d tools/public_sync ]]; then
       uv run --no-sync pytest tools/public_sync/tests/test_distribution_gate.py -v
     fi
+    ;;
+  static)
+    # `static` and `quick` (issue #260) are the development-time profiles: they
+    # never run `uv pip install`, so the venv stays exactly as `uv sync` left it
+    # and they can be repeated freely. `full` remains the release gate.
+    run_static_checks
+    ;;
+  quick)
+    # Same static checks as `static`, then one browser-less pytest run. Dropping
+    # the browser marker takes out 268 of 2235 tests that account for roughly
+    # two thirds of pytest wall time, at the cost of the browser-based
+    # acceptance coverage — so packaging work, theme layout changes, or anything
+    # touching tests/acceptance still needs `full`.
+    # Issue #263: `-n auto` because `quick` is development-time only — CI runs
+    # full / minimum / latest, never this profile — so it executes on whatever
+    # core count the developer has, and a fixed worker count would be wrong
+    # everywhere but one machine. `--dist loadgroup` because the distribution
+    # tests share the repo-root dist/ and must stay on one worker; the guard
+    # for that lives in tools/public_sync/tests/test_xdist_distribution_group.py.
+    run_static_checks
+    uv run --no-sync pytest -n auto --dist loadgroup -m "not browser" -v "${pytest_targets[@]}"
     ;;
   minimum)
     uv pip install 'Sphinx==9.1.0' 'myst-parser==5.1.0'

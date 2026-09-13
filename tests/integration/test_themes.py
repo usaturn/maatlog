@@ -7,6 +7,13 @@ from pathlib import Path
 import pytest
 from conftest import ProjectFactory
 from jinja2 import Environment
+from social_metadata import (
+    assert_no_duplicate_social_metadata,
+    assert_no_social_metadata,
+    json_ld_objects,
+    open_graph_values,
+    twitter_values,
+)
 
 from maatlog.errors import MaatlogBuildError
 from maatlog.theme_api import (
@@ -244,6 +251,9 @@ def test_inherits_base_third_party_theme_is_accepted(make_project: ProjectFactor
     page = result.html("post.html")
     assert page.select_one(".maatlog-post")
     assert page.select_one(".maatlog-sidebar")
+    assert open_graph_values(page, "og:type") == ["article"]
+    assert len(json_ld_objects(page)) == 1
+    assert_no_duplicate_social_metadata(page)
 
 
 def test_standalone_third_party_theme_is_accepted(make_project: ProjectFactory) -> None:
@@ -256,6 +266,28 @@ def test_standalone_third_party_theme_is_accepted(make_project: ProjectFactory) 
     page = result.html("post.html")
     assert page.select_one(".maatlog-post")
     assert page.select_one(".maatlog-sidebar")
+    assert_no_social_metadata(page)
+    assert set(result.app.env.get_domain("maatlog").data["posts_by_docname"]) == {"post"}
+
+
+def test_standalone_optin_third_party_theme_renders_shared_metadata(make_project: ProjectFactory) -> None:
+    """A standalone theme that opts in renders the shared View contract.
+
+    ``maatlog.metadata`` is present in the standalone template context even when
+    the theme does not opt in; iterating it like the shared partial renders the
+    post's article metadata exactly once.
+    """
+    result = make_project(
+        files=POST_PROJECT,
+        theme="standalone_optin",
+        extensions=_THEME_FIXTURE_EXTENSIONS,
+        conf_py_prefix=_THEME_FIXTURE_PREFIX,
+    ).build()
+    page = result.html("post.html")
+    assert open_graph_values(page, "og:type") == ["article"]
+    assert twitter_values(page, "twitter:card") == ["summary"]
+    assert len(json_ld_objects(page)) == 1
+    assert_no_duplicate_social_metadata(page)
 
 
 @pytest.mark.parametrize(
@@ -358,13 +390,15 @@ def test_hero_image_is_decorative(make_project: ProjectFactory) -> None:
 
 def test_external_post_shows_the_excerpt_once(make_project: ProjectFactory) -> None:
     # excerpt は header の tagline が出す。本文側にも出すと同じ文が 2 回出る。
+    # head は仕様として Social Metadata が同じ excerpt を出すため、数える範囲は本文（body）に絞る。
     result = make_project(files=EXTERNAL_POST_PROJECT, theme="maatlog-base").build()
     page = result.html("post.html")
 
     tagline = page.select_one(".maatlog-post-tagline")
     assert tagline is not None
     assert page.select_one(".maatlog-post-body .maatlog-post-excerpt") is None
-    assert page.text.count("External summary only.") == 1
+    body = page.text[page.text.index("<body") :]
+    assert body.count("External summary only.") == 1
     assert page.select_one(".maatlog-external-link") is not None
 
 

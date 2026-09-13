@@ -4,6 +4,7 @@ import json
 import os
 import pickle
 from collections.abc import Collection, Iterable, Iterator, Sequence
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
@@ -65,14 +66,17 @@ from .profiles import (
     register_avatars,
     resolve_profiles,
 )
+from .social_metadata import project_social_metadata
 from .table_layout import setup_table_layout
 from .taxonomy import DomainIndex
 from .theme_api import resolve_palette, resolve_pygments_style, validate_selected_theme
+from .urls import resolve_crawler_url
 from .version import PACKAGE_VERSION
 from .views import (
     AuthorProfileView,
     AuthorSummaryView,
     FeedLinkView,
+    MaatlogTemplateContext,
     NavigationView,
     PostCardView,
     SiteView,
@@ -208,6 +212,33 @@ def finalize_domain(app: Sphinx, env: BuildEnvironment) -> None:
         )
 
 
+def _as_page_template_mapping(
+    app: Sphinx,
+    pagename: str,
+    context: MaatlogTemplateContext,
+    *,
+    canonical_url: str | None = None,
+) -> dict[str, Any]:
+    """Finalize one page's ``maatlog`` mapping, projecting social metadata when it applies.
+
+    The :func:`is_full_html_builder` check is what lets every page path share this one
+    entry point: ``singlehtml``, ``text`` and the other partial or non-HTML builders have
+    no per-page crawler URL to resolve, so they get the mapping with metadata left empty
+    instead of needing a separate call site.
+
+    ``canonical_url`` is the explicit ``maatlog-canonical-url`` of a page that declares
+    one. Resolving the crawler URL is this function's job, not the projectors', so the
+    explicit value is applied here: ``og:url`` and ``WebSite.url`` then name the same
+    document as ``rel="canonical"`` instead of the ``html_baseurl`` URL the page happens
+    to be built at. A value that does not resolve falls back to the built URL.
+    """
+    if not is_full_html_builder(app.builder):
+        return as_template_mapping(context)
+    page_url = resolve_crawler_url(canonical_url) or resolve_crawler_url(absolute_doc_url(app, pagename))
+    metadata = project_social_metadata(context, page_url=page_url)
+    return as_template_mapping(replace(context, metadata=metadata))
+
+
 def inject_maatlog_page_context(
     app: Sphinx,
     pagename: str,
@@ -237,7 +268,7 @@ def inject_maatlog_page_context(
     site = _site_view(app, pagename, config)
     # Full HTML only: archives / theme post template / body store / feed discovery.
     if builder_capability(app.builder) is not BuilderCapability.FULL_HTML:
-        context.setdefault("maatlog", as_template_mapping(empty_context(site=site)))
+        context.setdefault("maatlog", _as_page_template_mapping(app, pagename, empty_context(site=site)))
         return None
 
     domain = cast(MaatlogDomain, app.env.get_domain("maatlog"))
@@ -245,14 +276,18 @@ def inject_maatlog_page_context(
     home_docname = resolved_home_docname(app, config)
     if home_docname is not None and pagename == home_docname:
         post = posts.get(pagename)
+        home_canonical_url: str | None = None
         if post is not None:
             capture_internal_body(app, pagename, post, context)
             if post.canonical_url is not None:
                 context["pageurl"] = post.canonical_url
+                home_canonical_url = post.canonical_url
         index = cast(DomainIndex | None, domain.data.get("index"))
         published = index.published if index is not None else ()
         linker = post_taxonomy_linker(index, builder=app.builder, from_docname=pagename, root=config.archive_docname)
-        context["maatlog"] = as_template_mapping(
+        context["maatlog"] = _as_page_template_mapping(
+            app,
+            pagename,
             home_context(
                 published,
                 app.builder,
@@ -273,7 +308,8 @@ def inject_maatlog_page_context(
                 feeds=_archive_discovery_feeds(app, page_axis=None, taxonomy_id=None, label="Posts"),
                 author_summaries=_author_summaries(app, from_docname=pagename, config=config, linker=linker),
                 featured_posts=resolved_featured_posts(app),
-            )
+            ),
+            canonical_url=home_canonical_url,
         )
         return HOME_TEMPLATE
 
@@ -300,7 +336,9 @@ def inject_maatlog_page_context(
         index = cast(DomainIndex | None, domain.data.get("index"))
         linker = post_taxonomy_linker(index, builder=app.builder, from_docname=pagename, root=config.archive_docname)
         if "maatlog" not in context:
-            context["maatlog"] = as_template_mapping(
+            context["maatlog"] = _as_page_template_mapping(
+                app,
+                pagename,
                 normal_page_context(
                     site=site,
                     taxonomies=(
@@ -315,7 +353,7 @@ def inject_maatlog_page_context(
                     ),
                     feeds=_archive_discovery_feeds(app, page_axis=None, taxonomy_id=None, label="Posts"),
                     author_summaries=_author_summaries(app, from_docname=pagename, config=config, linker=linker),
-                )
+                ),
             )
         return None
 
@@ -359,7 +397,7 @@ def inject_maatlog_page_context(
             app, from_docname=pagename, config=config, linker=linker, author_ids=post.authors
         ),
     )
-    context["maatlog"] = as_template_mapping(maatlog_context)
+    context["maatlog"] = _as_page_template_mapping(app, pagename, maatlog_context)
     # Suppress Sphinx basic-theme ``pageurl`` canonical; ``maatlog_head`` owns it
     # so explicit ``maatlog-canonical-url`` is not overridden by html_baseurl.
     context["pageurl"] = None
@@ -429,7 +467,9 @@ def collect_archive_pages(app: Sphinx) -> Iterator[tuple[str, dict[str, Any], st
                 author_ids=archive_authors,
             )
         )
-        maatlog = as_template_mapping(
+        maatlog = _as_page_template_mapping(
+            app,
+            page.docname,
             archive_context(
                 page,
                 app.builder,
@@ -442,7 +482,7 @@ def collect_archive_pages(app: Sphinx) -> Iterator[tuple[str, dict[str, Any], st
                 profile=profile_view,
                 author_summaries=summaries,
                 **({"featured_posts": resolved_featured_posts(app)} if is_home else {}),
-            )
+            ),
         )
         yield (
             page.docname,

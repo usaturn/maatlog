@@ -107,7 +107,7 @@ MaatLog HTML メタデータ）が保証されるのは ``html`` および ``dir
 
 * `docs/authoring.rst` — 投稿メタデータスキーマと例
 * `docs/configuration.rst` — conf.py の設定とデフォルト
-* `docs/theme-api.rst` — Theme API 1.0 契約と公式テーマ
+* `docs/theme-api.rst` — Theme API 1.0 仕様と公式テーマ
 * `docs/builders.rst` — ビルダー行列と静的サイト制約
 
 開発
@@ -142,6 +142,47 @@ full プロファイルはブラウザを使うアクセシビリティテスト
 リポジトリ全体の authoritative な検証入口は引き続き次です::
 
     ./scripts/ci/verify.sh full
+
+検証プロファイル
+----------------
+
+検証の入口は ``scripts/ci/verify.sh <profile>`` に一本化されています。プロファイル
+によって実行時間だけでなく、検査する範囲が変わります:
+
+``static``
+    static チェック一式です。``ruff check``、``ruff format --check``、``pyright``、
+    および frontend の検査（``npm ci`` と ``npm run check``）を実行します。
+
+``quick``
+    static と同じ検査に続けて、``pytest -m "not browser"`` を実行します。
+
+``full``
+    リリース前のゲートです。static チェック、ブラウザを使うアクセシビリティテストを
+    含む全テスト、配布物のビルド（``uv build``、``twine check``）、配布物のテストを
+    実行します。
+
+``minimum`` / ``latest``
+    CI が実行する Sphinx の互換性マトリクスです。``uv pip install`` で Sphinx の
+    バージョンを差し替えるため、仮想環境を書き換えます。
+
+``static`` と ``quick`` は ``uv pip install`` を実行しないため、仮想環境は
+``uv sync`` 直後の状態のまま保たれ、開発中に繰り返し実行できます。また、static
+チェックが失敗した時点で停止し、テストには進みません。authoritative な検証入口は
+引き続き ``full`` です。
+
+8コア / 31GB の Dev Container で、``uv sync`` と ``npm ci`` が済んだ状態での実測値
+（2026-09-11）:
+
+``quick`` はテストを並列実行する（``-n auto``）ため、実行時間は使えるコア数に
+依存します。
+
+=====================  ================
+プロファイル           実行時間
+=====================  ================
+``static``             約17秒
+``quick``              約1.3〜1.7分
+``full``               約12〜16分
+=====================  ================
 
 ライセンスとステータス
 ----------------------

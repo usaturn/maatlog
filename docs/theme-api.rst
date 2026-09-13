@@ -1,7 +1,7 @@
 Theme API
 =========
 
-MaatLog のテーマは Sphinx の HTML テーマに小さな契約を加えたものです。
+MaatLog のテーマは Sphinx の HTML テーマに小さなインターフェース仕様を加えたものです。
 すなわち、
 マニフェスト、必須のテンプレートと Jinja ブロック、安定した  ``maatlog`` コンテキスト
 名前空間、セマンティックな CSS クラス、そして CSS カスタムプロパティです
@@ -9,20 +9,21 @@ MaatLog のテーマは Sphinx の HTML テーマに小さな契約を加えた�
 API バージョン
 --------------
 
-Theme API の現在のバージョンは **1.21** です。
+Theme API の現在のバージョンは **1.22** です。
 ``api = "1.0"`` を宣言する ``inherits-base`` のテーマは
 引き続き受理されます。
-``standalone`` のテーマは ``api = "1.21"`` を宣言し、
+``standalone`` のテーマは ``api = "1.22"`` を宣言し、
 1.12 追加分と 1.16 追加分の必須テンプレートを自前で同梱する必要があります
-（詳細は下記「1.11 から 1.12 で追加された契約」と
-「1.15 から 1.16 で追加された契約」を参照してください）。
-1.13 から 1.15 は任意契約だけを足すため、必須テンプレートと必須ブロックは 1.12 のままでした。
+（詳細は下記「1.11 から 1.12 で追加された仕様」と
+「1.15 から 1.16 で追加された仕様」を参照してください）。
+1.13 から 1.15 は任意仕様だけを足すため、必須テンプレートと必須ブロックは 1.12 のままでした。
 1.16 は必須テンプレートを 2 件足します。
-1.17 は任意契約だけを足すため、必須テンプレートと必須ブロックは 1.16 のままです
-1.18 も任意契約だけを足すため、必須セットは 1.16 のままです
-1.19 も任意契約だけを足すため、必須セットは 1.16 のままです
-1.20 も任意契約だけを足すため、必須セットは 1.16 のままです
-1.21 も任意契約だけを足すため、必須セットは 1.16 のままです
+1.17 は任意仕様だけを足すため、必須テンプレートと必須ブロックは 1.16 のままです
+1.18 も任意仕様だけを足すため、必須セットは 1.16 のままです
+1.19 も任意仕様だけを足すため、必須セットは 1.16 のままです
+1.20 も任意仕様だけを足すため、必須セットは 1.16 のままです
+1.21 も任意仕様だけを足すため、必須セットは 1.16 のままです
+1.22 も任意仕様だけを足すため、必須セットは 1.16 のままです
 
 開発が安定するまでの間、Theme API の更新は下位互換しない破壊的変更です。
 新しいコアは、以前の ``api`` を宣言するテーマを受理し続けることを約束しません。
@@ -35,10 +36,10 @@ Theme API の現在のバージョンは **1.21** です。
 コアはメジャー ``1`` を実装するテーマを受け入れます。
 テーマがコアの提供するマイナー
 より高いバージョンを要求する場合、検証は失敗します。
-現在の 1.21 コアは 1.0 / 1.1 / 1.2 / 1.3 / 1.4 / 1.5 / 1.6 / 1.7 / 1.8 / 1.9 / 1.10 / 1.11 / 1.12 / 1.13 / 1.14 / 1.15 / 1.16 / 1.17 / 1.18 / 1.19 / 1.20 テーマを受理しますが、次の Theme API 更新が
+現在の 1.22 コアは 1.0 / 1.1 / 1.2 / 1.3 / 1.4 / 1.5 / 1.6 / 1.7 / 1.8 / 1.9 / 1.10 / 1.11 / 1.12 / 1.13 / 1.14 / 1.15 / 1.16 / 1.17 / 1.18 / 1.19 / 1.20 / 1.21 テーマを受理しますが、次の Theme API 更新が
 同じ約束を引き継ぐとは限りません
 
-1.0 から 1.1 で追加された任意の契約:
+1.0 から 1.1 で追加された任意の仕様:
 
 * **任意キー** — ``maatlog.site`` （``SiteView``）、 ``maatlog.page_kind`` の
   ``"home"``、 ``PostView.taxonomies`` / ``PostCardView.taxonomies``
@@ -49,7 +50,7 @@ Theme API の現在のバージョンは **1.21** です。
 * **任意クラス** — ``.maatlog-taxonomy-link``、 ``.maatlog-home-intro``、
   ``.maatlog-home-archive-link``
 
-1.1 から 1.2 で追加された任意の契約:
+1.1 から 1.2 で追加された任意の仕様:
 
 * **任意テンプレート** — ``maatlog/components/banner.html``、
   ``maatlog/components/nav-sidebar.html``、
@@ -75,7 +76,7 @@ Theme API の現在のバージョンは **1.21** です。
   ``<div>`` に変わりました。
   ナビゲーションのランドマークは外側の
   ``<nav class="maatlog-nav">`` が担います。
-  クラス名による契約は変わりませんが、
+  クラス名による仕様は変わりませんが、
   ``aside.maatlog-sidebar`` を選択している CSS は当たらなくなります
 * **レイアウト状態クラス** —  ``.maatlog-layout`` は、そのページが実際に
   ``<aside class="maatlog-toc">`` を出力するときだけ ``maatlog-layout-has-toc`` を
@@ -93,14 +94,14 @@ Theme API の現在のバージョンは **1.21** です。
   ページ種別クラスと
   ``maatlog-layout-has-toc`` は独立した状態であり、同時に付く場合があります
 
-1.2 から 1.3 で追加された任意の契約:
+1.2 から 1.3 で追加された任意の仕様:
 
 * ライト／ダークの配色トークンと ``<html data-theme="light|dark">`` （後述）
 * テーマ JavaScript の目印 ``<html class="maatlog-js">`` （後述）
 * 任意コンポーネント ``maatlog/components/theme-toggle.html`` （後述）
 * テンプレートコンテキスト ``maatlog.version``
 
-1.3 から 1.4 で追加された任意の契約:
+1.3 から 1.4 で追加された任意の仕様:
 
 * **任意キー** — ``TaxonomyItemView.is_current``。
   そのページが当該分類の
@@ -117,7 +118,7 @@ Theme API の現在のバージョンは **1.21** です。
   ``searchbox.html`` を include しなくなり、 ``maatlog/components/search.html``
   を include します。
   ``.maatlog-banner-search`` ラッパは残るため、クラス名に
-  よる契約は変わりません。
+  よる仕様は変わりません。
   ``<h3 id="searchlabel">`` と送信ボタンと
   ``#searchbox`` のインライン script は出力されなくなります
 * **挙動の変更** —  ``.maatlog-banner`` は ``position: sticky`` になります
@@ -146,12 +147,12 @@ Theme API の現在のバージョンは **1.21** です。
 * **挙動の変更** — ``maatlog/components/post-grid.html`` は、featured 以外の
   カードを ``<div class="maatlog-post-grid">`` で包みます
 
-1.4 から 1.5 で追加された任意の契約:
+1.4 から 1.5 で追加された任意の仕様:
 
 * **任意マニフェストキー** — ``palettes`` （``default_palette``）（後述「パレット」）
 * **任意設定** — ``maatlog_palette`` （ :doc:`configuration` を参照）
 * **任意 CSS ファイル** — ``static/palettes/<name>.css``
-* **契約の明文化** — 装飾トークンにはコントラスト比の下限を課さない（後述
+* **仕様の明文化** — 装飾トークンにはコントラスト比の下限を課さない（後述
   「パレット」）
 
 .. warning::
@@ -161,20 +162,20 @@ Theme API の現在のバージョンは **1.21** です。
     ``.maatlog-post-header + .maatlog-post-meta`` のような兄弟セレクタを書いて
     いる CSS は当たらなくなります。
 
-1.5 から 1.6 で追加された任意の契約:
+1.5 から 1.6 で追加された任意の仕様:
 
 * **任意マニフェストキー** — ``[maatlog.pygments]`` （後述「シンタックスハイライト」）
 
-1.6 から 1.7 で追加された任意の契約:
+1.6 から 1.7 で追加された任意の仕様:
 
 * テーマ JavaScript の共有 enhancer レジストリ（ ``window.maatlog`` ）
 * アーカイブの Infinite Scroll と ``maatlog:content-added`` イベント
 
-1.7 から 1.8 で追加された任意の契約:
+1.7 から 1.8 で追加された任意の仕様:
 
 * ページ Prefetch（ ``<link rel="prefetch">`` ）
 
-1.8 から 1.9 で追加された任意の契約:
+1.8 から 1.9 で追加された任意の仕様:
 
 * **任意ブロック** — ``maatlog_post_top_image`` （ ``maatlog/post.html`` 、記事の
   ヒーロー画像）
@@ -190,7 +191,7 @@ Theme API の現在のバージョンは **1.21** です。
 ``maatlog.post.top_image_url`` があるとき ``<h1>`` に
 ``maatlog-visually-hidden`` を付け、タイトルをオーバーレイ側で描画します
 
-1.9 から 1.10 で追加された任意の契約:
+1.9 から 1.10 で追加された任意の仕様:
 
 * **任意ブロック** — ``maatlog_archive_filter`` （ ``maatlog/archive.html`` 、
   アーカイブの絞り込みツールバー）
@@ -217,7 +218,7 @@ Theme API の現在のバージョンは **1.21** です。
 0 件メッセージ ``.maatlog-archive-empty-filtered`` は ``role="status"`` を
 持ちます。チップ操作は URL 遷移もフォーカス移動も伴わないためです
 
-1.10 から 1.11 で追加された任意の契約:
+1.10 から 1.11 で追加された任意の仕様:
 
 * **任意属性** — Sidebar の ``id="maatlog-sidebar"`` （
   ``data-maatlog-component="sidebar"`` と同一要素）、バナーの
@@ -235,7 +236,7 @@ Theme API の現在のバージョンは **1.21** です。
 ドロワーとして開閉します。JavaScript が無いときは従来どおり本文下部の
 縦積みレイアウトで Sidebar 情報へ到達できます。
 ``--maatlog-z-sidebar-*`` と safe-area padding は後続の固定 UI
-（Back to Top など）が衝突しないためのレイヤー契約です
+（Back to Top など）が衝突しないためのレイヤー仕様です
 
 ドロワーを開いている間、トグルは ``--maatlog-z-sidebar-toggle`` の層へ固定配置され、
 ドロワーの Close コントロールとして機能します。バナーの残りは
@@ -244,7 +245,7 @@ Theme API の現在のバージョンは **1.21** です。
 ``data-maatlog-label-open`` / ``data-maatlog-label-close`` から読みます。
 両属性を省いたテーマでは初期 ``aria-label`` と英語のフォールバックを使います
 
-1.11 から 1.12 で追加された契約:
+1.11 から 1.12 で追加された仕様:
 
 * **必須テンプレートの追加** — ``maatlog/profile.html``、
   ``maatlog/components/author-links.html``
@@ -264,7 +265,7 @@ Theme API の現在のバージョンは **1.21** です。
 * **任意クラス** — ``.maatlog-profile`` およびその子（ヘッダ、アバター、About、
   featured、stats、interests など）
 
-1.12 から 1.13 で追加された任意の契約:
+1.12 から 1.13 で追加された任意の仕様:
 
 * **任意テンプレート** — ``maatlog/components/back-to-top.html``
 * **任意ブロック** — ``layout.html`` の ``maatlog_back_to_top``
@@ -289,7 +290,7 @@ Back to Top を ``display: none`` にします。
 祖先が ``transform`` / ``filter`` / ``contain`` を持つと ``position: fixed`` の
 containing block がそこへ移るためです
 
-1.13 から 1.14 で追加された任意の契約:
+1.13 から 1.14 で追加された任意の仕様:
 
 * **任意ブロック** — ``maatlog_config_style`` （ ``layout.html`` 、
   ``extrahead`` の末尾。 ``conf.py`` 由来の ``:root`` カスタムプロパティを
@@ -313,7 +314,7 @@ containing block がそこへ移るためです
 上書きできます。テーマ側の既定値
 ``clamp(42rem, 24rem + 16vw, 60rem)`` は変わっていません
 
-1.14 から 1.15 で追加された任意の契約:
+1.14 から 1.15 で追加された任意の仕様:
 
 * **任意ブロック** — ``maatlog/post.html`` の ``maatlog_post_share``
 * **任意属性** — ``data-maatlog-component="share"``
@@ -332,7 +333,7 @@ Share を出すテーマは ``data-maatlog-component="share"`` を付けた要�
 enhancer はこの 2 つをクラスで取得し、どちらかが欠けると無言で何もしません。
 ``.maatlog-share`` は表示制御だけに使うクラスなので任意です
 
-1.15 から 1.16 で追加された契約:
+1.15 から 1.16 で追加された仕様:
 
 * **必須テンプレートの追加** — ``maatlog/components/right-rail.html``、
   ``maatlog/components/author-summary.html``
@@ -362,7 +363,7 @@ enhancer はこの 2 つをクラスで取得し、どちらかが欠けると�
   ``maatlog_right_rail`` へ名前を変えてください
 - ``.maatlog-toc`` は ``<aside>`` から ``<nav>`` に変わりました
 
-1.16 から 1.17 で追加された任意の契約:
+1.16 から 1.17 で追加された任意の仕様:
 
 * **任意クラス** — ``.maatlog-copy-link-status``
 * **任意属性** — ``data-maatlog-copy-state``、 ``data-maatlog-copy-label``
@@ -398,7 +399,7 @@ hover でしか permalink を開きません。
 ``maatlog-base`` は ``@media (hover: none)`` で両方を上書きし、
 タッチだけの読者にもコントロールを見せます
 
-1.17 から 1.18 で追加された任意の契約:
+1.17 から 1.18 で追加された任意の仕様:
 
 * **任意キー** — ``maatlog.featured``、 ``maatlog.latest`` （いずれも
   ``tuple[PostCardView, ...]``。キーは常に存在し、非 Home では空タプル）
@@ -420,11 +421,11 @@ hover でしか permalink を開きません。
 ``featured_posts`` 接続口へ渡す（設定 ``maatlog_featured_posts``）。
 選択処理の補完なしで 3 件未満を接続口へ直接渡した場合の旧テーマ互換は約束しない。
 
-1.18 から 1.19 で追加された任意の契約:
+1.18 から 1.19 で追加された任意の仕様:
 
 * **任意クラス** — ``.maatlog-table-wrapper`` （本文の docutils 表を包む
   スクロールコンテナ）
-* **DOM 契約** — 完全 HTML ビルド（``html`` / ``dirhtml``）では、本文のすべての
+* **DOM 仕様** — 完全 HTML ビルド（``html`` / ``dirhtml``）では、本文のすべての
   docutils 表（list-table / csv-table / RST の simple・grid 表 / MyST パイプ表）が
   ``<div class="maatlog-table-wrapper" tabindex="0">`` で包まれます。
   caption、 ``:name:`` の id、 ``colgroup`` （列幅）、 ``align-*`` クラス、
@@ -438,7 +439,7 @@ hover でしか permalink を開きません。
   を付け、 ``maatlog-base`` はスタイルを付けません
 * ``singlehtml`` 等の部分対応 builder と非 HTML builder の出力は変わりません
 
-1.19 から 1.20 で追加された任意の契約:
+1.19 から 1.20 で追加された任意の仕様:
 
 * 公式 ``maatlog-default`` は ``--maatlog-main-width`` を中央列
   ``.maatlog-layout-main`` の最大幅として適用します
@@ -450,7 +451,7 @@ hover でしか permalink を開きません。
 * DOM と必須テンプレートは 1.19 のままです。``maatlog-base`` の CSS は
   この上限を適用しません
 
-1.20 から 1.21 で変わった契約:
+1.20 から 1.21 で変わった仕様:
 
 * ``default`` の ``--maatlog-content-width`` の対象が、本文見出し（通常ページの
   ``h2``–``h6`` を含む）・表の wrapper 外形・コード外形に広がりました
@@ -459,12 +460,68 @@ hover でしか permalink を開きません。
 * ``table.docutils`` の ``display: block`` による自己スクロールをやめ、
   横スクロールは ``.maatlog-table-wrapper`` が担います
 
+1.21 から 1.22 で追加された任意の仕様:
+
+* **任意キー** — ``maatlog.metadata`` （``SocialMetadataView``）。
+  キーはすべての HTML ページで常に存在し、projector が値を出さないときは
+  ``open_graph`` / ``twitter`` が空タプル、 ``json_ld`` が ``None`` になります
+* **表示モデル** — Open Graph の ``OpenGraphPropertyView`` は ``property`` と
+  ``content``、X（Twitter Card）の ``TwitterCardPropertyView`` は ``name`` と
+  ``content`` を持ちます。
+  ``open_graph`` / ``twitter`` は順序付きタプルで、同じプロパティの繰り返しを保持します。
+  OG は ``<meta property="...">``、X は ``<meta name="...">`` で描画します
+* **JSON-LD** — ``json_ld`` はコアが直列化した script-safe な JSON 文字列です。
+  この値になれるのはコアの ``serialize_json_ld()`` が返した文字列だけです。
+  ``SocialMetadataView`` は代入された文字列を JSON object として読み直し、
+  ``serialize_json_ld()`` で直列化し直した結果と一致することを確かめます。
+  一致しない文字列 — 素の ``json.dumps()`` の出力、手書きの JSON、JSON ですらない値 —
+  はすべて ``ValueError`` で拒否します。
+  テーマは ``<script type="application/ld+json">`` 内にそのまま出力し、
+  Jinja で JSON の意味構造を組み直したり、再直列化したりしてはいけません
+* **任意テンプレート** — ``maatlog/components/social-metadata.html``。
+  共通 partial がメタ属性をエスケープし、 ``json_ld`` を ``safe`` で出力します。
+  空の View からはメタタグも JSON-LD の script 要素も出力しません
+* **任意ブロック** — ``maatlog_social_metadata``。
+  ``maatlog-base`` の ``maatlog_head`` 内にあり、標準実装は共通 partial を include します。
+  必須ブロックと必須テンプレートは増えません
+
+``inherits-base`` テーマは base のブロックを継承して出力を自動で受け取ります。
+``maatlog_head`` を上書きする場合は、その中で ``{{ super() }}`` を呼んでこの出力を維持してください。
+``extrahead`` を上書きして ``maatlog_head`` をその中に入れ子にすると出力が二重になります。
+``maatlog_head`` を ``super()`` なしで置き換えると、入れ子の ``maatlog_social_metadata`` ごと消えるため、ソーシャルメタデータの出力も失われます。
+どちらも下記「1.21 から 1.22 で変わった仕様」を参照してください。
+``standalone`` テーマは共通 partial を描画するか、同じ View の仕様どおりに描画します
+
+コアはページ種別ごとに ``maatlog.metadata`` を完成させます。
+内部投稿は ``BlogPosting``、外部投稿は JSON-LD を持たない website summary、
+プロフィール1ページ目は ``ProfilePage`` / ``Person``、実際のブログトップは
+``WebSite``、その他のアーカイブは JSON-LD を持たない website summary です。
+通常ページの View は空のままです。
+
+1.21 から 1.22 で変わった仕様:
+
+* ``maatlog_head`` は ``maatlog-base`` の ``layout.html`` が定義し、所有します。
+  1.21 まで ``maatlog/post.html`` などのページテンプレートが持っていた定義は削除されました
+* ``maatlog_head`` の責務にソーシャルメタデータの出力が加わりました。
+  必須ブロックと必須テンプレートのセットは変わりません
+* ``inherits-base`` テーマが ``extrahead`` を上書きし、その中に ``maatlog_head`` を入れ子にしている場合は、その ``extrahead`` の上書きを削除してください。
+  残したままでは ``maatlog_head`` が二重に描画され、canonical URL と Atom のフィードディスカバリリンクが重複します。
+  ``{{ super() }}`` が親の ``extrahead`` を描画するとき、その中の ``maatlog_head`` は最も派生したテーマの上書きに解決されるためです
+* 1.22 で head に要素を足すときは、 ``extrahead`` で包まずに ``maatlog_head`` を直接上書きします ::
+
+      {%- extends "maatlog-base/layout.html" -%}
+
+      {%- block maatlog_head -%}
+      {{ super() }}
+      <meta name="theme-extra" content="..." />
+      {%- endblock maatlog_head -%}
+
 1.0 から 1.11 までの必須テンプレートと必須ブロックは変わっていませんでした。
 ``implementation = "inherits-base"`` のテーマは、宣言する API が ``"1.0"`` から
-``"1.21"`` のどれでも引き続き検証を通ります（``maatlog-base`` の継承チェーン経由で
+``"1.22"`` のどれでも引き続き検証を通ります（``maatlog-base`` の継承チェーン経由で
 1.12 追加分と 1.16 追加分の必須テンプレート／ブロックを取得するため）。
 1.16 で追加される必須ブロックはありません。
-``implementation = "standalone"`` のテーマは ``api = "1.21"`` を宣言し、
+``implementation = "standalone"`` のテーマは ``api = "1.22"`` を宣言し、
 1.12 追加分の必須テンプレートと必須ブロック、および 1.16 追加分の必須テンプレートを
 自前で持つ必要があります。
 ``"1.11"`` 以下のままでは ``template-missing`` / ``block-missing`` で、
@@ -499,12 +556,12 @@ hover でしか permalink を開きません。
 公式テーマ
 ----------
 
-* ``maatlog-base`` — 契約の実装（Sphinx の ``basic`` を継承）
+* ``maatlog-base`` — 仕様の実装（Sphinx の ``basic`` を継承）
 * ``maatlog-default`` — すぐに使えるテーマ（ ``maatlog-base`` を継承）
 
-公式テーマは ``api = "1.21"`` を宣言します。
+公式テーマは ``api = "1.22"`` を宣言します。
 ``maatlog-base`` は ``standalone``、 ``maatlog-default`` は ``inherits-base`` です。
-第三者の ``inherits-base`` テーマは ``"1.0"`` から ``"1.21"`` のどれでも検証を通ります。
+第三者の ``inherits-base`` テーマは ``"1.0"`` から ``"1.22"`` のどれでも検証を通ります。
 旧テーマは ``maatlog.posts`` と ``featured_count`` スライスを使い続けてよい。
 ``maatlog/home.html`` が無いときは ``maatlog.theme.home-template-missing`` を警告し、
 アーカイブルート 1 ページ目がトップを兼ねます。
@@ -684,6 +741,9 @@ Theme API 1.2 から、 ``maatlog/components/sidebar.html`` の出力はレイ�
   差し替えるテーマは、自身の
   テンプレートディレクトリに同名ファイルを置いてください
 
+* ``maatlog/components/social-metadata.html`` — ``maatlog.metadata`` の OG / X /
+  JSON-LD を head に描画する共通 partial（1.22 以降）
+
 必須の Jinja ブロック
 ---------------------
 
@@ -694,7 +754,8 @@ Theme API 1.2 から、 ``maatlog/components/sidebar.html`` の出力はレイ�
    * - ブロック
      - 責務
    * - ``maatlog_head``
-     - canonical URL、フィードディスカバリ、テーマ固有の head 追加要素
+     - canonical URL、フィードディスカバリ、ソーシャルメタデータ（ ``maatlog_social_metadata`` ）、テーマ固有の head 追加要素。
+       ``maatlog-base`` では ``layout.html`` がこのブロックを定義します
    * - ``maatlog_post_header``
      - カテゴリ、タイトル、タグライン、 ``maatlog_post_meta``、hero image
    * -  ``maatlog_post_meta``
@@ -724,7 +785,7 @@ Theme API 1.2 から、 ``maatlog/components/sidebar.html`` の出力はレイ�
 テーマがこの分岐を実装せず、すべてのアーカイブを同じ体裁で描画しても
 検証は通ります
 
-ブロックの契約では  ``maatlog`` コンテキスト名前空間のみを使います（場当たり的な
+ブロックの仕様では  ``maatlog`` コンテキスト名前空間のみを使います（場当たり的な
 トップレベルのグローバル変数は使いません）
 
 任意の Jinja ブロック
@@ -735,17 +796,20 @@ Theme API 1.2 から、 ``maatlog/components/sidebar.html`` の出力はレイ�
 
 * ``maatlog_home_intro`` — ホームでユーザ本文 ``{{ body }}`` を出します
 * ``maatlog_archive_filter`` — アーカイブの絞り込みツールバーを出します
+* ``maatlog_social_metadata`` — ``maatlog_head`` 内でソーシャルメタデータの
+  共通 partial を include します（1.22 以降）
 
 コンテキスト名前空間
 --------------------
 
 MaatLog のすべてのテンプレートは、トップレベルの  ``maatlog`` マッピングを受け取り
 ます。
-キーは常に存在し、使われない値は ``None`` または空のシーケンスになります
+キーは常に存在し、使われない値は ``None`` または空のシーケンスになります。
+``maatlog.metadata`` は値がなくても空の ``SocialMetadataView`` として存在します
 
 ::
 
-    maatlog.api_version   # "1.21"
+    maatlog.api_version   # "1.22"
     maatlog.version       # MaatLog ディストリビューションのバージョン（例 "0.1.0"）
     maatlog.page_kind     # "post" | "archive" | "home" | "normal" | "profile"
     maatlog.post          # PostView | None
@@ -760,6 +824,14 @@ MaatLog のすべてのテンプレートは、トップレベルの  ``maatlog`
     maatlog.feeds         # tuple[FeedLinkView, ...]
     maatlog.taxonomies    # TaxonomyNavigationView
     maatlog.site          # SiteView
+    maatlog.metadata      # SocialMetadataView（常に存在）
+
+**SocialMetadataView** のフィールド: ``open_graph``
+（``tuple[OpenGraphPropertyView, ...]``）、 ``twitter``
+（``tuple[TwitterCardPropertyView, ...]``）、 ``json_ld`` （``str | None``）。
+OG / X のタプルは順序と重複を保持し、既定値は ``()`` です。
+``json_ld`` の既定値は ``None`` で、値がある場合は script-safe な JSON 文字列です。
+各 View の描画ルールは上記「1.21 から 1.22 で追加された任意の仕様」を参照してください
 
 **SiteView** のフィールド: ``title``、 ``tagline``、 ``archive_url``、
 ``top_image_title_font``、 ``content_width``。
@@ -902,7 +974,7 @@ Theme API 1.12 から ``maatlog/components/author-links.html`` は必須テン�
 各要素は **AuthorLinkView** （ ``type``、 ``url``、 ``label``、 ``icon``）です。
 ``maatlog_author_links`` が空または未定義のときは何も出力しません
 
-出力の契約は次のとおりです
+出力の仕様は次のとおりです
 
 * ルート要素は ``<ul class="maatlog-author-links" data-maatlog-component="author-links">`` です
 * 各リンクは ``rel="noopener"`` と ``data-maatlog-link-type`` を持ちます
@@ -1256,7 +1328,7 @@ Pygments のスタイルは Pygments 同梱のものを名前で参照するだ�
 Theme API 1.6 から、パレットは当てる Pygments スタイルを宣言できます。
 ``[maatlog.pygments]`` はパレット名から Pygments のスタイル名への対応表です
 
-* 任意の契約です。
+* 任意の仕様です。
   テーブルを持たないテーマは ``theme.conf`` の ``pygments_style`` /
   ``pygments_dark_style`` で従来どおり動きます
 * 部分宣言を許します。

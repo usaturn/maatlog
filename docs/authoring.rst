@@ -127,7 +127,9 @@ MyST の front matter は YAML の暗黙の型付けに従います。MaatLog �
    * - ``maatlog-canonical-url``
      - 絶対 URL または ``None``
      - 任意
-     - ``http`` / ``https`` のみ。userinfo とフラグメントは不可。
+     - ``http`` / ``https`` のみ。ホスト名が必須で、userinfo・空白は不可、
+       ポートは解析可能でなければならない。query と fragment は持つことができ、
+       バイト列のまま保持される。
    * - ``maatlog-external-url``
      - 絶対 URL または ``None``
      - 任意
