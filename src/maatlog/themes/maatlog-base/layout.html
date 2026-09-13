@@ -36,6 +36,19 @@
 {%- if maatlog.site.top_image_title_font %} --maatlog-top-image-title-font: {{ maatlog.site.top_image_title_font }};{% endif %} }</style>
 {%- endif -%}
 {%- endblock maatlog_config_style -%}
+{%- block maatlog_head -%}
+{%- if maatlog.page_kind == "post" and maatlog.post and maatlog.post.canonical_url -%}
+<link rel="canonical" href="{{ maatlog.post.canonical_url|e }}" />
+{%- endif -%}
+{%- if maatlog.page_kind in ("post", "archive", "home", "profile") -%}
+{%- for feed in maatlog.feeds -%}
+<link rel="alternate" type="application/atom+xml" title="{{ feed.title|e }}" href="{{ feed.url|e }}" />
+{%- endfor -%}
+{%- endif -%}
+{%- block maatlog_social_metadata -%}
+{%- include "maatlog/components/social-metadata.html" -%}
+{%- endblock maatlog_social_metadata -%}
+{%- endblock maatlog_head -%}
 {%- endblock extrahead -%}
 
 {#- テーマ JS は head 内で同期読み込みする。保存済みのライト/ダーク設定を

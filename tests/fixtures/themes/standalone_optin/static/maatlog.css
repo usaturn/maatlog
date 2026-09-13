@@ -1,0 +1,14 @@
+/* Compliant standalone third-party fixture. */
+:root {
+  --maatlog-content-width: 40rem;
+  --maatlog-sidebar-width: 14rem;
+  --maatlog-space-xs: 0.25rem;
+  --maatlog-space-sm: 0.5rem;
+  --maatlog-space-md: 1rem;
+  --maatlog-space-lg: 2rem;
+  --maatlog-color-text: #111;
+  --maatlog-color-muted: #666;
+  --maatlog-color-link: #04c;
+  --maatlog-color-border: #ccc;
+  --maatlog-card-background: #fff;
+}

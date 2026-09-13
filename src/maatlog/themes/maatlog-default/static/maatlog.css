@@ -1153,7 +1153,7 @@ img {
 
 /* 地を透かすのは blur が効くときだけ。透過だけが効くと背後の本文が
    バナーの文字に重なって読めなくなる。非対応環境は不透明のまま。
-   currentcolor は色リテラルではないので、色トークン契約に抵触しない。 */
+   currentcolor は色リテラルではないので、色トークンの仕様に抵触しない。 */
 @supports (backdrop-filter: blur(8px)) and (background: color-mix(in srgb, currentcolor 82%, transparent)) {
   .maatlog-banner {
     background: color-mix(in srgb, var(--maatlog-banner-background) 82%, transparent);

@@ -119,7 +119,7 @@ class PaletteDeclaration(BaseModel):
         return None
 
 
-CORE_THEME_API: Final = ThemeApiVersion(major=1, minor=21)
+CORE_THEME_API: Final = ThemeApiVersion(major=1, minor=22)
 
 
 def is_compatible(core: ThemeApiVersion, theme: ThemeApiVersion) -> bool:

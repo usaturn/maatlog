@@ -402,6 +402,26 @@ def test_a10_third_party_theme(site: AcceptanceSite) -> None:
     page = result.html("posts/rst-post.html")
     assert page.select_one(".contract-theme-marker")
     assert result.exists("_static/maatlog.css")
+    # Theme API 1.22 makes maatlog-base/layout.html the single owner of maatlog_head,
+    # so an inherits-base child must not wrap it in an extrahead override: Jinja would
+    # resolve the nested block twice and duplicate every link below. The expected set
+    # comes from conf.py (html_baseurl, maatlog_archive_docname, maatlog_feed_taxonomies)
+    # and rst-post.rst's own taxonomies, not from the rendered page.
+    assert len(page.select('link[rel="canonical"]')) == 1
+    feeds = page.select('link[type="application/atom+xml"]')
+    assert {feed["href"] for feed in feeds} == {
+        "https://example.test/docs/blog/atom.xml",
+        "https://example.test/docs/blog/tag/sphinx/atom.xml",
+        "https://example.test/docs/blog/tag/python/atom.xml",
+        "https://example.test/docs/blog/category/engineering/atom.xml",
+        "https://example.test/docs/blog/author/alice/atom.xml",
+        "https://example.test/docs/blog/month/2026-08/atom.xml",
+    }
+    assert len(feeds) == 6
+    archive = result.html("blog.html")
+    assert len(archive.select('link[rel="canonical"]')) == 1
+    archive_feeds = archive.select('link[type="application/atom+xml"]')
+    assert [feed["href"] for feed in archive_feeds] == ["https://example.test/docs/blog/atom.xml"]
     # Registration is via add_html_theme (extension), not conf html_theme_path alone.
     conf = (site.srcdir / "conf.py").read_text(encoding="utf-8")
     assert "maatlog_acceptance_themes" in conf
@@ -419,7 +439,7 @@ def test_a11_theme_contract_errors(site: AcceptanceSite) -> None:
         text,
     )
     assert "field=api" in text
-    assert "core_api=1.21" in text
+    assert "core_api=1.22" in text
     assert "theme_api=2.0" in text
     assert "value=2.0" in text
 
@@ -430,7 +450,7 @@ def test_a11_theme_contract_errors(site: AcceptanceSite) -> None:
         manifest_text,
     )
     assert "field=manifest" in manifest_text
-    assert "core_api=1.21" in manifest_text
+    assert "core_api=1.22" in manifest_text
     assert "expected=maatlog-theme.toml" in manifest_text
 
     missing_block = site.build_invalid("missing-block")
@@ -440,7 +460,7 @@ def test_a11_theme_contract_errors(site: AcceptanceSite) -> None:
         block_text,
     )
     assert "field=block" in block_text
-    assert "core_api=1.21" in block_text
+    assert "core_api=1.22" in block_text
     assert "theme_api=1.0" in block_text
 
     missing_templates = site.build_invalid("missing-templates")
@@ -450,7 +470,7 @@ def test_a11_theme_contract_errors(site: AcceptanceSite) -> None:
         templates_text,
     )
     assert "field=template" in templates_text
-    assert "core_api=1.21" in templates_text
+    assert "core_api=1.22" in templates_text
     assert "theme_api=1.0" in templates_text
 
 

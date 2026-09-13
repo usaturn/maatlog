@@ -556,7 +556,6 @@ def _normalize_url(
         or not parsed.hostname
         or parsed.username is not None
         or parsed.password is not None
-        or bool(parsed.fragment)
         or any(character.isspace() for character in value)
     ):
         diagnostics.append(
@@ -565,7 +564,7 @@ def _normalize_url(
                 code="maatlog.url.invalid",
                 message="Invalid absolute URL",
                 field=name,
-                expected="an absolute HTTP or HTTPS URL without userinfo or a fragment",
+                expected="an absolute HTTP or HTTPS URL without userinfo",
                 value=repr(redact_userinfo_in_text(value)),
             )
         )

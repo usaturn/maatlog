@@ -15,6 +15,7 @@ from sphinx.util.osutil import relative_uri
 from .archives import ArchivePage
 from .authors import AuthorProfile
 from .model import Post
+from .social_metadata import SocialMetadataView
 from .theme_api import CORE_THEME_API
 from .urls import is_absolute_http_url, post_urls
 from .version import PACKAGE_VERSION
@@ -210,6 +211,7 @@ class MaatlogTemplateContext:
     api_version: str = str(CORE_THEME_API)
     version: str = PACKAGE_VERSION
     page_kind: PageKind = "normal"
+    metadata: SocialMetadataView = SocialMetadataView()
     post: PostView | None = None
     posts: tuple[PostCardView, ...] = ()
     featured: tuple[PostCardView, ...] = ()

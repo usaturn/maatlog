@@ -1,18 +1,6 @@
 {# MaatLog post page — implements Theme API 1.0 blocks and semantic classes. #}
 {%- extends "layout.html" -%}
 
-{%- block extrahead -%}
-  {{ super() }}
-  {%- block maatlog_head -%}
-  {%- if maatlog.post and maatlog.post.canonical_url -%}
-  <link rel="canonical" href="{{ maatlog.post.canonical_url|e }}" />
-  {%- endif -%}
-  {%- for feed in maatlog.feeds -%}
-  <link rel="alternate" type="application/atom+xml" title="{{ feed.title|e }}" href="{{ feed.url|e }}" />
-  {%- endfor -%}
-  {%- endblock maatlog_head -%}
-{%- endblock extrahead -%}
-
 {%- block body -%}
 <article class="maatlog-post" data-maatlog-component="post">
   <div class="contract-theme-marker" data-theme="contract-theme"></div>

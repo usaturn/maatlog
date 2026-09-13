@@ -63,14 +63,14 @@ def test_internal_post_head(make_project: ProjectFactory) -> None:
     ).build()
     page = result.html("post.html")
 
-    canonical = page.select_one('link[rel="canonical"]')
-    assert canonical is not None
-    assert canonical["href"] == "https://example.com/post.html"
+    canonical = page.select('link[rel="canonical"]')
+    assert len(canonical) == 1
+    assert canonical[0]["href"] == "https://example.com/post.html"
 
-    atom = page.select_one('link[type="application/atom+xml"]')
-    assert atom is not None
-    assert atom.get("rel") == "alternate"
-    assert atom["href"] == "https://example.com/blog/atom.xml"
+    atom = page.select('link[type="application/atom+xml"]')
+    assert len(atom) == 5
+    assert atom[0].get("rel") == "alternate"
+    assert atom[0]["href"] == "https://example.com/blog/atom.xml"
     assert "application/atom+xml" in page.text
 
     # Taxonomy feeds for the post's membership.
@@ -79,9 +79,11 @@ def test_internal_post_head(make_project: ProjectFactory) -> None:
     assert "https://example.com/blog/author/alice/atom.xml" in page.text
     assert "https://example.com/blog/month/2026-08/atom.xml" in page.text
 
-    # MaatLog does not emit OGP / Twitter Card meta tags.
-    assert 'property="og:' not in page.text
-    assert 'name="twitter:' not in page.text
+    # Issue #209 projects the post's Open Graph; canonical and Atom stay as they were.
+    assert page.select('meta[property="og:type"]') == [{"property": "og:type", "content": "article"}]
+    assert page.select('meta[property="og:url"]') == [
+        {"property": "og:url", "content": "https://example.com/post.html"}
+    ]
 
     assert "Body visible on the MaatLog page." in page.text
 

@@ -1,0 +1,9 @@
+{%- for item in maatlog.metadata.open_graph -%}
+<meta property="{{ item.property|e }}" content="{{ item.content|e }}" />
+{%- endfor -%}
+{%- for item in maatlog.metadata.twitter -%}
+<meta name="{{ item.name|e }}" content="{{ item.content|e }}" />
+{%- endfor -%}
+{%- if maatlog.metadata.json_ld -%}
+<script type="application/ld+json">{{ maatlog.metadata.json_ld|safe }}</script>
+{%- endif -%}

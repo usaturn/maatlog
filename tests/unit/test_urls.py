@@ -13,6 +13,7 @@ from maatlog.urls import (
     is_relative_docname,
     post_urls,
     redact_url,
+    resolve_crawler_url,
     validate_baseurl,
 )
 
@@ -35,6 +36,36 @@ from maatlog.urls import (
 def test_invalid_feed_baseurl(url: str | None) -> None:
     with pytest.raises(MaatlogBuildError, match="maatlog.feed.baseurl-required"):
         validate_baseurl(url)
+
+
+@pytest.mark.parametrize(
+    ("value", "page_url", "expected"),
+    [
+        ("https://example.test/post?q=1#part", None, "https://example.test/post?q=1#part"),
+        (
+            "../_images/hero.png",
+            "https://example.test/blog/posts/one/",
+            "https://example.test/blog/posts/_images/hero.png",
+        ),
+        ("post.html", "https://example.test/docs/index.html", "https://example.test/docs/post.html"),
+        ("post/", "https://example.test/docs/", "https://example.test/docs/post/"),
+        ("post.html", None, None),
+        ("", "https://example.test/", None),
+        (None, "https://example.test/", None),
+        ("mailto:a@example.test", "https://example.test/", None),
+        ("javascript:alert(1)", "https://example.test/", None),
+        ("https:///missing-host", None, None),
+        ("relative", "relative/base.html", None),
+        # A crawler-facing property must never carry a URL that cannot be parsed back:
+        # the port has to be a number in range and the value must hold no whitespace.
+        ("https://example.test:not-a-port/post", None, None),
+        ("https://example.test:99999/post", None, None),
+        ("https://example .test/post", None, None),
+        ("https://example.test/a b", None, None),
+    ],
+)
+def test_resolve_crawler_url(value: str | None, page_url: str | None, expected: str | None) -> None:
+    assert resolve_crawler_url(value, page_url=page_url) == expected
 
 
 def test_invalid_baseurl_redacts_userinfo_in_diagnostic() -> None:
@@ -216,6 +247,10 @@ def test_is_absolute_http_url_accepts_absolute_http_urls(url: str) -> None:
         "https://",
         "",
         "   ",
+        "https://example.com:not-a-port/alice",
+        "https://example.com:99999/alice",
+        "https://exa mple.com/alice",
+        "https://example.com/a\tb",
     ],
 )
 def test_is_absolute_http_url_rejects_non_http_urls(url: str) -> None:

@@ -147,6 +147,47 @@ The authoritative full repository verification remains::
 
     ./scripts/ci/verify.sh full
 
+Verification profiles
+---------------------
+
+``scripts/ci/verify.sh <profile>`` is the single verification entry point. The
+profiles differ in what they cover, not only in how long they take:
+
+``static``
+    The static checks: ``ruff check``, ``ruff format --check``, ``pyright``, and
+    the frontend checks (``npm ci`` and ``npm run check``).
+
+``quick``
+    The same static checks, followed by ``pytest -m "not browser"``.
+
+``full``
+    The release gate: the static checks, the whole test suite including the
+    browser-driven accessibility tests, then the distribution build
+    (``uv build``, ``twine check``) and the distribution tests.
+
+``minimum`` / ``latest``
+    The Sphinx compatibility matrix that CI runs. These swap Sphinx versions
+    with ``uv pip install``, so they rewrite the virtualenv.
+
+``static`` and ``quick`` never run ``uv pip install``, so the virtualenv stays
+exactly as ``uv sync`` left it and both profiles can be repeated freely while
+developing. They also stop at the first failing static check, before the test
+suite starts. ``full`` remains the authoritative check.
+
+Measured on an 8-core / 31 GB Dev Container (2026-09-11), with a warm
+``uv sync`` and ``npm ci``:
+
+``quick`` runs its tests in parallel (``-n auto``), so its wall time tracks the
+number of cores available.
+
+===========  ================
+profile      wall time
+===========  ================
+``static``   ~17 seconds
+``quick``    ~1.3-1.7 minutes
+``full``     ~12-16 minutes
+===========  ================
+
 License and status
 ------------------
 
