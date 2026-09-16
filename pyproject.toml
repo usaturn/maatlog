@@ -1,6 +1,6 @@
 [project]
 name = "maatlog"
-version = "0.5.0"
+version = "0.6.0"
 description = "A Sphinx extension that turns documentation projects into static blogs."
 readme = "README.rst"
 requires-python = ">=3.14"
@@ -14,6 +14,9 @@ classifiers = [
     "Framework :: Sphinx :: Extension",
 ]
 dependencies = ["Sphinx>=9.1", "myst-parser>=5.1", "pydantic>=2"]
+
+[project.optional-dependencies]
+images = ["Pillow>=11.3"]
 
 [project.urls]
 Homepage = "https://github.com/usaturn/maatlog"
@@ -32,6 +35,7 @@ dev = [
     "playwright>=1.62.0",
     "beautifulsoup4>=4.15.0",
     "pytest-xdist>=3.8.0",
+    "Pillow>=11.3",
 ]
 
 # Keep every path in this file present in both layouts: this file is shared with the

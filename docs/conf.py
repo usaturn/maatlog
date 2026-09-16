@@ -2,7 +2,7 @@ project = "MaatLog"
 copyright = "2026, MaatLog maintainers"
 author = "MaatLog maintainers"
 language = "ja"
-release = "0.5.0"
+release = "0.6.0"
 
 extensions = [
     "maatlog",

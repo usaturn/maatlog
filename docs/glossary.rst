@@ -47,3 +47,22 @@
     Chrome DevTools MCP
         Chrome DevTools の計測機能を MCP 経由でエージェントへ提供するサーバである。
         :term:`Lighthouse` の実行や性能トレースの取得を担うが、本リポジトリでは導入していない
+
+    Pillow
+        Python の画像処理ライブラリである。
+        :term:`MaatLog` のレスポンシブ画像機能は ``images`` extra で導入する
+        Pillow をバックエンドとして使い、JPEG / PNG / WebP の
+        デコード・リサイズ・エンコードを行う
+
+    EXIF
+    Exchangeable Image File Format
+        デジタルカメラなどが画像ファイルへ埋め込むメタデータの規格である。
+        撮影日時や機種、位置情報、画像の表示方向を示す orientation が含まれる。
+        :term:`MaatLog` は生成するバリアントに orientation を適用したうえで、
+        EXIF そのものは出力へ残さない
+
+    ICC
+    ICC プロファイル
+        画像の色を機器間で一貫して再現するための色情報である。
+        :term:`MaatLog` はバリアントへ ICC プロファイルを保持し、
+        パレット形式の画像は sRGB プロファイルへ変換する

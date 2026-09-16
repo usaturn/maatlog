@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping, Sequence
-from dataclasses import asdict
 from pathlib import Path
 from typing import Any, cast
 
@@ -22,6 +21,7 @@ from sphinx.writers.text import TextTranslator
 from .archives import PostFilter, filter_posts
 from .config import TAXONOMY_KEY_PATTERN, MaatlogConfig
 from .errors import Diagnostic, MaatlogBuildError
+from .image_contracts import ImageUsage
 from .images import (
     IMAGE_INVALID,
     IMAGE_INVALID_EXPECTED,
@@ -32,7 +32,13 @@ from .images import (
 from .model import Post
 from .navigation import post_taxonomy_linker
 from .taxonomy import DomainIndex
-from .views import image_url_for, post_card_view, relative_page_url_for
+from .views import (
+    image_url_for,
+    post_card_template_mapping,
+    post_card_view,
+    relative_page_url_for,
+    responsive_image_for,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -226,8 +232,9 @@ def html_visit_post_list(self: HTML5Translator, node: post_list) -> None:
             image_url=image_url_for(builder, docname, post.image_uri),
             slug=post.slug,
             taxonomies=linker.for_post(post),
+            responsive_image=responsive_image_for(builder, docname, post.image_uri, usage=ImageUsage.ARCHIVE_CARD),
         )
-        cards_html.append(_render_post_card(builder, asdict(card)))
+        cards_html.append(_render_post_card(builder, post_card_template_mapping(card)))
     body = "".join(cards_html)
     self.body.append(f'<div class="maatlog-post-list" data-maatlog-component="post-list">{body}</div>')
     raise nodes.SkipNode

@@ -1,4 +1,9 @@
-{# Post grid component. Never reads the ``maatlog`` namespace. #}
+{# Post grid component. Reads only ``maatlog.page_kind`` (guarded) to pick
+   the card image presentation; every ``loop`` value the card needs is copied
+   into the ``with`` arguments so post-card.html never touches the outer loop. #}
+{%- set _page_kind = maatlog.page_kind if maatlog is defined and maatlog.page_kind is defined else 'unknown' -%}
+{%- set _is_blog_top = _page_kind == 'home' or (maatlog is defined and maatlog.archive is defined and maatlog.archive and maatlog.archive.is_home) -%}
+{%- set _standalone_cards = _page_kind not in ['home', 'archive'] -%}
 {%- set heading = latest_heading if latest_heading is defined else "Older posts" -%}
 {%- if featured_cards is defined or latest_cards is defined -%}
 {%- set featured_list = featured_cards if featured_cards is defined else [] -%}
@@ -6,7 +11,12 @@
 {%- if featured_list -%}
 <div class="maatlog-post-featured" data-maatlog-component="featured">
   {%- for card in featured_list -%}
-  {%- with card=card, card_variant=("lead" if loop.first else "secondary"), card_anchor=card.slug -%}
+  {%- set _featured_variant = 'lead' if loop.first else 'secondary' -%}
+  {%- with card=card, card_variant=_featured_variant, card_anchor=card.slug,
+      image_presentation=('standalone' if _standalone_cards else _featured_variant),
+      image_featured_count=featured_list|length,
+      image_early=true,
+      image_high=(loop.first and _is_blog_top) -%}
   {%- include "maatlog/components/post-card.html" -%}
   {%- endwith -%}
   {%- endfor -%}
@@ -16,7 +26,11 @@
 <h2 class="maatlog-post-list-heading">{{ heading|e }}</h2>
 <div class="maatlog-post-grid" data-maatlog-component="latest">
   {%- for card in latest_list -%}
-  {%- with card=card, card_variant="latest", card_anchor=card.slug -%}
+  {%- with card=card, card_variant="latest", card_anchor=card.slug,
+      image_presentation=('standalone' if _standalone_cards else 'latest'),
+      image_featured_count=0,
+      image_early=(true if _standalone_cards else (loop.index0 < 6)),
+      image_high=false -%}
   {%- include "maatlog/components/post-card.html" -%}
   {%- endwith -%}
   {%- endfor -%}
@@ -30,7 +44,18 @@
 {%- if featured_n -%}
 <div class="maatlog-post-featured" data-maatlog-component="featured">
   {%- for card in cards[:featured_n] -%}
-  {%- with card=card, card_variant="featured", card_anchor=card.slug -%}
+  {%- if _standalone_cards -%}
+  {%- set _legacy_presentation = 'standalone' -%}
+  {%- elif loop.index0 is odd or (featured_n == 3 and loop.index0 == 2) -%}
+  {%- set _legacy_presentation = 'featured-secondary' -%}
+  {%- else -%}
+  {%- set _legacy_presentation = 'featured-primary' -%}
+  {%- endif -%}
+  {%- with card=card, card_variant="featured", card_anchor=card.slug,
+      image_presentation=_legacy_presentation,
+      image_featured_count=featured_n,
+      image_early=true,
+      image_high=false -%}
   {%- include "maatlog/components/post-card.html" -%}
   {%- endwith -%}
   {%- endfor -%}
@@ -42,7 +67,11 @@
 {%- if cards[featured_n:] -%}
 <div class="maatlog-post-grid"{% if featured_n %} data-maatlog-component="latest"{% endif %}>
   {%- for card in cards[featured_n:] -%}
-  {%- with card=card, card_anchor=card.slug -%}
+  {%- with card=card, card_anchor=card.slug,
+      image_presentation=('standalone' if _standalone_cards else ('latest' if featured_n else 'archive')),
+      image_featured_count=0,
+      image_early=(true if _standalone_cards else (loop.index0 < 6)),
+      image_high=false -%}
   {%- include "maatlog/components/post-card.html" -%}
   {%- endwith -%}
   {%- endfor -%}

@@ -111,7 +111,7 @@ def test_core_is_compatible_with_equal_or_lower_minor() -> None:
 
 
 def test_core_theme_api_is_the_current_contract_version() -> None:
-    assert CORE_THEME_API == ThemeApiVersion(major=1, minor=22)
+    assert CORE_THEME_API == ThemeApiVersion(major=1, minor=23)
 
 
 def test_theme_api_one_twenty_two_documents_social_metadata_contract() -> None:
@@ -126,6 +126,31 @@ def test_theme_api_one_twenty_two_documents_social_metadata_contract() -> None:
         "TwitterCardPropertyView",
         "maatlog_social_metadata",
         "maatlog/components/social-metadata.html",
+    ):
+        assert token in section
+
+
+def test_theme_api_one_twenty_three_documents_responsive_image_contract() -> None:
+    documentation = (Path(__file__).resolve().parents[2] / "docs" / "theme-api.rst").read_text(encoding="utf-8")
+    section = documentation.partition("1.22 から 1.23 で追加された任意の仕様:")[2].partition(
+        "1.0 から 1.11 までの必須テンプレート"
+    )[0]
+    for token in (
+        "ResponsiveImageView",
+        "responsive_image",
+        "responsive_top_image",
+        "render_image",
+        "image_sizes",
+        "image_loading",
+        "image_fetchpriority",
+        "maatlog/components/image.html",
+        "maatlog/components/image-policy.html",
+        "post-top",
+        "post-representative",
+        "home-lead",
+        "home-secondary",
+        "home-latest",
+        "archive-card",
     ):
         assert token in section
 
@@ -206,7 +231,7 @@ def test_bundled_theme_manifest_declares_core_api(theme_name: str) -> None:
     manifest = parse_and_validate_manifest(section, core_api=CORE_THEME_API)
 
     assert manifest.api == CORE_THEME_API
-    assert str(manifest.api) == "1.22"
+    assert str(manifest.api) == "1.23"
 
 
 def test_inherits_base_theme_at_1_8_is_accepted_by_current_core() -> None:
@@ -228,7 +253,7 @@ def test_required_contract_constants() -> None:
 
 
 def test_core_theme_api_renders_as_a_dotted_string() -> None:
-    assert str(CORE_THEME_API) == "1.22"
+    assert str(CORE_THEME_API) == "1.23"
 
 
 def test_older_theme_api_versions_stay_compatible() -> None:
@@ -255,7 +280,8 @@ def test_older_theme_api_versions_stay_compatible() -> None:
     assert is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=20))
     assert is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=21))
     assert is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=22))
-    assert not is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=23))
+    assert is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=23))
+    assert not is_compatible(CORE_THEME_API, ThemeApiVersion(major=1, minor=24))
     assert not is_compatible(CORE_THEME_API, ThemeApiVersion(major=2, minor=0))
 
 
@@ -536,10 +562,10 @@ def test_right_rail_components_are_required_templates() -> None:
     assert "maatlog/components/author-summary.html" in REQUIRED_TEMPLATES
 
 
-def test_core_api_is_one_twenty_two() -> None:
+def test_core_api_is_one_twenty_three() -> None:
     from maatlog.theme_api import CORE_THEME_API
 
-    assert str(CORE_THEME_API) == "1.22"
+    assert str(CORE_THEME_API) == "1.23"
 
 
 def test_core_theme_api_is_bumped_for_the_magazine_home_contract() -> None:

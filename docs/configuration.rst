@@ -72,6 +72,14 @@
      - パレット名の ``str | None``
      - ``None``
      - ``html``
+   * - ``maatlog_responsive_images``
+     - ``bool``
+     - ``False``
+     - ``html``
+   * - ``maatlog_responsive_image_widths``
+     - 正の ``int`` のシーケンス
+     - ``(480, 768, 960, 1200, 1600)``
+     - ``html``
 
 関連する Sphinx の設定
 ----------------------
@@ -434,6 +442,142 @@ query と fragment は持つことができ、バイト列のまま保持され�
 * 画像の寸法・MIME、 ``og:locale``、X アカウント
 * アーカイブのグラフ (``CollectionPage`` / ``ItemList``)
 * OGP 画像の生成
+
+レスポンシブ画像
+----------------
+
+``maatlog_responsive_images`` を ``True`` にすると、完全な HTML ビルダー
+（``html`` / ``dirhtml``）で管理対象画像の幅違いバリアントを生成し、
+``srcset`` / ``sizes`` 付きの ``<img>`` を出力します。
+既定は ``False`` であり、無効のままでは従来どおり元画像 1 枚だけを配信します::
+
+    maatlog_responsive_images = True
+    maatlog_responsive_image_widths = (480, 768, 960, 1200, 1600)
+
+画像のデコードとエンコードには :term:`Pillow` を使います。
+``images`` extra で導入してください ::
+
+    pip install "maatlog[images]"
+
+有効化したビルドでバックエンドが見つからない場合、
+``maatlog.image.backend-missing`` でビルドを失敗させ、
+``pip install "maatlog[images]"`` を案内します。
+この検査は画像を持たないプロジェクトでも働くため、
+有効化した状態で extra を入れ忘れた配布環境を確実に検出できます。
+``singlehtml`` などの完全 HTML ではないビルダーと、
+text / latex などの非 HTML ビルダーではこの機能は働かず、
+バックエンドの有無に関わらず従来どおり元画像 1 枚を出力します。
+無効のビルドと非完全 HTML ビルダーでは、MaatLog はバックエンドモジュール
+（``maatlog.responsive_images``）を import せず、 :term:`Pillow` を呼び出しません
+
+対象と形式
+~~~~~~~~~~
+
+バリアントを生成するのは、記事の代表画像（``maatlog-image``）と
+``maatlog:maattop`` のトップ画像のうち、srcdir 内のローカル画像だけです。
+本文中の通常の画像（``.. image::`` や MyST の ``![]()``）、
+リモート URL の画像は対象外であり、従来どおりの出力のままです
+
+バリアントを生成するのは JPEG / PNG / WebP のソースだけです。
+SVG と GIF は形式として対象外であり、複数フレームのアニメーションも
+変換しません。
+これらは元画像をそのまま配信し、 ``srcset`` は付きません。
+対象形式のソースをデコードできない場合は元画像へフォールバックせず、
+``maatlog.image.decode-failed`` でビルドを失敗させます。
+巨大なソースにはピクセル数の上限を設け、上限を超える入力は
+``maatlog.image.too-large`` でビルドを失敗させます
+
+``maatlog_responsive_image_widths`` は生成する候補幅（px）です。
+空でない正の整数のシーケンスでなければならず、
+``bool`` や 0 以下の値は ``maatlog.config.invalid`` で拒否します。
+重複は取り除かれ、昇順に正規化されます。
+元画像の自然幅以上の幅は生成しない（アップスケールしない）ため、
+自然幅より小さい候補だけが作られ、自然幅そのものは常に候補に含まれます
+
+処理とキャッシュ
+~~~~~~~~~~~~~~~~
+
+生成されるバリアントには次の処理が適用されます
+
+- :term:`EXIF` の orientation を適用し、表示方向を正規化します
+- アルファチャンネルとパレット形式を正規化し、透過を保持します
+- :term:`ICC` プロファイルを保持します（パレット変換時は sRGB へ変換します）
+- EXIF・GPS・XMP・コメントなどのメタデータは剥がします。
+  ICC プロファイルだけを出力へ再付与します
+
+エンコーダの既定プロファイルは次のとおりです
+
+.. list-table::
+   :header-rows: 1
+   :widths: 20 80
+
+   * - 形式
+     - 既定値
+   * - JPEG
+     - quality ``82``、progressive、optimize、4:2:0 相当の subsampling ``2``
+   * - PNG
+     - optimize、compress_level ``9``
+   * - WebP
+     - quality ``82``、method ``6``、alpha_quality ``100``、exact
+
+リサイズは Lanczos で行います。
+これらの値は固定であり、設定で変更できません
+
+生成したバリアントは doctree ディレクトリ配下の
+``maatlog_responsive_images`` にキャッシュします。
+キャッシュキーにはソースの同一性と内容ハッシュ、要求幅、画像形式、
+エンコーダプロファイル、バックエンド情報、パイプラインスキーマが含まれ、
+キャッシュしたバリアントは再読み込み時に検証してから再利用します。
+記録は sidecar の JSON で管理し、途中状態を残さずに公開します
+
+出力はビルダーの画像ディレクトリ（既定 ``_images``）配下の
+``maatlog`` に置き、 ``.manifest.json`` で所有を管理します。
+掃除はマニフェストが示す自前の出力だけを対象とし、
+関係ないファイルは削除しません。
+無効化やソース削除で不要になった出力は次回ビルドで取り除かれます
+
+キャッシュと出力のどちらも、親ディレクトリ（``doctreedir``・ビルダーの
+画像ディレクトリ）に追従して再配置できます。
+消えたキャッシュは次回ビルドで作り直され、移した出力はその場所の
+``.manifest.json`` に記録された自前の分だけを掃除します
+
+診断
+~~~~
+
+画像まわりの失敗と警告は ``maatlog.image.*`` の診断コードで報告します
+
+.. list-table::
+   :header-rows: 1
+   :widths: 36 64
+
+   * - コード
+     - 条件
+   * - ``maatlog.image.backend-missing``
+     - 有効化した完全 HTML ビルドで利用できるバックエンドが無い
+   * - ``maatlog.image.codec-missing``
+     - バックエンドがソース形式をエンコードできない
+   * - ``maatlog.image.decode-failed``
+     - ソース画像をデコードできない
+   * - ``maatlog.image.encode-failed``
+     - バリアントのエンコードに失敗した
+   * - ``maatlog.image.too-large``
+     - ソースがピクセル数の上限を超えた
+   * - ``maatlog.image.source-unreadable``
+     - 収集時に検査を通ったソースが生成時に読めなくなった
+   * - ``maatlog.image.cache-unwritable``
+     - バリアントキャッシュへ書き込めない
+   * - ``maatlog.image.invalid-variant``
+     - 公開先の既存ファイルが生成バリアントと衝突した
+   * - ``maatlog.image.output-unwritable``
+     - バリアントの公開先へ書き込めない
+   * - ``maatlog.image.manifest-invalid``
+     - 前回ビルドの ``.manifest.json`` が読めず、所有記録を再構築する
+       （ビルドは続行する警告）
+
+``maatlog.image.invalid`` と ``maatlog.image.missing`` は代表画像 URI の
+検査コードであり、レスポンシブ画像の有無に関わらず従来どおり報告します
+
+テーマ側の ``srcset`` / ``sizes`` 仕様は :doc:`theme-api` を参照してください
 
 本文の幅
 --------

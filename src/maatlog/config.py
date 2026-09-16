@@ -40,6 +40,8 @@ CONFIG_VALUES = {
     "maatlog_palette": (None, "html"),
     "maatlog_top_image_title_font": (None, "html"),
     "maatlog_content_width": (None, "html"),
+    "maatlog_responsive_images": (False, "html"),
+    "maatlog_responsive_image_widths": ((480, 768, 960, 1200, 1600), "html"),
 }
 
 TAXONOMY_KEY_PATTERN = re_compile(r"[a-z0-9][a-z0-9._-]*\Z")
@@ -51,6 +53,7 @@ PALETTE_NAME_PATTERN = re_compile(r"[a-z0-9][a-z0-9-]*\Z")
 # ``/*`` はコメントで、``\`` は CSS エスケープシーケンスの開始になる。
 CSS_VALUE_FORBIDDEN_PATTERN = re_compile(r"[<>{};\\]|/\*")
 CSS_VALUE_EXPECTED = "a CSS declaration value without <, >, {, }, ;, \\, or /*"
+IMAGE_WIDTHS_EXPECTED = "a non-empty sequence of positive integers"
 
 
 class MaatlogConfig(BaseModel):
@@ -77,6 +80,8 @@ class MaatlogConfig(BaseModel):
     palette: str | None
     top_image_title_font: str | None
     content_width: str | None
+    responsive_images: bool
+    responsive_image_widths: tuple[int, ...]
 
     @field_validator("tags", "categories", "authors")
     @classmethod
@@ -128,6 +133,12 @@ class MaatlogConfig(BaseModel):
         content_width = _validate_optional_css_value(
             "maatlog_content_width", resolved["maatlog_content_width"], diagnostics
         )
+        responsive_images = _validate_bool(
+            "maatlog_responsive_images", resolved["maatlog_responsive_images"], diagnostics
+        )
+        responsive_image_widths = _validate_image_widths(
+            "maatlog_responsive_image_widths", resolved["maatlog_responsive_image_widths"], diagnostics
+        )
 
         if diagnostics:
             raise MaatlogBuildError(diagnostics)
@@ -138,6 +149,8 @@ class MaatlogConfig(BaseModel):
         assert generate_feeds is not None
         assert feed_taxonomies is not None
         assert feed_limit is not None
+        assert responsive_images is not None
+        assert responsive_image_widths is not None
         return cls(
             timezone=timezone,
             tags=tags,
@@ -156,6 +169,8 @@ class MaatlogConfig(BaseModel):
             palette=palette,
             top_image_title_font=top_image_title_font,
             content_width=content_width,
+            responsive_images=responsive_images,
+            responsive_image_widths=responsive_image_widths,
         )
 
 
@@ -325,6 +340,28 @@ def _validate_positive_int(field: str, value: Any, diagnostics: list[Diagnostic]
         _invalid(diagnostics, field, value, "a positive integer")
         return None
     return value
+
+
+def _validate_image_widths(field: str, value: Any, diagnostics: list[Diagnostic]) -> tuple[int, ...] | None:
+    """Normalize a responsive image width sequence to unique ascending positive integers.
+
+    ``bool`` is rejected before the ``int`` check because ``isinstance(True, int)`` is
+    true; a boolean width is always a configuration mistake.
+    """
+    if not isinstance(value, (list, tuple)) or not value:
+        _invalid(diagnostics, field, value, IMAGE_WIDTHS_EXPECTED)
+        return None
+    widths: set[int] = set()
+    is_valid = True
+    for item in cast(Sequence[object], value):
+        if isinstance(item, bool) or not isinstance(item, int) or item < 1:
+            _invalid(diagnostics, field, item, IMAGE_WIDTHS_EXPECTED)
+            is_valid = False
+            continue
+        widths.add(item)
+    if not is_valid:
+        return None
+    return tuple(sorted(widths))
 
 
 def _validate_bool(field: str, value: Any, diagnostics: list[Diagnostic]) -> bool | None:

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import datetime
 from typing import Any, Final, Literal, Self, cast
 
@@ -14,6 +14,12 @@ from sphinx.util.osutil import relative_uri
 
 from .archives import ArchivePage
 from .authors import AuthorProfile
+from .image_contracts import (
+    RESPONSIVE_OUTPUT_SUBDIR,
+    ImageUsage,
+    ResponsiveImageView,
+    build_responsive_image_view,
+)
 from .model import Post
 from .social_metadata import SocialMetadataView
 from .theme_api import CORE_THEME_API
@@ -114,6 +120,7 @@ class PostCardView:
     external_url: str | None
     slug: str | None = None
     taxonomies: PostTaxonomiesView = PostTaxonomiesView.empty()
+    responsive_image: ResponsiveImageView | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -178,6 +185,8 @@ class PostView:
     top_image_url: str | None = None
     top_image_alt: str = ""
     taxonomies: PostTaxonomiesView = PostTaxonomiesView.empty()
+    responsive_image: ResponsiveImageView | None = None
+    responsive_top_image: ResponsiveImageView | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -265,7 +274,77 @@ def normal_page_context(
 
 def as_template_mapping(context: MaatlogTemplateContext) -> dict[str, Any]:
     """Convert *context* to a plain mapping for Jinja (stable public keys)."""
-    return asdict(context)
+    return _with_responsive_srcset(asdict(context))
+
+
+def post_card_template_mapping(card: PostCardView) -> dict[str, Any]:
+    """Convert one card to a plain mapping for the post-card component."""
+    return _with_responsive_srcset(asdict(card))
+
+
+def _with_responsive_srcset(value: Any) -> Any:
+    """Add ``srcset`` to every responsive entry mapping in an ``asdict`` result."""
+    if isinstance(value, dict):
+        source = cast(dict[str, Any], value)
+        mapped: dict[str, Any] = {key: _with_responsive_srcset(item) for key, item in source.items()}
+        for key in ("responsive_image", "responsive_top_image"):
+            entry = mapped.get(key)
+            if isinstance(entry, dict):
+                entry_map = cast(dict[str, Any], entry)
+                candidates = entry_map.get("candidates")
+                if isinstance(candidates, (list, tuple)) and "srcset" not in entry_map:
+                    entries = cast(Sequence[Mapping[str, Any]], candidates)
+                    entry_map["srcset"] = ", ".join(f"{item['url']} {item['width']}w" for item in entries)
+        return mapped
+    if isinstance(value, list):
+        return [_with_responsive_srcset(item) for item in cast(list[Any], value)]
+    if isinstance(value, tuple):
+        return tuple(_with_responsive_srcset(item) for item in cast(tuple[Any, ...], value))
+    return value
+
+
+def responsive_image_for(
+    builder: Builder, from_docname: str, image_uri: str | None, *, usage: ImageUsage
+) -> ResponsiveImageView | None:
+    """Project one source image into page-relative responsive URLs.
+
+    Read-only: the entry comes from :func:`responsive_manifest` alone. A source
+    with no snapshot entry (unknown, unresizable, or disabled build) yields
+    ``None`` so the theme falls back to the single original URL.
+    """
+    if image_uri is None:
+        return None
+    from .responsive_image_build import responsive_manifest
+
+    manifest = responsive_manifest(builder.env)
+    entry = manifest.get(image_uri)
+    if entry is None:
+        return None
+    image_root = relative_uri(
+        builder.get_target_uri(from_docname),
+        f"{getattr(builder, 'imagedir', '_images')}/{RESPONSIVE_OUTPUT_SUBDIR}/",
+    )
+    return build_responsive_image_view(entry, image_root_url=image_root, usage=usage)
+
+
+def _retarget_responsive(card: PostCardView, usage: ImageUsage) -> PostCardView:
+    """Return *card* with its responsive view re-labelled for *usage*."""
+    view = card.responsive_image
+    if view is None:
+        return card
+    return replace(card, responsive_image=replace(view, usage=usage))
+
+
+def _retarget_home_usages(
+    featured: tuple[PostCardView, ...], latest: tuple[PostCardView, ...]
+) -> tuple[tuple[PostCardView, ...], tuple[PostCardView, ...]]:
+    """Re-label home featured/latest cards after the final selection."""
+    retargeted_featured = tuple(
+        _retarget_responsive(card, ImageUsage.HOME_LEAD if index == 0 else ImageUsage.HOME_SECONDARY)
+        for index, card in enumerate(featured)
+    )
+    retargeted_latest = tuple(_retarget_responsive(card, ImageUsage.HOME_LATEST) for card in latest)
+    return retargeted_featured, retargeted_latest
 
 
 def post_card_view(
@@ -275,6 +354,7 @@ def post_card_view(
     image_url: str | None = None,
     slug: str | None = None,
     taxonomies: PostTaxonomiesView | None = None,
+    responsive_image: ResponsiveImageView | None = None,
 ) -> PostCardView:
     """Project a domain :class:`Post` into a list/card view."""
     return PostCardView(
@@ -289,6 +369,7 @@ def post_card_view(
         external_url=post.external_url,
         slug=post.slug if slug is None else slug,
         taxonomies=taxonomies if taxonomies is not None else PostTaxonomiesView.empty(),
+        responsive_image=responsive_image,
     )
 
 
@@ -301,6 +382,8 @@ def post_view(
     top_image_url: str | None = None,
     top_image_alt: str = "",
     taxonomies: PostTaxonomiesView | None = None,
+    responsive_image: ResponsiveImageView | None = None,
+    responsive_top_image: ResponsiveImageView | None = None,
 ) -> PostView:
     """Project a domain :class:`Post` into a full post page view.
 
@@ -337,6 +420,8 @@ def post_view(
         top_image_url=top_image_url,
         top_image_alt=top_image_alt,
         taxonomies=taxonomies if taxonomies is not None else PostTaxonomiesView.empty(),
+        responsive_image=responsive_image,
+        responsive_top_image=responsive_top_image,
     )
 
 
@@ -354,6 +439,8 @@ def build_post_context(
     site: SiteView | None = None,
     post_taxonomies: PostTaxonomiesView | None = None,
     author_summaries: tuple[AuthorSummaryView, ...] = (),
+    responsive_image: ResponsiveImageView | None = None,
+    responsive_top_image: ResponsiveImageView | None = None,
 ) -> MaatlogTemplateContext:
     """Build a ``page_kind="post"`` template context for *post*."""
     return MaatlogTemplateContext(
@@ -366,6 +453,8 @@ def build_post_context(
             top_image_url=top_image_url,
             top_image_alt=top_image_alt,
             taxonomies=post_taxonomies,
+            responsive_image=responsive_image,
+            responsive_top_image=responsive_top_image,
         ),
         navigation=navigation if navigation is not None else NavigationView(None, None),
         feeds=feeds,
@@ -456,6 +545,9 @@ def archive_context(
             page_url=relative_page_url_for(builder, page.docname, post.docname),
             image_url=image_url_for(builder, page.docname, post.image_uri),
             taxonomies=linker(post) if linker is not None else None,
+            responsive_image=responsive_image_for(
+                builder, page.docname, post.image_uri, usage=ImageUsage.ARCHIVE_CARD
+            ),
         )
         for post in page.posts
     )
@@ -470,10 +562,14 @@ def archive_context(
                     page_url=relative_page_url_for(builder, page.docname, item.docname),
                     image_url=image_url_for(builder, page.docname, item.image_uri),
                     taxonomies=linker(item) if linker is not None else None,
+                    responsive_image=responsive_image_for(
+                        builder, page.docname, item.image_uri, usage=ImageUsage.ARCHIVE_CARD
+                    ),
                 )
                 for item in featured_posts
             )
         featured, latest = project_featured_latest(cards, featured=featured_cards)
+        featured, latest = _retarget_home_usages(featured, latest)
     return MaatlogTemplateContext(
         page_kind="profile" if profile is not None else "archive",
         posts=cards,
@@ -532,6 +628,7 @@ def home_context(
             page_url=relative_page_url_for(builder, docname, item.docname),
             image_url=image_url_for(builder, docname, item.image_uri),
             taxonomies=linker(item) if linker is not None else None,
+            responsive_image=responsive_image_for(builder, docname, item.image_uri, usage=ImageUsage.ARCHIVE_CARD),
         )
 
     visible_posts = tuple(item for item in published if item.docname != docname)
@@ -546,6 +643,7 @@ def home_context(
         featured=featured_cards,
         latest_limit=page_size,
     )
+    featured, latest = _retarget_home_usages(featured, latest)
     cards = featured + latest
     return MaatlogTemplateContext(
         page_kind="home",

@@ -53,6 +53,12 @@ from .html_metadata import (
     prepare_body_fragment_store,
     resolved_baseurl,
 )
+from .image_contracts import (
+    ImageUsage,
+    ImageVariantGenerator,
+    register_responsive_images,
+    register_variant_generator_factory,
+)
 from .metadata import capture_source, cleanup_sources, collect_maattop_from_myst, collect_post
 from .model import Post
 from .navigation import PostTaxonomyLinker, neighbors, post_taxonomy_linker, taxonomy_navigation
@@ -66,6 +72,7 @@ from .profiles import (
     register_avatars,
     resolve_profiles,
 )
+from .responsive_image_build import register_responsive_image_build
 from .social_metadata import project_social_metadata
 from .table_layout import setup_table_layout
 from .taxonomy import DomainIndex
@@ -91,6 +98,7 @@ from .views import (
     post_card_view,
     register_representative_images,
     relative_page_url_for,
+    responsive_image_for,
     theme_can_resolve_template,
 )
 
@@ -395,6 +403,15 @@ def inject_maatlog_page_context(
         top_image_alt=top_image_alt,
         author_summaries=_author_summaries(
             app, from_docname=pagename, config=config, linker=linker, author_ids=post.authors
+        ),
+        responsive_image=responsive_image_for(
+            app.builder, pagename, post.image_uri, usage=ImageUsage.POST_REPRESENTATIVE
+        ),
+        responsive_top_image=responsive_image_for(
+            app.builder,
+            pagename,
+            maattop_data["uri"] if maattop_data else None,
+            usage=ImageUsage.POST_TOP,
         ),
     )
     context["maatlog"] = _as_page_template_mapping(app, pagename, maatlog_context)
@@ -880,6 +897,9 @@ def _neighbor_card(
         page_url=relative_page_url_for(app.builder, from_docname, post.docname),
         image_url=image_url_for(app.builder, from_docname, post.image_uri),
         taxonomies=linker.for_post(post) if linker is not None else None,
+        responsive_image=responsive_image_for(
+            app.builder, from_docname, post.image_uri, usage=ImageUsage.ARCHIVE_CARD
+        ),
     )
 
 
@@ -906,6 +926,12 @@ def _visit_maattop(self: Any, node: maattop_node) -> None:  # type: ignore[type-
     raise nodes.SkipNode
 
 
+def _create_responsive_image_generator() -> ImageVariantGenerator:
+    from .responsive_images import PillowImageVariantGenerator
+
+    return PillowImageVariantGenerator()
+
+
 def setup(app: Sphinx) -> ExtensionMetadata:
     app.require_sphinx("9.1")
     app.setup_extension("myst_parser")
@@ -929,6 +955,9 @@ def setup(app: Sphinx) -> ExtensionMetadata:
     # Theme API 1.19: docutils 表のスクロール wrapper（完全 HTML ビルドのみ）。
     setup_table_layout(app)
     register_config(app)
+    register_variant_generator_factory(app, _create_responsive_image_generator)
+    register_responsive_images(app)
+    register_responsive_image_build(app)
     _register_bundled_themes(app)
     app.connect("config-inited", initialize_build_time)
     app.connect("builder-inited", warn_partial_support_once)

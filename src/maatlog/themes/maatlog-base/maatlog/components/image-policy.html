@@ -1,0 +1,3 @@
+{% macro image_sizes(usage, presentation='standalone', has_rail=none, featured_count=0) -%}100vw{%- endmacro %}
+{% macro image_loading(usage, early=true) -%}{{ 'eager' if early else 'lazy' }}{%- endmacro %}
+{% macro image_fetchpriority(usage, high=false) -%}{{ 'high' if high else 'auto' }}{%- endmacro %}

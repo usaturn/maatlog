@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from io import StringIO
 from pathlib import Path, PurePosixPath
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from conftest import SphinxFactory
@@ -22,6 +22,7 @@ from maatlog.domain import MaatlogDomain
 from maatlog.errors import Diagnostic, MaatlogBuildError, format_diagnostic, safe_value
 from maatlog.featured import select_featured_posts
 from maatlog.feeds import write_feeds_after_success
+from maatlog.image_contracts import ImageProcessingError, resolve_variant_generator
 from maatlog.model import Post, PublicationStatus
 from maatlog.outputs import safe_owned_path
 from maatlog.profiles import resolve_profiles
@@ -64,6 +65,15 @@ FATAL_CODE_INVENTORY: frozenset[str] = frozenset(
         "maatlog.taxonomy-id.invalid",
         "maatlog.image.missing",
         "maatlog.image.invalid",
+        "maatlog.image.backend-missing",
+        "maatlog.image.codec-missing",
+        "maatlog.image.decode-failed",
+        "maatlog.image.encode-failed",
+        "maatlog.image.too-large",
+        "maatlog.image.cache-unwritable",
+        "maatlog.image.invalid-variant",
+        "maatlog.image.output-unwritable",
+        "maatlog.image.source-unreadable",
         "maatlog.url.invalid",
         "maatlog.datetime.invalid",
         "maatlog.datetime.order",
@@ -623,6 +633,15 @@ UNIT_FATAL_CASES: tuple[tuple[str, str, str], ...] = (
     ("maatlog.featured.unpublished", "maatlog_featured_posts", "featured-slug-unpublished"),
     ("maatlog.featured.duplicate", "maatlog_featured_posts", "featured-slug-duplicate"),
     ("maatlog.featured.self", "maatlog_featured_posts", "featured-slug-self"),
+    ("maatlog.image.backend-missing", "maatlog_responsive_images", "image-backend-missing"),
+    ("maatlog.image.codec-missing", "format", "image-codec-missing"),
+    ("maatlog.image.decode-failed", "source", "image-decode-failed"),
+    ("maatlog.image.encode-failed", "format", "image-encode-failed"),
+    ("maatlog.image.too-large", "source", "image-too-large"),
+    ("maatlog.image.cache-unwritable", "cache-dir", "image-cache-unwritable"),
+    ("maatlog.image.invalid-variant", "path", "image-invalid-variant"),
+    ("maatlog.image.output-unwritable", "output-dir", "image-output-unwritable"),
+    ("maatlog.image.source-unreadable", "source", "image-source-unreadable"),
 )
 
 
@@ -694,6 +713,8 @@ def _raise_unit_fatal(
         "featured-slug-self",
     }:
         return _raise_featured_slug_fatal(kind)
+    if kind.startswith("image-"):
+        return _raise_image_fatal(kind)
     msg = f"unknown unit fatal kind: {kind}"
     raise AssertionError(msg)
 
@@ -723,6 +744,84 @@ def _raise_featured_slug_fatal(kind: str) -> MaatlogBuildError:
             published=tuple(item for item in posts if item.status is PublicationStatus.PUBLISHED),
             home_docname=home_docname,
         )
+    return caught.value
+
+
+# kind -> (code, field, message, value, expected). The (code, field) pairs mirror
+# the UNIT_FATAL_CASES entries so the tuple and the raiser cannot drift apart.
+_IMAGE_FATAL_DETAILS: dict[str, tuple[str, str, str, str, str]] = {
+    "image-codec-missing": (
+        "maatlog.image.codec-missing",
+        "format",
+        "the backend lacks a codec for the requested format",
+        "webp",
+        "an encoder profile with a working codec",
+    ),
+    "image-decode-failed": (
+        "maatlog.image.decode-failed",
+        "source",
+        "the source image could not be decoded",
+        "hero.png",
+        "a decodable source image",
+    ),
+    "image-encode-failed": (
+        "maatlog.image.encode-failed",
+        "format",
+        "the variant could not be encoded into the target format",
+        "jpeg",
+        "a working encoder for the target format",
+    ),
+    "image-too-large": (
+        "maatlog.image.too-large",
+        "source",
+        "the source image exceeds the safe decode limit",
+        "hero.png",
+        "a source image within the decode size limit",
+    ),
+    "image-cache-unwritable": (
+        "maatlog.image.cache-unwritable",
+        "cache-dir",
+        "the variant cache directory is not writable",
+        "maatlog_responsive_images",
+        "a writable cache directory",
+    ),
+    "image-invalid-variant": (
+        "maatlog.image.invalid-variant",
+        "path",
+        "the backend returned a variant that does not match its request",
+        "hero-320w-0123456789abcdef.jpg",
+        "a validated responsive variant artifact",
+    ),
+    "image-output-unwritable": (
+        "maatlog.image.output-unwritable",
+        "output-dir",
+        "the responsive image output directory is not writable",
+        "_images/maatlog",
+        "a writable responsive image output directory",
+    ),
+    "image-source-unreadable": (
+        "maatlog.image.source-unreadable",
+        "source",
+        "the source image could not be read",
+        "hero.png",
+        "a readable image file",
+    ),
+}
+
+
+def _raise_image_fatal(kind: str) -> MaatlogBuildError:
+    if kind == "image-backend-missing":
+        with pytest.raises(MaatlogBuildError) as caught:
+            resolve_variant_generator(cast(Sphinx, SimpleNamespace()))
+        return caught.value
+    code, field, message, value, expected = _IMAGE_FATAL_DETAILS[kind]
+    with pytest.raises(MaatlogBuildError) as caught:
+        try:
+            raise ImageProcessingError(
+                Diagnostic(code=code, message=message, field=field, value=value, expected=expected)
+            )
+        except ImageProcessingError as exc:
+            raise MaatlogBuildError([exc.diagnostic]) from exc
     return caught.value
 
 

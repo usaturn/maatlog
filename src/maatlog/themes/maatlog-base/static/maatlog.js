@@ -301,11 +301,65 @@
     }
   }
 
+  // Managed responsive-image srcset (``data-maatlog-srcset="w-v1"``) only supports
+  // ASCII safe paths: unreserved marks plus ``/``, ``:`` for an absolute URL,
+  // and ``%HH`` escapes. Query strings, fragments, and other schemes never
+  // match the grammar below, so they stay byte-identical.
   /**
-   * Rewrite relative ``href``／``src`` on *root* and its descendants.
+   * Resolve every candidate of a managed ``srcset`` against *pageUrl*.
+   *
+   * Whole-string validation comes first; only a srcset whose every candidate
+   * passes the grammar is rewritten, never partially. Unknown grammars return
+   * null so the caller leaves the attribute untouched.
+   *
+   * @param {string} value
+   * @param {string} pageUrl
+   * @returns {string | null}
+   */
+  function rewriteManagedSrcset(value, pageUrl) {
+    const text = value.trim();
+    const candidate = String.raw`[A-Za-z0-9._~:/%\-]+[\t\n\f\r ]+[1-9][0-9]*w`;
+    const grammar = new RegExp(`^(?:${candidate})(?:[\\t\\n\\f\\r ]*,[\\t\\n\\f\\r ]*(?:${candidate}))*$`);
+    if (!grammar.test(text)) {
+      return null;
+    }
+    /** @type {Set<number>} */
+    const widths = new Set();
+    /** @type {string[]} */
+    const rewritten = [];
+    for (const part of text.split(",")) {
+      const [rawUrl, descriptor] = part.trim().split(/[\t\n\f\r ]+/);
+      if (!rawUrl || !descriptor || /%(?![0-9a-fA-F]{2})/.test(rawUrl)) {
+        return null;
+      }
+      const width = Number(descriptor.slice(0, -1));
+      if (!Number.isSafeInteger(width) || width <= 0 || widths.has(width)) {
+        return null;
+      }
+      try {
+        const resolved = new URL(rawUrl, pageUrl);
+        if (!["http:", "https:"].includes(resolved.protocol)) {
+          return null;
+        }
+        widths.add(width);
+        rewritten.push(`${resolved.href} ${width}w`);
+      } catch {
+        return null;
+      }
+    }
+    return rewritten.join(", ");
+  }
+
+  /**
+   * Rewrite relative ``href``／``src`` and managed ``srcset`` on *root* and
+   * its descendants.
    *
    * After ``document.importNode``, attribute values still resolve against the
    * *current* document when clicked; *pageUrl* is the fetched archive page.
+   * Only ``img[data-maatlog-srcset="w-v1"][srcset]`` is rewritten, and only
+   * when every candidate passes the managed grammar. An imported managed
+   * image drops ``fetchpriority="high"`` to ``"auto"``; ``loading`` is kept
+   * so an on-screen image never turns lazy.
    *
    * @param {Node} root
    * @param {string} pageUrl
@@ -317,10 +371,10 @@
     }
     /** @type {Element[]} */
     const elements = [];
-    if (root.hasAttribute("href") || root.hasAttribute("src")) {
+    if (root.hasAttribute("href") || root.hasAttribute("src") || root.hasAttribute("srcset")) {
       elements.push(root);
     }
-    elements.push(...root.querySelectorAll("[href], [src]"));
+    elements.push(...root.querySelectorAll("[href], [src], [srcset]"));
     for (const element of elements) {
       const href = element.getAttribute("href");
       if (href !== null) {
@@ -329,6 +383,18 @@
       const src = element.getAttribute("src");
       if (src !== null) {
         element.setAttribute("src", absolutizeUrl(src, pageUrl));
+      }
+      if (element.matches('img[data-maatlog-srcset="w-v1"]')) {
+        const srcset = element.getAttribute("srcset");
+        if (srcset !== null) {
+          const rewritten = rewriteManagedSrcset(srcset, pageUrl);
+          if (rewritten !== null) {
+            element.setAttribute("srcset", rewritten);
+          }
+        }
+        if (element.getAttribute("fetchpriority") === "high") {
+          element.setAttribute("fetchpriority", "auto");
+        }
       }
     }
   }
@@ -524,8 +590,28 @@
         if (!response.ok) {
           throw new Error(`unexpected status ${response.status}`);
         }
+        // The final URL after redirects is the base the fetched markup is
+        // relative to; without a redirect it equals the requested URL, so the
+        // event detail stays the same.
+        const pageUrl = response.url || url;
+        let pageOrigin;
+        try {
+          pageOrigin = new URL(pageUrl).origin;
+        } catch {
+          throw new Error(`unusable page URL ${pageUrl}`);
+        }
+        if (pageOrigin !== window.location.origin) {
+          throw new Error(`foreign page URL ${pageUrl}`);
+        }
+        if (pageUrl !== url) {
+          if (loadedUrls.has(pageUrl)) {
+            stop();
+            return;
+          }
+          loadedUrls.add(pageUrl);
+        }
         const doc = new DOMParser().parseFromString(await response.text(), "text/html");
-        const appended = appendCards(doc, url);
+        const appended = appendCards(doc, pageUrl);
         if (appended.length === 0) {
           stop();
           return;
@@ -533,14 +619,14 @@
         for (const card of appended) {
           enhance(card);
         }
-        adoptPagination(doc, url);
-        // *url* (not window.location.href): the adopted nav's anchors are relative
-        // to the page we just fetched, not to this document.
-        nextUrl = paginationNextUrl(nav, url);
+        adoptPagination(doc, pageUrl);
+        // *pageUrl* (not window.location.href): the adopted nav's anchors are
+        // relative to the page we just fetched, not to this document.
+        nextUrl = paginationNextUrl(nav, pageUrl);
         archive.dispatchEvent(
           new CustomEvent("maatlog:content-added", {
             bubbles: true,
-            detail: { cards: appended, url },
+            detail: { cards: appended, url: pageUrl },
           }),
         );
         const noun = appended.length === 1 ? "post" : "posts";
