@@ -45,6 +45,18 @@ def _css_rule(css: str, selector: str) -> str:
     return css[start : css.index("}", start) + 1]
 
 
+def _css_element_rule(css: str, selector: str) -> str:
+    """要素セレクタのルール本体。
+
+    ``_css_rule`` は部分一致なので、 ``img`` のような要素セレクタでは
+    ``.maatlog-post-top-image-img {`` のようなクラスセレクタにも当たる。
+    行頭でアンカーして、要素セレクタ自身のルールだけを拾う。
+    """
+    match = re.search(rf"(?m)^{re.escape(selector)} \{{", css)
+    assert match is not None, selector
+    return css[match.start() : css.index("}", match.start()) + 1]
+
+
 def _reading_width_block(css: str) -> str:
     """prettier が :is() を折り返しても reading-width 宣言を拾う。"""
     needle = "min(100%, var(--maatlog-content-width"
@@ -186,6 +198,13 @@ def test_base_styles_the_skip_link(make_project: ProjectFactory) -> None:
     css = _stylesheet(make_project, "maatlog-base")
 
     assert ".maatlog-skip-link" in css
+
+
+def test_base_caps_every_image_to_its_containing_block(make_project: ProjectFactory) -> None:
+    rule = _css_element_rule(_stylesheet(make_project, "maatlog-base"), "img")
+
+    assert "max-width: 100%" in rule
+    assert "height: auto" in rule
 
 
 POST_TAXONOMY_SELECTORS = (

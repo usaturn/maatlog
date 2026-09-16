@@ -33,7 +33,15 @@ from maatlog.extension import (
     resolved_home_docname,
 )
 from maatlog.html_metadata import force_post_docs_outdated_for_feeds, prepare_body_fragment_store
+from maatlog.image_contracts import (
+    _check_responsive_image_backend,  # pyright: ignore[reportPrivateUsage]
+)
 from maatlog.metadata import capture_source, cleanup_sources, collect_post
+from maatlog.responsive_image_build import (
+    finish_responsive_images,
+    prepare_responsive_images,
+    publish_responsive_images,
+)
 from maatlog.theme_api import validate_selected_theme
 from maatlog.views import SiteView, as_template_mapping, empty_context, register_representative_images
 
@@ -70,6 +78,10 @@ def test_setup_registers_config_values_and_validation_handler() -> None:
     connect_events = [call.args[0] for call in app.connect.call_args_list]
     assert connect_events == [
         "config-inited",  # validate_config
+        "env-updated",  # responsive image backend gate
+        "env-updated",  # responsive manifest preparation
+        "write-started",  # responsive variant publication
+        "build-finished",  # responsive ownership commit
         "config-inited",  # initialize_build_time
         "builder-inited",  # warn_partial_support_once
         "builder-inited",  # html metadata / filters (before theme template compile)
@@ -96,33 +108,37 @@ def test_setup_registers_config_values_and_validation_handler() -> None:
         "build-finished",  # commit_html_shell_fingerprint (last; only on success)
     ]
     assert app.connect.call_args_list[0] == (("config-inited", validate_config), {})
-    assert app.connect.call_args_list[1] == (("config-inited", initialize_build_time), {})
-    assert app.connect.call_args_list[2] == (("builder-inited", warn_partial_support_once), {})
-    assert app.connect.call_args_list[3] == (("builder-inited", _initialize_html_metadata), {})
-    assert app.connect.call_args_list[4] == (("builder-inited", validate_selected_theme), {})
-    assert app.connect.call_args_list[5] == (("builder-inited", link_palette_stylesheet), {})
-    assert app.connect.call_args_list[6] == (("builder-inited", apply_pygments_style), {})
-    assert app.connect.call_args_list[7] == (("source-read", capture_source), {"priority": 999})
-    assert app.connect.call_args_list[8] == (
+    assert app.connect.call_args_list[1] == (("env-updated", _check_responsive_image_backend), {})
+    assert app.connect.call_args_list[2] == (("env-updated", prepare_responsive_images), {"priority": 600})
+    assert app.connect.call_args_list[3] == (("write-started", publish_responsive_images), {"priority": 400})
+    assert app.connect.call_args_list[4] == (("build-finished", finish_responsive_images), {"priority": 900})
+    assert app.connect.call_args_list[5] == (("config-inited", initialize_build_time), {})
+    assert app.connect.call_args_list[6] == (("builder-inited", warn_partial_support_once), {})
+    assert app.connect.call_args_list[7] == (("builder-inited", _initialize_html_metadata), {})
+    assert app.connect.call_args_list[8] == (("builder-inited", validate_selected_theme), {})
+    assert app.connect.call_args_list[9] == (("builder-inited", link_palette_stylesheet), {})
+    assert app.connect.call_args_list[10] == (("builder-inited", apply_pygments_style), {})
+    assert app.connect.call_args_list[11] == (("source-read", capture_source), {"priority": 999})
+    assert app.connect.call_args_list[12] == (
         ("doctree-read", collect_maattop_from_myst),
         {"priority": 99},
     )
-    assert app.connect.call_args_list[9] == (("doctree-read", collect_post), {"priority": 100})
-    assert app.connect.call_args_list[10] == (("doctree-read", collect_post_lists), {"priority": 101})
-    assert app.connect.call_args_list[11] == (("doctree-read", collect_maattop), {"priority": 102})
-    assert app.connect.call_args_list[12] == (("env-get-outdated", force_post_docs_outdated_for_feeds), {})
-    assert app.connect.call_args_list[13] == (("env-purge-doc", purge_doc), {})
-    assert app.connect.call_args_list[14] == (("env-merge-info", merge_info), {})
-    assert app.connect.call_args_list[15] == (("env-updated", finalize_domain), {})
-    assert app.connect.call_args_list[16] == (("env-get-updated", force_home_doc_updated), {})
-    assert app.connect.call_args_list[17] == (("doctree-resolved", process_post_list_nodes), {})
-    assert app.connect.call_args_list[18] == (("html-collect-pages", collect_archive_pages), {})
-    assert app.connect.call_args_list[19] == (("html-page-context", inject_maatlog_page_context), {})
-    assert app.connect.call_args_list[20] == (("write-started", prepare_body_fragment_store), {})
-    assert app.connect.call_args_list[21] == (("write-started", register_representative_images), {})
-    assert app.connect.call_args_list[22] == (("build-finished", finalize_generated_outputs), {})
-    assert app.connect.call_args_list[23] == (("build-finished", cleanup_sources), {})
-    assert app.connect.call_args_list[24] == (("build-finished", commit_html_shell_fingerprint), {})
+    assert app.connect.call_args_list[13] == (("doctree-read", collect_post), {"priority": 100})
+    assert app.connect.call_args_list[14] == (("doctree-read", collect_post_lists), {"priority": 101})
+    assert app.connect.call_args_list[15] == (("doctree-read", collect_maattop), {"priority": 102})
+    assert app.connect.call_args_list[16] == (("env-get-outdated", force_post_docs_outdated_for_feeds), {})
+    assert app.connect.call_args_list[17] == (("env-purge-doc", purge_doc), {})
+    assert app.connect.call_args_list[18] == (("env-merge-info", merge_info), {})
+    assert app.connect.call_args_list[19] == (("env-updated", finalize_domain), {})
+    assert app.connect.call_args_list[20] == (("env-get-updated", force_home_doc_updated), {})
+    assert app.connect.call_args_list[21] == (("doctree-resolved", process_post_list_nodes), {})
+    assert app.connect.call_args_list[22] == (("html-collect-pages", collect_archive_pages), {})
+    assert app.connect.call_args_list[23] == (("html-page-context", inject_maatlog_page_context), {})
+    assert app.connect.call_args_list[24] == (("write-started", prepare_body_fragment_store), {})
+    assert app.connect.call_args_list[25] == (("write-started", register_representative_images), {})
+    assert app.connect.call_args_list[26] == (("build-finished", finalize_generated_outputs), {})
+    assert app.connect.call_args_list[27] == (("build-finished", cleanup_sources), {})
+    assert app.connect.call_args_list[28] == (("build-finished", commit_html_shell_fingerprint), {})
 
 
 def test_initialize_build_time_keeps_one_build_local_value(monkeypatch: pytest.MonkeyPatch) -> None:

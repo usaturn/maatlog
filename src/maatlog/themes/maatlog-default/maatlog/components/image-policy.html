@@ -1,0 +1,41 @@
+{% macro _slot(c, p, n=1, featured_count=0, wide=false) -%}
+{%- if p == 'post' -%}{{ c }}
+{%- elif p in ['lead', 'secondary', 'featured-primary', 'featured-secondary'] -%}
+  {%- set padding = '4rem' if p == 'lead' else '2rem' -%}
+  {%- if wide and featured_count != 1 -%}
+    {%- set numerator = 8 if p in ['lead', 'featured-primary'] else 5 -%}
+    calc(({{ c }} - 1rem) * {{ numerator }} / 13 - {{ padding }} - 2px)
+  {%- else -%}calc({{ c }} - {{ padding }} - 2px){%- endif -%}
+{%- else -%}calc(({{ c }} - {{ n - 1 }}rem) / {{ n }} - 2rem - 2px)
+{%- endif -%}
+{%- endmacro %}
+
+{% macro image_sizes(usage, presentation='standalone', has_rail=none, featured_count=0) -%}
+{%- set p = presentation -%}
+{%- if p == 'standalone' or has_rail is none -%}100vw
+{%- else -%}
+  {%- set narrow = 'calc(100vw - 4rem - 16px)' -%}
+  {%- set medium = 'calc(100vw - 19rem - 16px)' -%}
+  {%- set outside = '34.5rem' if has_rail else '19rem' -%}
+  {%- set wide = 'min(calc(100vw - ' ~ outside ~ ' - 16px), calc(clamp(50rem, 30rem + 18vw, 72rem) - 2rem))' -%}
+  {%- if p == 'archive' -%}
+    (width < calc(35rem + 16px)) {{ _slot(narrow, p, 1) }},
+    (width <= 48rem) {{ _slot(narrow, p, 2) }},
+    (width < calc(50rem + 16px)) {{ _slot(medium, p, 1) }},
+    (width <= 64rem) {{ _slot(medium, p, 2) }},
+    {% if has_rail %}(width < calc(69.5rem + 16px)) {{ _slot(wide, p, 1) }},{% endif %}
+    (width < 138.8888888889rem) {{ _slot(wide, p, 2) }}, {{ _slot(wide, p, 3) }}
+  {%- elif p == 'latest' -%}
+    (width <= 48rem) {{ _slot(narrow, p, 1) }},
+    (width <= 64rem) {{ _slot(medium, p, 2) }},
+    {% if has_rail %}(width < calc(75.5rem + 16px)) {{ _slot(wide, p, 1) }},{% endif %}
+    (width < 188.8888888889rem) {{ _slot(wide, p, 2) }}, {{ _slot(wide, p, 3) }}
+  {%- else -%}
+    (width <= 48rem) {{ _slot(narrow, p, featured_count=featured_count) }},
+    (width <= 64rem) {{ _slot(medium, p, featured_count=featured_count) }},
+    {{ _slot(wide, p, featured_count=featured_count, wide=true) }}
+  {%- endif -%}
+{%- endif -%}
+{%- endmacro %}
+{% macro image_loading(usage, early=true) -%}{{ 'eager' if early else 'lazy' }}{%- endmacro %}
+{% macro image_fetchpriority(usage, high=false) -%}{{ 'high' if high else 'auto' }}{%- endmacro %}

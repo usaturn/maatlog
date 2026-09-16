@@ -17,6 +17,13 @@
   display: none !important;
 }
 
+/* 本文の非管理画像が natural width で横にはみ出さないよう土台で抑える。
+   maatlog-default も同じルールを持つ。 */
+img {
+  max-width: 100%;
+  height: auto;
+}
+
 /* Font family names are case-sensitive identifiers, not CSS keywords. */
 /* stylelint-disable value-keyword-case */
 :root {

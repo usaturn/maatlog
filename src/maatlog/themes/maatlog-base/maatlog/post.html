@@ -1,5 +1,6 @@
 {# MaatLog post page — implements Theme API 1.0 blocks and semantic classes. #}
 {%- extends "layout.html" -%}
+{%- from 'maatlog/components/image.html' import render_image with context -%}
 
 {%- macro taxonomy_separator() -%}
 <span class="maatlog-visually-hidden">, </span>
@@ -33,11 +34,11 @@
 <article class="maatlog-post" data-maatlog-component="post">
   {#- Hero image from maattop directive. Theme API 1.9, optional. -#}
   {%- block maatlog_post_top_image -%}
-  {%- if maatlog.post and maatlog.post.top_image_url -%}
+  {%- if maatlog.post and (maatlog.post.top_image_url or maatlog.post.responsive_top_image|default(none)) -%}
   <div class="maatlog-post-top-image" data-maatlog-component="post-top-image">
-    <img class="maatlog-post-top-image-img"
-         src="{{ maatlog.post.top_image_url|e }}"
-         alt="{{ maatlog.post.top_image_alt|e }}" />
+    {{ render_image(maatlog.post.responsive_top_image|default(none), maatlog.post.top_image_url,
+       alt=maatlog.post.top_image_alt, css_class='maatlog-post-top-image-img', presentation='post',
+       has_rail=maatlog_has_rail|default(none), early=true, high=true) }}
     <div class="maatlog-post-top-image-overlay" aria-hidden="true"></div>
     <div class="maatlog-post-top-image-title">
       <span aria-hidden="true">{{ maatlog.post.title|e }}</span>
@@ -56,7 +57,7 @@
     {%- endif -%}
     {%- endblock maatlog_post_eyebrow -%}
 
-    <h1{% if maatlog.post and maatlog.post.top_image_url %} class="maatlog-visually-hidden"{% endif %}>{{ maatlog.post.title|e if maatlog.post else title|e }}</h1>
+    <h1{% if maatlog.post and (maatlog.post.top_image_url or maatlog.post.responsive_top_image|default(none)) %} class="maatlog-visually-hidden"{% endif %}>{{ maatlog.post.title|e if maatlog.post else title|e }}</h1>
 
     {#- The excerpt doubles as the tagline. Theme API 1.4, optional. -#}
     {%- block maatlog_post_tagline -%}
@@ -108,8 +109,11 @@
 
     {#- Decorative: it repeats the title. Theme API 1.4, optional. -#}
     {%- block maatlog_post_hero -%}
-    {%- if maatlog.post and maatlog.post.image_url -%}
-    <img class="maatlog-post-hero-image" src="{{ maatlog.post.image_url|e }}" alt="" />
+    {%- if maatlog.post and (maatlog.post.image_url or maatlog.post.responsive_image|default(none)) -%}
+    {{ render_image(maatlog.post.responsive_image|default(none), maatlog.post.image_url,
+       css_class='maatlog-post-hero-image', presentation='post',
+       has_rail=maatlog_has_rail|default(none), early=true,
+       high=not (maatlog.post.top_image_url or maatlog.post.responsive_top_image|default(none))) }}
     {%- endif -%}
     {%- endblock maatlog_post_hero -%}
   </header>

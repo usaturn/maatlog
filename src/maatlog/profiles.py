@@ -22,6 +22,7 @@ from .config import TaxonomyAxis
 from .directives import post_list
 from .errors import Diagnostic, MaatlogBuildError
 from .html_metadata import strip_leading_document_title
+from .image_contracts import ImageUsage
 from .images import (
     IMAGE_INVALID_EXPECTED,
     IMAGE_MISSING,
@@ -42,6 +43,7 @@ from .views import (
     image_url_for,
     post_card_view,
     relative_page_url_for,
+    responsive_image_for,
 )
 
 PROFILE_UNKNOWN_CODE = "maatlog.author.profile-unknown"
@@ -338,6 +340,9 @@ def build_profile_view(
             page_url=relative_page_url_for(builder, from_docname, by_slug[slug].docname),
             image_url=image_url_for(builder, from_docname, by_slug[slug].image_uri),
             taxonomies=linker(by_slug[slug]) if linker is not None else None,
+            responsive_image=responsive_image_for(
+                builder, from_docname, by_slug[slug].image_uri, usage=ImageUsage.ARCHIVE_CARD
+            ),
         )
         for slug in profile.featured_posts
         if slug in by_slug

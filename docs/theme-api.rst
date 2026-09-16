@@ -9,10 +9,10 @@ MaatLog のテーマは Sphinx の HTML テーマに小さなインターフェ�
 API バージョン
 --------------
 
-Theme API の現在のバージョンは **1.22** です。
+Theme API の現在のバージョンは **1.23** です。
 ``api = "1.0"`` を宣言する ``inherits-base`` のテーマは
 引き続き受理されます。
-``standalone`` のテーマは ``api = "1.22"`` を宣言し、
+``standalone`` のテーマは ``api = "1.23"`` を宣言し、
 1.12 追加分と 1.16 追加分の必須テンプレートを自前で同梱する必要があります
 （詳細は下記「1.11 から 1.12 で追加された仕様」と
 「1.15 から 1.16 で追加された仕様」を参照してください）。
@@ -24,6 +24,7 @@ Theme API の現在のバージョンは **1.22** です。
 1.20 も任意仕様だけを足すため、必須セットは 1.16 のままです
 1.21 も任意仕様だけを足すため、必須セットは 1.16 のままです
 1.22 も任意仕様だけを足すため、必須セットは 1.16 のままです
+1.23 も任意仕様だけを足すため、必須セットは 1.16 のままです
 
 開発が安定するまでの間、Theme API の更新は下位互換しない破壊的変更です。
 新しいコアは、以前の ``api`` を宣言するテーマを受理し続けることを約束しません。
@@ -36,7 +37,7 @@ Theme API の現在のバージョンは **1.22** です。
 コアはメジャー ``1`` を実装するテーマを受け入れます。
 テーマがコアの提供するマイナー
 より高いバージョンを要求する場合、検証は失敗します。
-現在の 1.22 コアは 1.0 / 1.1 / 1.2 / 1.3 / 1.4 / 1.5 / 1.6 / 1.7 / 1.8 / 1.9 / 1.10 / 1.11 / 1.12 / 1.13 / 1.14 / 1.15 / 1.16 / 1.17 / 1.18 / 1.19 / 1.20 / 1.21 テーマを受理しますが、次の Theme API 更新が
+現在の 1.23 コアは 1.0 / 1.1 / 1.2 / 1.3 / 1.4 / 1.5 / 1.6 / 1.7 / 1.8 / 1.9 / 1.10 / 1.11 / 1.12 / 1.13 / 1.14 / 1.15 / 1.16 / 1.17 / 1.18 / 1.19 / 1.20 / 1.21 / 1.22 テーマを受理しますが、次の Theme API 更新が
 同じ約束を引き継ぐとは限りません
 
 1.0 から 1.1 で追加された任意の仕様:
@@ -516,12 +517,197 @@ hover でしか permalink を開きません。
       <meta name="theme-extra" content="..." />
       {%- endblock maatlog_head -%}
 
+1.22 から 1.23 で追加された任意の仕様:
+
+* **任意キー** — ``PostView.responsive_image`` / ``PostView.responsive_top_image``、
+  ``PostCardView.responsive_image``。
+  いずれも ``ResponsiveImageView | None`` で、
+  ``maatlog_responsive_images`` が有効な完全 HTML ビルドでバリアントが生成された
+  管理画像にだけ populated になります。
+  無効のビルド、対象外の画像（SVG・GIF・アニメーション・リモート・本文画像）、
+  非完全 HTML ビルダーでは ``None`` です。
+  既存の ``image_url`` / ``top_image_url`` はフォールバック URL としてそのまま残ります
+* **ResponsiveImageView** — ``src`` （フォールバック URL）、 ``candidates``
+  （``ResponsiveImageCandidate`` のタプルで、各要素は ``url`` と ``width``）、
+  ``width`` / ``height`` （表示方向適用後の自然寸法）、 ``usage`` を持ちます。
+  派生プロパティ ``srcset`` は ``"<url> <width>w"`` をカンマ区切りで連結した
+  文字列です。
+  ``usage`` は ``post-top``、 ``post-representative``、 ``home-lead``、
+  ``home-secondary``、 ``home-latest``、 ``archive-card`` のいずれかで、
+  投稿のトップ画像、投稿の代表画像、Home の featured lead、featured 2・3 件目、
+  Home の latest、およびアーカイブ・ ``post-list`` のカードを示します
+* **任意テンプレート** — ``maatlog/components/image.html`` と
+  ``maatlog/components/image-policy.html``。
+  前者は共有マクロ ``render_image`` を、後者は ``image_sizes`` /
+  ``image_loading`` / ``image_fetchpriority`` の 3 つのポリシーマクロを提供します
+* **任意クラス** — なし。
+  レスポンシブ画像は既存の ``.maatlog-post-top-image-img`` /
+  ``.maatlog-post-hero-image`` / ``.maatlog-post-card-image`` をそのまま使います
+* **任意スタイル** — ``maatlog-base`` のスタイルシートは 1.23 からすべての
+  ``img`` を containing block に収めます
+  （``max-width: 100%; height: auto;``）。
+  レスポンシブ画像の有効・無効にかかわらず適用されるため、
+  本文中の非管理画像も natural width で横にはみ出しません。
+  ``maatlog-default`` は従来から同じルールを持ちます。
+  この上限を上書きするテーマは、画像のはみ出しを抑える別の手段を用意し、
+  スロット計測の ``overflow <= 1px`` 要件を満たせる状態にしてください
+
+``render_image`` のシグネチャは次のとおりです::
+
+    render_image(image, fallback_src, alt='', css_class='',
+                 presentation='standalone', has_rail=none,
+                 featured_count=0, early=true, high=false)
+
+``image`` が ``ResponsiveImageView`` のとき ``srcset`` / ``sizes`` /
+``width`` / ``height`` / ``loading`` / ``fetchpriority`` / ``decoding="async"``
+付きの ``<img>`` を出力し、 ``None`` で ``fallback_src`` があるときは
+従来どおりの単一 ``src`` の ``<img>`` に下がります。
+``sizes`` / ``loading`` / ``fetchpriority`` の値はポリシーマクロが決めます。
+管理画像の ``<img>`` には ``data-maatlog-srcset="w-v1"`` が付きます。
+テーマ runtime はこの目印を持つ ``<img>`` の ``srcset`` だけを書き換えるため、
+手書きの ``<img>`` ではその書き換えは働きません
+
+``image-policy.html`` の 3 マクロのシグネチャは次のとおりです::
+
+    image_sizes(usage, presentation='standalone', has_rail=none, featured_count=0)
+    image_loading(usage, early=true)
+    image_fetchpriority(usage, high=false)
+
+ポリシーマクロの引数の意味は次のとおりです
+
+* ``usage`` — ``ResponsiveImageView.usage`` の値。
+  画像が使われる役割を示します
+* ``presentation`` — 呼び出し側が渡すレイアウト文脈です。
+  公式テーマは ``post``、 ``lead``、 ``secondary``、 ``featured-primary``、
+  ``featured-secondary``、 ``latest``、 ``archive``、 ``standalone`` を使います。
+  ``standalone`` はスロットを特定しない保守的なフォールバックです
+* ``has_rail`` — そのページに右列（rail）があるかを示します。
+  ``none`` のとき ``image_sizes`` は ``100vw`` にフォールバックします
+* ``featured_count`` — そのページの featured カード件数です。
+  featured の 8:5 分割を使うかどうかの判定に使います
+* ``early`` — 初期 viewport に入る見込みの画像に ``True`` を渡します。
+  公式テーマは latest / archive の先頭 6 件だけに ``True`` を渡します
+* ``high`` — LCP 候補にだけ ``True`` を渡します。
+  ページ全体で ``fetchpriority="high"`` は 0〜1 件です
+
+``maatlog-base`` のポリシーは ``sizes`` に ``100vw`` 、 ``loading`` に
+``early`` 由来の ``eager`` / ``lazy``、 ``fetchpriority`` に ``high`` 由来の
+``high`` / ``auto`` を返します。
+``maatlog-default`` は ``image_sizes`` だけを上書きし、
+レイアウトに対応した式を返します。
+``image_loading`` と ``image_fetchpriority`` の実装は base と同じです
+
+``maatlog-default`` の ``image_sizes`` は、ベースコンテンツ幅 ``C`` と
+スロット式を組み合わせます。
+``C`` は viewport と rail の有無で次のように決まります
+
+* ``width <= 48rem`` — ``calc(100vw - 4rem - 16px)``
+* ``48rem < width <= 64rem`` — ``calc(100vw - 19rem - 16px)``
+* wide で rail あり — ``min(calc(100vw - 34.5rem - 16px), calc(clamp(50rem, 30rem + 18vw, 72rem) - 2rem))``
+* wide で rail なし — ``min(calc(100vw - 19rem - 16px), calc(clamp(50rem, 30rem + 18vw, 72rem) - 2rem))``
+
+``presentation`` ごとのスロット式は次のとおりです
+
+* ``post`` — ``C``
+* ``lead`` — 狭い・中程度の幅では ``C - 4rem - 2px``。
+  wide で ``featured_count`` が 1 以外のとき ``(C - 1rem) * 8 / 13 - 4rem - 2px``
+* ``secondary`` — 狭い・中程度の幅では ``C - 2rem - 2px``。
+  wide で ``featured_count`` が 1 以外のとき ``(C - 1rem) * 5 / 13 - 2rem - 2px``
+* ``featured-primary`` — 余白 ``2rem`` で ``lead`` と同じ比率。
+  wide で ``featured_count`` が 1 以外のとき ``(C - 1rem) * 8 / 13 - 2rem - 2px``、
+  それ以外は ``C - 2rem - 2px``
+* ``featured-secondary`` — ``secondary`` と同じ式です
+* ``latest`` / ``archive`` — ``(C - (n - 1)rem) / n - 2rem - 2px``。
+  ``n`` はその viewport での列数です
+* ``standalone`` — ``100vw``。
+  表示スロットを特定しない保守的なフォールバックであり、
+  精密なスロット幅ではありません
+
+``latest`` と ``archive`` の列数 ``n`` は次の閾値で決まります。
+``latest`` は ``width <= 48rem`` で 1 列、 ``<= 64rem`` で 2 列、
+wide では rail があると ``width < calc(75.5rem + 16px)`` まで 1 列、
+``width < 188.8888888889rem`` まで 2 列、それ以上で 3 列です。
+``archive`` は狭い幅で ``width < calc(35rem + 16px)`` まで 1 列、
+``<= 48rem`` で 2 列、中程度の幅で ``width < calc(50rem + 16px)`` まで 1 列、
+``<= 64rem`` で 2 列です。
+wide では rail があると ``width < calc(69.5rem + 16px)`` まで 1 列、
+``width < 138.8888888889rem`` まで 2 列、それ以上で 3 列です
+
+例として、rail のある投稿ページでは ``sizes`` が次の文字列になります
+（空白類で正規化して示します。実際の属性値はテンプレートの改行と
+インデントを保ったまま ``forceescape`` で HTML エスケープされます）::
+
+    (width <= 48rem) calc(100vw - 4rem - 16px), (width <= 64rem) calc(100vw - 19rem - 16px), min(calc(100vw - 34.5rem - 16px), calc(clamp(50rem, 30rem + 18vw, 72rem) - 2rem))
+
+これらの式は公式テーマの CSS と 1 対 1 に対応します。
+``4rem`` / ``19rem`` / ``34.5rem`` はナビゲーション・rail・gap・padding の
+合計幅で、 ``clamp(50rem, 30rem + 18vw, 72rem) - 2rem`` は ``--maatlog-main-width``
+の有効幅です。
+``- 2rem - 2px`` と ``- 4rem - 2px`` はカードの padding と border を表します。
+検証スイートの 136 件の exact スロット観測では、式の評価値と表示幅の差は
+最大 ``0.015625 CSS px`` でした。
+検証スイートが強制する許容値は ``max(2px, 表示幅 * 0.01)`` です
+
+``sizes`` の精度の扱いは 2 段です。
+公式レイアウトの既知スロット（``post``、 ``lead``、 ``secondary``、
+``featured-primary``、 ``featured-secondary``、 ``latest``、 ``archive``）は、
+評価した ``sizes`` の幅と実際の表示幅の差が
+``max(2px, 表示幅 * 0.01)`` 以内に収まります。
+``standalone`` と第三者テーマのレイアウトは保守的な扱いで、
+``0 < 表示幅 <= 評価した sizes 幅 + 2px`` と
+``評価した sizes 幅 <= viewport 幅 + 2px`` を満たせばよいとします
+
+``loading`` / ``fetchpriority`` の既定の対応は次のとおりです
+
+.. list-table::
+   :header-rows: 1
+   :widths: 44 28 28
+
+   * - 役割
+     - ``loading``
+     - ``fetchpriority``
+   * - ``post-top``
+     - ``eager``
+     - ``high``
+   * - ``post-representative`` （トップ画像なし）
+     - ``eager``
+     - ``high``
+   * - ``post-representative`` （トップ画像あり）
+     - ``eager``
+     - ``auto``
+   * - ``home-lead``
+     - ``eager``
+     - ``high``
+   * - ``home-secondary``
+     - ``eager``
+     - ``auto``
+   * - ``home-latest`` / ``archive-card``
+     - 先頭 6 件は ``eager``、以降 ``lazy``
+     - ``auto``
+   * - ``standalone`` など文脈不明
+     - ``eager``
+     - ``auto``
+
+``high`` を付けられるのは投稿のトップ画像、トップ画像の無い投稿の代表画像、
+Home の featured lead だけです。
+lead が画像を持たなくても ``high`` を secondary へ移譲しません。
+この選択は :term:`Core Web Vitals` の LCP を意識したものですが、
+導入文や利用者の設定で LCP 候補は変わるため、改善を約束するものではありません
+
+``image-policy.html`` を差し替える第三者テーマは、 ``image_sizes`` /
+``image_loading`` / ``image_fetchpriority`` の 3 マクロをすべて上記の
+シグネチャで提供してください。
+1 つでも欠けると ``render_image`` がそのマクロを import できず、
+描画が失敗します。
+``maatlog/components/image.html`` だけを差し替えて base のポリシーを
+そのまま使う構成も可能です
+
 1.0 から 1.11 までの必須テンプレートと必須ブロックは変わっていませんでした。
 ``implementation = "inherits-base"`` のテーマは、宣言する API が ``"1.0"`` から
-``"1.22"`` のどれでも引き続き検証を通ります（``maatlog-base`` の継承チェーン経由で
+``"1.23"`` のどれでも引き続き検証を通ります（``maatlog-base`` の継承チェーン経由で
 1.12 追加分と 1.16 追加分の必須テンプレート／ブロックを取得するため）。
 1.16 で追加される必須ブロックはありません。
-``implementation = "standalone"`` のテーマは ``api = "1.22"`` を宣言し、
+``implementation = "standalone"`` のテーマは ``api = "1.23"`` を宣言し、
 1.12 追加分の必須テンプレートと必須ブロック、および 1.16 追加分の必須テンプレートを
 自前で持つ必要があります。
 ``"1.11"`` 以下のままでは ``template-missing`` / ``block-missing`` で、
@@ -559,9 +745,9 @@ hover でしか permalink を開きません。
 * ``maatlog-base`` — 仕様の実装（Sphinx の ``basic`` を継承）
 * ``maatlog-default`` — すぐに使えるテーマ（ ``maatlog-base`` を継承）
 
-公式テーマは ``api = "1.22"`` を宣言します。
+公式テーマは ``api = "1.23"`` を宣言します。
 ``maatlog-base`` は ``standalone``、 ``maatlog-default`` は ``inherits-base`` です。
-第三者の ``inherits-base`` テーマは ``"1.0"`` から ``"1.22"`` のどれでも検証を通ります。
+第三者の ``inherits-base`` テーマは ``"1.0"`` から ``"1.23"`` のどれでも検証を通ります。
 旧テーマは ``maatlog.posts`` と ``featured_count`` スライスを使い続けてよい。
 ``maatlog/home.html`` が無いときは ``maatlog.theme.home-template-missing`` を警告し、
 アーカイブルート 1 ページ目がトップを兼ねます。
@@ -731,8 +917,13 @@ Theme API 1.2 から、 ``maatlog/components/sidebar.html`` の出力はレイ�
   アーカイブルートの 1 ページ目が引き受け、その  ``is_home`` が真になります
 * ``maatlog/components/post-grid.html`` — featured グリッドと通常カード一覧。
   ``cards`` と任意の ``featured_count`` に加え、任意の ``featured_cards`` /
-  ``latest_cards`` / ``latest_heading`` を受け取ります。分離変数が定義されて
-  いればそちらを優先します。 ``maatlog`` 名前空間は読みません
+  ``latest_cards`` / ``latest_heading`` を受け取ります。
+  分離変数が定義されて
+  いればそちらを優先します。
+  ``maatlog`` 名前空間からは
+  ``maatlog.page_kind`` と ``maatlog.archive.is_home`` だけを読み、
+  いずれもガード付きで参照します（1.23 以降。カード画像の
+  ``presentation`` を決めるためです）
 * ``maatlog/components/search.html`` — 検索フォーム。
   ``banner.html`` から
   ``include`` されます
@@ -743,6 +934,12 @@ Theme API 1.2 から、 ``maatlog/components/sidebar.html`` の出力はレイ�
 
 * ``maatlog/components/social-metadata.html`` — ``maatlog.metadata`` の OG / X /
   JSON-LD を head に描画する共通 partial（1.22 以降）
+* ``maatlog/components/image.html`` — レスポンシブ画像を描く共有マクロ
+  ``render_image`` （1.23 以降）
+* ``maatlog/components/image-policy.html`` — ``image_sizes`` / ``image_loading`` /
+  ``image_fetchpriority`` の 3 マクロを定義するポリシーテンプレート（1.23 以降）。
+  差し替える場合は 3 マクロすべてを同じシグネチャで提供してください
+  （詳細は「1.22 から 1.23 で追加された任意の仕様」を参照してください）
 
 必須の Jinja ブロック
 ---------------------
@@ -809,7 +1006,7 @@ MaatLog のすべてのテンプレートは、トップレベルの  ``maatlog`
 
 ::
 
-    maatlog.api_version   # "1.22"
+    maatlog.api_version   # "1.23"
     maatlog.version       # MaatLog ディストリビューションのバージョン（例 "0.1.0"）
     maatlog.page_kind     # "post" | "archive" | "home" | "normal" | "profile"
     maatlog.post          # PostView | None
@@ -844,12 +1041,17 @@ OG / X のタプルは順序と重複を保持し、既定値は ``()`` です�
 ``canonical_url``、 ``external_url``、 ``published_at``、 ``expires_at``、
 ``excerpt``、 ``image_url``、 ``tags``、 ``categories``、 ``authors``、
 ``body_html``、 ``taxonomies`` （``PostTaxonomiesView``）、 ``top_image_url``、
-``top_image_alt``。
-``top_image_url`` はヒーロー画像への相対 URL で、指定がなければ ``None`` です
+``top_image_alt``、 ``responsive_image``、 ``responsive_top_image``。
+``top_image_url`` はヒーロー画像への相対 URL で、指定がなければ ``None`` です。
+``responsive_image`` と ``responsive_top_image`` は ``ResponsiveImageView | None``
+で、バリアントが無いときは ``None`` です（1.23 以降）
 
 **PostCardView** のフィールド: ``title``、 ``page_url``、 ``published_at``、
 ``excerpt``、 ``image_url``、 ``tags``、 ``categories``、 ``authors``、
-``external_url``、 ``slug``、 ``taxonomies`` （``PostTaxonomiesView``）
+``external_url``、 ``slug``、 ``taxonomies`` （``PostTaxonomiesView``）、
+``responsive_image``。
+``responsive_image`` は ``ResponsiveImageView | None`` で、
+バリアントが無いときは ``None`` です（1.23 以降）
 
 **PostTaxonomiesView** のフィールドは  ``tags``、 ``categories``、 ``authors``
 で、各要素は **TaxonomyLinkView** （ ``id``、 ``label``、 ``url``）です。
