@@ -122,6 +122,19 @@ def test_tracked_symlink_to_public_path_passes(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stdout
 
 
+def test_exempt_path_symlink_to_parent_only_path_is_flagged(tmp_path: Path) -> None:
+    root = _init_repo(tmp_path / "repo", _minimal_repo_files())
+    relative = "scripts/ci/check_public_tree.py"
+    link = root / relative
+    link.parent.mkdir(parents=True)
+    link.symlink_to("../tools/evil.py")
+    subprocess.run(["git", "add", relative], cwd=root, check=True)
+
+    result = _run_tree_check(root)
+    assert result.returncode == 1, result.stdout
+    assert f"parent-path: {relative}" in result.stdout
+
+
 @pytest.mark.parametrize("parent_dir", PARENT_ONLY_DIR_EXAMPLES)
 def test_tracked_parent_only_directory_is_flagged(tmp_path: Path, parent_dir: str) -> None:
     files = _minimal_repo_files()

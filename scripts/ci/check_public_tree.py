@@ -127,8 +127,6 @@ def check_public_tree(root: Path) -> list[str]:
             violations.append(violation)
 
     for relative in files:
-        if relative in TEXT_SCAN_EXEMPT_PATHS:
-            continue
         path = root.joinpath(*PurePosixPath(relative).parts)
         if path.is_symlink():
             try:
@@ -139,6 +137,8 @@ def check_public_tree(root: Path) -> list[str]:
                 violations.append(f"{RULE_PARENT_PATH}: {relative}")
             if any(forbidden in target for forbidden in FORBIDDEN_SHARED_TEXT):
                 violations.append(f"{RULE_FORBIDDEN_TEXT}: {relative}")
+            continue
+        if relative in TEXT_SCAN_EXEMPT_PATHS:
             continue
         if not path.is_file():
             continue
