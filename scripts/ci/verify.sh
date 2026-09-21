@@ -5,7 +5,10 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$repo_root"
 
 profile="${1:-full}"
-target_set="${2-local}"
+if (($# > 1)); then
+  printf 'verify.sh takes only the profile argument; unexpected extra argument: %s\n' "$2" >&2
+  exit 64
+fi
 
 # ---- disk-space gate (issue #145) ------------------------------------------
 # Runs before log setup: writing the log itself needs free space too, so a
@@ -124,7 +127,6 @@ trap _verify_exit_trap EXIT
 verify_head_sha="$(git rev-parse HEAD 2>/dev/null || printf 'unknown')"
 printf 'verify.sh log: %s\n' "$verify_log_file"
 printf 'profile: %s\n' "$profile"
-printf 'target set: %s\n' "$target_set"
 printf 'start (UTC): %s\n' "$verify_log_timestamp"
 printf 'HEAD: %s\n' "$verify_head_sha"
 printf 'workdir: %s\n' "$repo_root"
@@ -158,55 +160,17 @@ _verify_rotate_logs() {
 }
 _verify_rotate_logs "$verify_log_dir"
 
-quality_targets=()
-pytest_targets=()
-case "$target_set" in
-  local)
-    # Local full/quick keep the complete layout-aware target set. Parent-only
-    # paths remain guarded because this shared script also runs after export.
-    quality_targets=(src tests)
-    pytest_targets=(tests)
-    if [[ -d tools/public_sync ]]; then
-      quality_targets+=(tools)
-    fi
-    if [[ -d tools/public_sync/tests ]]; then
-      pytest_targets+=(tools/public_sync/tests)
-    fi
-    if [[ -d .agents ]]; then
-      quality_targets+=(.agents)
-      pytest_targets+=(.agents)
-    fi
-    ;;
-  ci-shared)
-    # Parent CI's compatibility matrix owns only paths shipped publicly.
-    # Parent-only checks have their own private-contract job.
-    if [[ ! -d src && ! -d tests ]]; then
-      printf 'no verification targets found for target set: %s\n' "$target_set" >&2
-      exit 64
-    fi
-    for required_target in src tests; do
-      if [[ ! -d "$required_target" ]]; then
-        printf 'missing required verification target: %s\n' "$required_target" >&2
-        exit 64
-      fi
-    done
-    quality_targets=(src tests)
-    pytest_targets=(tests)
-    ;;
-  "")
-    printf 'empty verification target set\n' >&2
+# This checkout is the public repository: the package lives in src/ and its
+# suite in tests/. Those are the only verification targets — a checkout that
+# lacks either is broken rather than a different layout.
+quality_targets=(src tests)
+pytest_targets=(tests)
+for required_target in src tests; do
+  if [[ ! -d "$required_target" ]]; then
+    printf 'missing required verification target: %s\n' "$required_target" >&2
     exit 64
-    ;;
-  *)
-    printf 'unknown verification target set: %s\n' "$target_set" >&2
-    exit 64
-    ;;
-esac
-
-if ((${#quality_targets[@]} == 0 || ${#pytest_targets[@]} == 0)); then
-  printf 'no verification targets found for target set: %s\n' "$target_set" >&2
-  exit 64
-fi
+  fi
+done
 
 # Issue #320 measured the browser suite with 1/2/4 workers. Two workers with
 # loadscope were the fastest stable candidate; four workers timed out. Keep the
@@ -245,6 +209,11 @@ run_static_checks() {
   npm ci
   npm run check
 }
+
+# The public tree itself is a checked invariant: a tracked parent-only path
+# or a leaked private-environment reference fails every profile before any
+# dependency setup runs. The checker is stdlib-only, so it needs no synced venv.
+uv run --no-sync python scripts/ci/check_public_tree.py "$repo_root"
 
 uv lock --check
 uv sync --locked --all-groups

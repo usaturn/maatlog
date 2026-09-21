@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import os
 import subprocess
 import sys
@@ -10,7 +11,8 @@ import tomllib
 import zipfile
 from dataclasses import dataclass
 from importlib.metadata import version as distribution_version
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+from typing import cast
 from unittest.mock import create_autospec
 
 import pytest
@@ -394,6 +396,80 @@ def test_wheel_excludes_frontend_dev_tooling(distribution_artifacts: Distributio
 def test_sdist_excludes_frontend_dev_tooling(distribution_artifacts: DistributionArtifacts) -> None:
     with tarfile.open(distribution_artifacts.sdist, "r:gz") as archive:
         _assert_no_frontend_dev_tooling(set(archive.getnames()))
+
+
+def _parent_only_parts() -> frozenset[str]:
+    """Extract ``PARENT_ONLY_PARTS`` from the tracked-tree guard.
+
+    ``scripts/ci/check_public_tree.py`` is a CLI script, not an importable
+    module; parsing its assignment keeps this check on the same rule set
+    without duplicating the literals here.
+    """
+    script = REPO_ROOT / "scripts" / "ci" / "check_public_tree.py"
+    tree = ast.parse(script.read_text(encoding="utf-8"))
+    for node in ast.walk(tree):
+        if not (
+            isinstance(node, ast.Assign)
+            and any(isinstance(target, ast.Name) and target.id == "PARENT_ONLY_PARTS" for target in node.targets)
+        ):
+            continue
+        value = node.value
+        # literal_eval does not accept frozenset(...) calls; unwrap to the
+        # inner literal.
+        if (
+            isinstance(value, ast.Call)
+            and isinstance(value.func, ast.Name)
+            and value.func.id == "frozenset"
+            and len(value.args) == 1
+        ):
+            value = value.args[0]
+        return frozenset(cast(set[str], ast.literal_eval(value)))
+    raise AssertionError(f"{script} must define PARENT_ONLY_PARTS")
+
+
+def _assert_no_parent_only_members(names: set[str], archive: str) -> None:
+    """Fail when an archive member path carries a parent-only component.
+
+    Matches ``check_public_tree``'s component rule: only whole path segments
+    count, so ``docs/reviews-notes.rst`` is fine while ``tools/`` is not.
+    """
+    parts = _parent_only_parts()
+    leaked = sorted(name for name in names if parts & set(PurePosixPath(name).parts))
+    assert not leaked, f"{archive} contains parent-only members: {leaked}"
+
+
+def test_wheel_has_no_parent_only_members(distribution_artifacts: DistributionArtifacts) -> None:
+    with zipfile.ZipFile(distribution_artifacts.wheel) as archive:
+        _assert_no_parent_only_members(set(archive.namelist()), "wheel")
+
+
+def test_sdist_has_no_parent_only_members(distribution_artifacts: DistributionArtifacts) -> None:
+    with tarfile.open(distribution_artifacts.sdist, "r:gz") as archive:
+        _assert_no_parent_only_members(set(archive.getnames()), "sdist")
+
+
+def test_parent_only_members_check_flags_wheel_leak() -> None:
+    with pytest.raises(AssertionError, match="parent-only"):
+        _assert_no_parent_only_members(
+            {"maatlog/__init__.py", "maatlog/secret/.agents/config"},
+            "wheel",
+        )
+
+
+def test_parent_only_members_check_flags_sdist_subdir_leak() -> None:
+    with pytest.raises(AssertionError, match="parent-only"):
+        _assert_no_parent_only_members(
+            {"maatlog-0.6.0/PKG-INFO", "maatlog-0.6.0/sub/tools/private.py"},
+            "sdist",
+        )
+
+
+def test_parent_only_members_check_allows_ordinary_names() -> None:
+    """Bare words inside a file name are not path components and stay allowed."""
+    _assert_no_parent_only_members(
+        {"maatlog-0.6.0/README.rst", "maatlog-0.6.0/docs/reviews-notes.rst"},
+        "sdist",
+    )
 
 
 def test_sdist_exists_alongside_wheel(distribution_artifacts: DistributionArtifacts) -> None:

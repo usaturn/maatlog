@@ -38,9 +38,9 @@ dev = [
     "Pillow>=11.3",
 ]
 
-# Keep every path in this file present in both layouts: this file is shared with the
-# public repository, where tools/public_sync does not exist. The parent-side sync
-# tests are passed to pytest explicitly by scripts/ci/verify.sh.
+# Every path referenced here lives in the public checkout itself: testpaths and
+# pythonpath resolve under tests/, and scripts/ci/verify.sh adds no further
+# pytest roots.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["tests"]
