@@ -137,7 +137,7 @@ jobs:
           esac
 
           if [[ -n "$log_opts" ]]; then
-            gitleaks git --redact --no-banner --config "$GITHUB_WORKSPACE/.gitleaks.toml" --log-opts="$log_opts" .
+            gitleaks git --redact --no-banner --config "$GITHUB_WORKSPACE/.gitleaks.toml" --ignore-gitleaks-allow --log-opts="$log_opts" .
           else
-            gitleaks git --redact --no-banner --config "$GITHUB_WORKSPACE/.gitleaks.toml" .
+            gitleaks git --redact --no-banner --config "$GITHUB_WORKSPACE/.gitleaks.toml" --ignore-gitleaks-allow .
           fi

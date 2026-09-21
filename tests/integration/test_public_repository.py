@@ -95,6 +95,33 @@ def test_natural_language_reviews_is_not_flagged(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stderr
 
 
+@pytest.mark.parametrize(
+    ("target", "rule"),
+    [
+        ("/workspaces/maatlog/devenv/", "forbidden-text"),
+        ("./devenv/setup.sh", "forbidden-text"),
+        ("../tools/shared.py", "parent-path"),
+    ],
+)
+def test_tracked_symlink_to_parent_only_path_is_flagged(tmp_path: Path, target: str, rule: str) -> None:
+    root = _init_repo(tmp_path / "repo", _minimal_repo_files())
+    (root / "leak-link").symlink_to(target)
+    subprocess.run(["git", "add", "leak-link"], cwd=root, check=True)
+
+    result = _run_tree_check(root)
+    assert result.returncode == 1
+    assert f"{rule}: leak-link" in result.stdout
+
+
+def test_tracked_symlink_to_public_path_passes(tmp_path: Path) -> None:
+    root = _init_repo(tmp_path / "repo", _minimal_repo_files())
+    (root / "ok-link").symlink_to("src/ok.py")
+    subprocess.run(["git", "add", "ok-link"], cwd=root, check=True)
+
+    result = _run_tree_check(root)
+    assert result.returncode == 0, result.stdout
+
+
 @pytest.mark.parametrize("parent_dir", PARENT_ONLY_DIR_EXAMPLES)
 def test_tracked_parent_only_directory_is_flagged(tmp_path: Path, parent_dir: str) -> None:
     files = _minimal_repo_files()
@@ -423,6 +450,7 @@ def test_secret_scan_compares_event_shas_before_scanning() -> None:
 def test_secret_scan_uses_base_config_and_redacts() -> None:
     body = _secret_scan_body()
     assert 'gitleaks git --redact --no-banner --config "$GITHUB_WORKSPACE/.gitleaks.toml"' in body
+    assert body.count("--ignore-gitleaks-allow") == 2
     assert "--log-opts=" in body
     # Environment config injection must not be able to replace the pinned rules.
     assert "unset GITLEAKS_CONFIG GITLEAKS_CONFIG_TOML" in body
@@ -480,7 +508,7 @@ def _commit_file(root: Path, relative: str, content: str, message: str) -> str:
     return _git(root, "rev-parse", "HEAD")
 
 
-def _secret_repo(tmp_path: Path, *, leak: bool = True) -> tuple[Path, str, str]:
+def _secret_repo(tmp_path: Path, *, leak: bool = True, inline_allow: bool = False) -> tuple[Path, str, str]:
     """Repo whose base branch is clean and whose PR branch adds a secret.
 
     The PR branch also swaps ``.gitleaks.toml`` for a permissive ruleset, so the
@@ -496,7 +524,8 @@ def _secret_repo(tmp_path: Path, *, leak: bool = True) -> tuple[Path, str, str]:
 
     _git(root, "switch", "-q", "-c", "pr")
     if leak:
-        _commit_file(root, "leak.py", f'AWS_KEY = "{FAKE_AWS_KEY}"\n', "add key")
+        allow = "  #gitleaks:allow" if inline_allow else ""
+        _commit_file(root, "leak.py", f'AWS_KEY = "{FAKE_AWS_KEY}"{allow}\n', "add key")
     _commit_file(root, ".gitleaks.toml", _PERMISSIVE_CONFIG, "weaken config")
     head = _git(root, "rev-parse", "HEAD")
     _git(root, "switch", "-q", "main")
@@ -522,6 +551,7 @@ def _run_range_scan(
             "--no-banner",
             "--config",
             str(root / ".gitleaks.toml"),
+            "--ignore-gitleaks-allow",
             f"--log-opts={base}..{head}",
             ".",
         ],
@@ -539,6 +569,15 @@ def test_range_scan_detects_secret_despite_tree_config(tmp_path: Path) -> None:
     result = _run_range_scan(root, base, head)
     assert result.returncode == 1, result.stderr
     # --redact must keep the secret text out of every output stream.
+    assert FAKE_AWS_KEY not in result.stdout
+    assert FAKE_AWS_KEY not in result.stderr
+
+
+@requires_gitleaks
+def test_range_scan_rejects_inline_gitleaks_allow(tmp_path: Path) -> None:
+    root, base, head = _secret_repo(tmp_path, inline_allow=True)
+    result = _run_range_scan(root, base, head)
+    assert result.returncode == 1, result.stderr
     assert FAKE_AWS_KEY not in result.stdout
     assert FAKE_AWS_KEY not in result.stderr
 

@@ -35,7 +35,7 @@ _DIST_MODE_RE = re.compile(r"^--dist(=.*)?$")
 def isolate_quality_test_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     """Keep subprocess assertions independent of ambient overrides."""
     monkeypatch.delenv("VERIFY_BROWSER_WORKERS", raising=False)
-    monkeypatch.delenv("VERIFY_MIN_FREE_MB", raising=False)
+    monkeypatch.setenv("VERIFY_MIN_FREE_MB", "0")
     monkeypatch.delenv("VERIFY_LOG_DIR", raising=False)
     monkeypatch.delenv("PYTEST_ADDOPTS", raising=False)
 
@@ -164,13 +164,15 @@ def test_second_argument_is_rejected_with_64(tmp_path: Path, extra: str) -> None
     assert "unexpected extra argument" in result.stderr
 
 
-def test_missing_src_or_tests_rejected_with_64(tmp_path: Path) -> None:
+def test_missing_src_or_tests_rejected_with_64(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     checkout = tmp_path / "partial-checkout"
     script = checkout / "scripts/ci/verify.sh"
     script.parent.mkdir(parents=True)
     script.write_text(VERIFY_SH.read_text())
     script.chmod(0o755)
     (checkout / "tests").mkdir()
+    _install_df_stub(tmp_path, avail_kb=1)
+    monkeypatch.setenv("PATH", f"{tmp_path}:{os.environ['PATH']}")
 
     result = subprocess.run(
         [str(script), "minimum"],
@@ -507,7 +509,7 @@ def test_full_profile_runs_fail_fast_order_before_pytest_and_build(
 
     # Exactly three pytest invocations: parallel browser-less tests, bounded
     # browser tests, then the serial distribution gate against the archives.
-    pytest_argv = [argv for tool, argv in calls if tool == "uv" and "pytest" in argv]
+    pytest_argv = [argv for tool, argv in calls if tool == "uv" and argv.startswith("run --no-sync pytest ")]
     assert pytest_argv == [
         "run --no-sync pytest -n auto --dist loadgroup -m not browser and not distribution -v tests",
         "run --no-sync pytest -n 2 --dist loadscope -m browser and not distribution -v tests",
@@ -557,7 +559,7 @@ def test_full_profile_uses_valid_browser_worker_override(
 
     entries = _run_quality_profile(tmp_path, monkeypatch, "full")
 
-    pytest_argv = [argv for tool, _cwd, argv in entries if tool == "uv" and "pytest" in argv]
+    pytest_argv = [argv for tool, _cwd, argv in entries if tool == "uv" and argv.startswith("run --no-sync pytest ")]
     expected = str(int(workers))
     assert [argv for argv in pytest_argv if "-m browser and not distribution" in argv] == [
         f"run --no-sync pytest -n {expected} --dist loadscope -m browser and not distribution -v tests"
@@ -618,7 +620,7 @@ def test_full_profile_fail_fast_stops_before_pytest_on_static_lint_failure(
 
     assert result.returncode == 1
     assert ("uv", "run --no-sync ruff check src tests") in calls
-    assert not any(tool == "uv" and "pytest" in argv for tool, argv in calls)
+    assert not any(tool == "uv" and argv.startswith("run --no-sync pytest ") for tool, argv in calls)
     assert not any(tool == "npm" for tool, _argv in calls), "npm ci must not run once the lint step has failed"
 
     logs = list(log_dir.glob("verify-full-*.log"))
@@ -738,11 +740,11 @@ def test_static_profile_runs_static_checks_in_fail_fast_order_without_venv_chang
     frontend = calls.index(("npm", "run check"))
 
     assert ruff_check < ruff_format < pyright < npm_ci < frontend
-    assert not any("pytest" in argv for _tool, argv in calls)
+    assert not any(argv.startswith("run --no-sync pytest ") for _tool, argv in calls)
     assert not [argv for tool, argv in calls if tool == "uvx"]
     assert _uv_pip_install_calls(calls) == []
     # The distribution build belongs to `full` only (it rewrites dist/ each run).
-    assert not any("build" in argv for _tool, argv in calls)
+    assert not any(argv.startswith("build ") for _tool, argv in calls)
 
 
 def test_quick_profile_adds_browser_less_pytest_after_static_checks(
@@ -758,7 +760,9 @@ def test_quick_profile_adds_browser_less_pytest_after_static_checks(
     ruff_check = calls.index(("uv", "run --no-sync ruff check src tests"))
     ruff_format = calls.index(("uv", "run --no-sync ruff format --check src tests"))
     pyright = calls.index(("uv", "run --no-sync pyright src tests"))
-    pytest_calls = [index for index, (tool, argv) in enumerate(calls) if tool == "uv" and "pytest" in argv]
+    pytest_calls = [
+        index for index, (tool, argv) in enumerate(calls) if tool == "uv" and argv.startswith("run --no-sync pytest ")
+    ]
 
     assert len(pytest_calls) == 1
     (parallel_call,) = pytest_calls
@@ -770,7 +774,7 @@ def test_quick_profile_adds_browser_less_pytest_after_static_checks(
     assert not any(tool == "npm" for tool, _argv in calls)
     assert not [argv for tool, argv in calls if tool == "uvx"]
     assert _uv_pip_install_calls(calls) == []
-    assert not any("build" in argv for _tool, argv in calls)
+    assert not any(argv.startswith("build ") for _tool, argv in calls)
 
 
 def test_quick_profile_fail_fast_stops_before_pytest_on_static_lint_failure(
@@ -785,7 +789,7 @@ def test_quick_profile_fail_fast_stops_before_pytest_on_static_lint_failure(
 
     assert result.returncode == 1
     assert ("uv", "run --no-sync ruff check src tests") in calls
-    assert not any(tool == "uv" and "pytest" in argv for tool, argv in calls)
+    assert not any(tool == "uv" and argv.startswith("run --no-sync pytest ") for tool, argv in calls)
     assert not any(tool == "npm" for tool, _argv in calls), "npm ci must not run once the lint step has failed"
 
     logs = list(log_dir.glob("verify-quick-*.log"))
@@ -862,7 +866,7 @@ def test_compatibility_profiles_skip_browser_and_node_tools(
     entries = _run_quality_profile(tmp_path, monkeypatch, profile)
     calls = [(tool, argv) for tool, _cwd, argv in entries]
     assert all(tool != "npm" for tool, _argv in calls)
-    pytest_calls = [argv for tool, argv in calls if tool == "uv" and "pytest" in argv]
+    pytest_calls = [argv for tool, argv in calls if tool == "uv" and argv.startswith("run --no-sync pytest ")]
     assert pytest_calls == ["run --no-sync pytest -m not browser -v tests"]
 
 
@@ -958,6 +962,7 @@ def test_disk_gate_blocks_full_profile_when_free_space_is_below_default_threshol
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.delenv("VERIFY_MIN_FREE_MB")
     log_dir = tmp_path / "verify-logs"
     calls_path = tmp_path / "quality.calls"
     monkeypatch.setenv("VERIFY_LOG_DIR", str(log_dir))
@@ -1026,6 +1031,7 @@ def test_disk_gate_uses_profile_specific_default_threshold(
     avail_mb: int,
     expect_pass: bool,
 ) -> None:
+    monkeypatch.delenv("VERIFY_MIN_FREE_MB")
     log_dir = tmp_path / "verify-logs"
     monkeypatch.setenv("VERIFY_LOG_DIR", str(log_dir))
     _install_noop_quality_stubs(tmp_path, monkeypatch)
@@ -1043,6 +1049,7 @@ def test_disk_gate_checks_each_distinct_filesystem_once(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.delenv("VERIFY_MIN_FREE_MB")
     log_dir = tmp_path / "verify-logs"
     monkeypatch.setenv("VERIFY_LOG_DIR", str(log_dir))
     _install_noop_quality_stubs(tmp_path, monkeypatch)
@@ -1164,7 +1171,7 @@ def test_quick_profile_pytest_is_parallel_with_group_aware_scheduling(
     """
     entries = _run_quality_profile(tmp_path, monkeypatch, "quick")
     calls = [(tool, argv) for tool, _cwd, argv in entries]
-    pytest_argv = [argv for tool, argv in calls if tool == "uv" and "pytest" in argv]
+    pytest_argv = [argv for tool, argv in calls if tool == "uv" and argv.startswith("run --no-sync pytest ")]
 
     assert len(pytest_argv) == 1
     (parallel_argv,) = pytest_argv
@@ -1181,7 +1188,7 @@ def test_compatibility_profiles_do_not_run_pytest_in_parallel(
     """Compatibility jobs remain serial because they were not benchmarked."""
     entries = _run_quality_profile(tmp_path, monkeypatch, profile)
     calls = [(tool, argv) for tool, _cwd, argv in entries]
-    pytest_argv = [argv for tool, argv in calls if tool == "uv" and "pytest" in argv]
+    pytest_argv = [argv for tool, argv in calls if tool == "uv" and argv.startswith("run --no-sync pytest ")]
 
     assert pytest_argv
     for argv in pytest_argv:
@@ -1194,7 +1201,7 @@ def test_full_profile_parallelizes_only_non_distribution_suites(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     entries = _run_quality_profile(tmp_path, monkeypatch, "full")
-    pytest_argv = [argv for tool, _cwd, argv in entries if tool == "uv" and "pytest" in argv]
+    pytest_argv = [argv for tool, _cwd, argv in entries if tool == "uv" and argv.startswith("run --no-sync pytest ")]
 
     assert len(pytest_argv) == 3
     nonbrowser_argv, browser_argv, distribution_argv = pytest_argv

@@ -15,6 +15,7 @@ Exit codes: 0 clean, 1 violations found, 2 input or git error.
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from collections.abc import Sequence
@@ -129,7 +130,17 @@ def check_public_tree(root: Path) -> list[str]:
         if relative in TEXT_SCAN_EXEMPT_PATHS:
             continue
         path = root.joinpath(*PurePosixPath(relative).parts)
-        if not path.is_file() or path.is_symlink():
+        if path.is_symlink():
+            try:
+                target = os.readlink(path)
+            except OSError:
+                continue
+            if _violations_for_path(target) is not None:
+                violations.append(f"{RULE_PARENT_PATH}: {relative}")
+            if any(forbidden in target for forbidden in FORBIDDEN_SHARED_TEXT):
+                violations.append(f"{RULE_FORBIDDEN_TEXT}: {relative}")
+            continue
+        if not path.is_file():
             continue
         try:
             text = path.read_bytes().decode("utf-8")
