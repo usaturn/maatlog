@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  pull_request_target:
   workflow_dispatch:
 
 permissions:
@@ -12,6 +13,9 @@ permissions:
 jobs:
   verify:
     name: verify (${{ matrix.profile }})
+    # The untrusted-code event never runs this job; pull_request_target is
+    # reserved for the base-owned secret scan below.
+    if: github.event_name != 'pull_request_target'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -35,3 +39,105 @@ jobs:
           uv sync --locked --all-groups
           uv run playwright install --with-deps chromium
       - run: ./scripts/ci/verify.sh "${{ matrix.profile }}"
+
+  secret-scan:
+    name: secret-scan
+    # Runs on pull_request_target so the workflow and .gitleaks.toml always come
+    # from the base branch: a PR can neither weaken the rules nor remove this
+    # job. PR head commits are fetched as git objects and scanned, never
+    # checked out or executed.
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # pull_request_target: the exact base commit the event pinned.
+          # push / workflow_dispatch: the event commit itself.
+          ref: ${{ github.event.pull_request.base.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install Gitleaks
+        env:
+          GITLEAKS_VERSION: "8.30.1"
+          GITLEAKS_ARCHIVE_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+        run: |
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          archive="$tmp/gitleaks.tar.gz"
+          curl -fL -o "$archive" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          printf '%s  %s\n' "$GITLEAKS_ARCHIVE_SHA256" "$archive" | sha256sum -c -
+          tar -xzf "$archive" -C "$tmp" gitleaks
+          sudo install -m 0755 "$tmp/gitleaks" /usr/local/bin/gitleaks
+      - name: Scan for secrets
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          # Environment-provided config must not be able to replace the pinned
+          # ruleset: gitleaks resolves --config, then these variables, then the
+          # scanned tree's own .gitleaks.toml.
+          unset GITLEAKS_CONFIG GITLEAKS_CONFIG_TOML
+          if [[ ! -f "$GITHUB_WORKSPACE/.gitleaks.toml" ]]; then
+            echo "error: base-owned .gitleaks.toml is missing" >&2
+            exit 1
+          fi
+
+          log_opts=""
+          case "$EVENT_NAME" in
+            pull_request_target)
+              if [[ ! "$PR_NUMBER" =~ ^[0-9]+$ ]] \
+                || [[ ! "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]] \
+                || [[ ! "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+                echo "error: malformed pull_request_target event fields" >&2
+                exit 1
+              fi
+              checked_out="$(git rev-parse HEAD)"
+              if [[ "$checked_out" != "$BASE_SHA" ]]; then
+                echo "error: checked-out base $checked_out != event base.sha $BASE_SHA" >&2
+                exit 1
+              fi
+              # The pull ref tip can move while the run queues; only scan the
+              # commits the event pinned, and let git fail closed if they are
+              # not present.
+              git fetch --no-tags origin "refs/pull/$PR_NUMBER/head"
+              fetched="$(git rev-parse FETCH_HEAD)"
+              if [[ "$fetched" != "$HEAD_SHA" ]]; then
+                echo "error: fetched pull/$PR_NUMBER/head $fetched != event head.sha $HEAD_SHA" >&2
+                exit 1
+              fi
+              merge_base="$(git merge-base "$BASE_SHA" "$HEAD_SHA")"
+              log_opts="$merge_base..$HEAD_SHA"
+              ;;
+            push)
+              checked_out="$(git rev-parse HEAD)"
+              if [[ "$checked_out" != "$PUSH_AFTER" ]]; then
+                echo "error: checked-out $checked_out != event sha $PUSH_AFTER" >&2
+                exit 1
+              fi
+              if [[ "$PUSH_BEFORE" =~ ^[0-9a-f]{40}$ ]] \
+                && git cat-file -e "$PUSH_BEFORE^{commit}" 2>/dev/null; then
+                log_opts="$PUSH_BEFORE..$PUSH_AFTER"
+              else
+                # New branch or missing history: scan everything rather than
+                # skipping.
+                log_opts=""
+              fi
+              ;;
+            *)
+              log_opts=""
+              ;;
+          esac
+
+          if [[ -n "$log_opts" ]]; then
+            gitleaks git --redact --no-banner --config "$GITHUB_WORKSPACE/.gitleaks.toml" --log-opts="$log_opts" .
+          else
+            gitleaks git --redact --no-banner --config "$GITHUB_WORKSPACE/.gitleaks.toml" .
+          fi
