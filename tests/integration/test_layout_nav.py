@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 import pytest
-from conftest import ProjectFactory
+from fixtures.integration_builds import BuiltProjects
+
+# Every test in this module only reads finished output; share the builds on one
+# worker so the small key set is not rebuilt for each consumer (issue #364).
+pytestmark = pytest.mark.xdist_group("integration-layout-nav")
 
 LAYOUT_PROJECT = {
     "post.md": """---
@@ -27,8 +31,8 @@ BANNER_PAGES = ("index.html", "about.html", "post.html", "blog.html")
 
 
 @pytest.mark.parametrize("page_name", BANNER_PAGES)
-def test_banner_is_on_every_page(make_project: ProjectFactory, page_name: str) -> None:
-    result = make_project(files=LAYOUT_PROJECT, theme="maatlog-default").build()
+def test_banner_is_on_every_page(built_projects: BuiltProjects, page_name: str) -> None:
+    result = built_projects.project(files=LAYOUT_PROJECT, theme="maatlog-default")
     page = result.html(page_name)
 
     assert page.select_one(".maatlog-banner[data-maatlog-component='banner']")
@@ -36,36 +40,36 @@ def test_banner_is_on_every_page(make_project: ProjectFactory, page_name: str) -
     assert page.select_one(".maatlog-banner .maatlog-banner-search")
 
 
-def test_banner_shows_the_tagline_when_configured(make_project: ProjectFactory) -> None:
-    result = make_project(
+def test_banner_shows_the_tagline_when_configured(built_projects: BuiltProjects) -> None:
+    result = built_projects.project(
         files=LAYOUT_PROJECT,
         theme="maatlog-default",
         config={"maatlog_tagline": "Notes on Sphinx"},
-    ).build()
+    )
     page = result.html("about.html")
 
     assert page.select_one(".maatlog-banner-tagline")
     assert "Notes on Sphinx" in page
 
 
-def test_banner_omits_the_tagline_when_unset(make_project: ProjectFactory) -> None:
-    result = make_project(files=LAYOUT_PROJECT, theme="maatlog-default").build()
+def test_banner_omits_the_tagline_when_unset(built_projects: BuiltProjects) -> None:
+    result = built_projects.project(files=LAYOUT_PROJECT, theme="maatlog-default")
     page = result.html("about.html")
 
     assert page.select_one(".maatlog-banner-tagline") is None
 
 
-def test_banner_omits_the_logo_when_html_logo_is_unset(make_project: ProjectFactory) -> None:
-    result = make_project(files=LAYOUT_PROJECT, theme="maatlog-default").build()
+def test_banner_omits_the_logo_when_html_logo_is_unset(built_projects: BuiltProjects) -> None:
+    result = built_projects.project(files=LAYOUT_PROJECT, theme="maatlog-default")
     page = result.html("about.html")
 
     assert page.select_one(".maatlog-banner-logo") is None
     assert page.select_one(".maatlog-banner-title")
 
 
-def test_banner_search_is_a_single_input_without_a_submit_button(make_project: ProjectFactory) -> None:
+def test_banner_search_is_a_single_input_without_a_submit_button(built_projects: BuiltProjects) -> None:
     # Issue #95: Sphinx の「クイック検索」UI（見出し + 入力 + 検索ボタン）をやめる。
-    result = make_project(files=LAYOUT_PROJECT, theme="maatlog-default").build()
+    result = built_projects.project(files=LAYOUT_PROJECT, theme="maatlog-default")
     page = result.html("about.html")
 
     form = page.select_one(".maatlog-banner-search form.maatlog-search")
@@ -80,8 +84,8 @@ def test_banner_search_is_a_single_input_without_a_submit_button(make_project: P
     assert inputs[0]["id"] == "maatlog-search-input"
 
 
-def test_banner_search_drops_the_sphinx_quick_search_chrome(make_project: ProjectFactory) -> None:
-    result = make_project(files=LAYOUT_PROJECT, theme="maatlog-default").build()
+def test_banner_search_drops_the_sphinx_quick_search_chrome(built_projects: BuiltProjects) -> None:
+    result = built_projects.project(files=LAYOUT_PROJECT, theme="maatlog-default")
     text = result.html("about.html").text
 
     assert 'id="searchlabel"' not in text
@@ -89,9 +93,9 @@ def test_banner_search_drops_the_sphinx_quick_search_chrome(make_project: Projec
     assert "document.getElementById('searchbox')" not in text
 
 
-def test_banner_search_input_keeps_an_accessible_name(make_project: ProjectFactory) -> None:
+def test_banner_search_input_keeps_an_accessible_name(built_projects: BuiltProjects) -> None:
     # placeholder だけに頼らない。ラベルは視覚的に隠すが DOM には残す。
-    result = make_project(files=LAYOUT_PROJECT, theme="maatlog-default").build()
+    result = built_projects.project(files=LAYOUT_PROJECT, theme="maatlog-default")
     page = result.html("about.html")
 
     label = page.select_one('.maatlog-banner-search label[for="maatlog-search-input"]')
@@ -99,17 +103,17 @@ def test_banner_search_input_keeps_an_accessible_name(make_project: ProjectFacto
     assert "maatlog-visually-hidden" in label["class"]
 
 
-def test_search_page_itself_has_no_banner_search_form(make_project: ProjectFactory) -> None:
+def test_search_page_itself_has_no_banner_search_form(built_projects: BuiltProjects) -> None:
     # Sphinx の searchbox と同じガード。検索ページ上で二重のフォームを出さない。
-    result = make_project(files=LAYOUT_PROJECT, theme="maatlog-default").build()
+    result = built_projects.project(files=LAYOUT_PROJECT, theme="maatlog-default")
     page = result.html("search.html")
 
     assert page.select_one(".maatlog-banner-search") is not None
     assert page.select_one(".maatlog-banner-search form") is None
 
 
-def test_banner_title_links_to_the_root_document(make_project: ProjectFactory) -> None:
-    result = make_project(files=LAYOUT_PROJECT, theme="maatlog-default").build()
+def test_banner_title_links_to_the_root_document(built_projects: BuiltProjects) -> None:
+    result = built_projects.project(files=LAYOUT_PROJECT, theme="maatlog-default")
     page = result.html("about.html")
 
     link = page.select_one(".maatlog-banner-title a")
@@ -121,24 +125,24 @@ NAV_PAGES = ("index.html", "about.html", "post.html", "blog.html")
 
 
 @pytest.mark.parametrize("page_name", NAV_PAGES)
-def test_left_nav_is_on_every_page(make_project: ProjectFactory, page_name: str) -> None:
-    result = make_project(files=LAYOUT_PROJECT, theme="maatlog-default").build()
+def test_left_nav_is_on_every_page(built_projects: BuiltProjects, page_name: str) -> None:
+    result = built_projects.project(files=LAYOUT_PROJECT, theme="maatlog-default")
     page = result.html(page_name)
 
     assert page.select_one(".maatlog-layout .maatlog-nav[data-maatlog-component='nav']")
 
 
-def test_left_nav_carries_the_site_toctree(make_project: ProjectFactory) -> None:
-    result = make_project(files=LAYOUT_PROJECT, theme="maatlog-default").build()
+def test_left_nav_carries_the_site_toctree(built_projects: BuiltProjects) -> None:
+    result = built_projects.project(files=LAYOUT_PROJECT, theme="maatlog-default")
     page = result.html("about.html")
 
     hrefs = [item.get("href", "") for item in page.select(".maatlog-nav-toctree a")]
     assert any(href.endswith("post.html") for href in hrefs)
 
 
-def test_left_nav_carries_taxonomies_on_a_plain_page(make_project: ProjectFactory) -> None:
+def test_left_nav_carries_taxonomies_on_a_plain_page(built_projects: BuiltProjects) -> None:
     # Theme API 1.2: 投稿でないページでもタクソノミーが渡る。
-    result = make_project(files=LAYOUT_PROJECT, theme="maatlog-default").build()
+    result = built_projects.project(files=LAYOUT_PROJECT, theme="maatlog-default")
     page = result.html("about.html")
 
     assert page.select_one(".maatlog-nav .maatlog-sidebar[data-maatlog-component='sidebar']")
@@ -146,7 +150,7 @@ def test_left_nav_carries_taxonomies_on_a_plain_page(make_project: ProjectFactor
     assert any(href.endswith("blog/tag/sphinx.html") for href in hrefs)
 
 
-def test_left_nav_excludes_hidden_toctrees(make_project: ProjectFactory) -> None:
+def test_left_nav_excludes_hidden_toctrees(built_projects: BuiltProjects) -> None:
     files = {
         "index.rst": """Root
 ====
@@ -168,7 +172,7 @@ def test_left_nav_excludes_hidden_toctrees(make_project: ProjectFactory) -> None
         ),
         "draft.rst": ":maatlog-post: true\n:maatlog-slug: draft\n\nDraft Secret\n============\n",
     }
-    page = make_project(files=files, theme="maatlog-default").build().html("index.html")
+    page = built_projects.project(files=files, theme="maatlog-default").html("index.html")
 
     assert page.select_one(".maatlog-nav-toctree")
     assert any(item.get("href", "").endswith("about.html") for item in page.select(".maatlog-nav-toctree a"))
@@ -176,8 +180,8 @@ def test_left_nav_excludes_hidden_toctrees(make_project: ProjectFactory) -> None
     assert "Draft Secret" not in page.text
 
 
-def test_left_nav_uses_one_navigation_landmark(make_project: ProjectFactory) -> None:
-    page = make_project(files=LAYOUT_PROJECT, theme="maatlog-default").build().html("about.html")
+def test_left_nav_uses_one_navigation_landmark(built_projects: BuiltProjects) -> None:
+    page = built_projects.project(files=LAYOUT_PROJECT, theme="maatlog-default").html("about.html")
 
     assert len(page.select("nav.maatlog-nav")) == 1
     assert page.select_one("nav.maatlog-nav div.maatlog-sidebar")
@@ -185,32 +189,32 @@ def test_left_nav_uses_one_navigation_landmark(make_project: ProjectFactory) -> 
 
 
 @pytest.mark.parametrize("page_name", NAV_PAGES)
-def test_sidebar_is_never_rendered_inside_the_body(make_project: ProjectFactory, page_name: str) -> None:
-    result = make_project(files=LAYOUT_PROJECT, theme="maatlog-default").build()
+def test_sidebar_is_never_rendered_inside_the_body(built_projects: BuiltProjects, page_name: str) -> None:
+    result = built_projects.project(files=LAYOUT_PROJECT, theme="maatlog-default")
     page = result.html(page_name)
 
     assert page.select(".maatlog-layout-main .maatlog-sidebar") == []
 
 
-def test_left_nav_has_no_empty_taxonomy_sections_without_posts(make_project: ProjectFactory) -> None:
-    result = make_project(files={"about.rst": "About\n=====\n\nNo posts here.\n"}, theme="maatlog-default").build()
+def test_left_nav_has_no_empty_taxonomy_sections_without_posts(built_projects: BuiltProjects) -> None:
+    result = built_projects.project(files={"about.rst": "About\n=====\n\nNo posts here.\n"}, theme="maatlog-default")
     page = result.html("about.html")
 
     assert page.select_one(".maatlog-nav")
     assert page.select(".maatlog-taxonomy") == []
 
 
-def test_base_theme_gets_the_same_left_nav(make_project: ProjectFactory) -> None:
-    result = make_project(files=LAYOUT_PROJECT, theme="maatlog-base").build()
+def test_base_theme_gets_the_same_left_nav(built_projects: BuiltProjects) -> None:
+    result = built_projects.project(files=LAYOUT_PROJECT, theme="maatlog-base")
     page = result.html("post.html")
 
     assert page.select_one(".maatlog-nav .maatlog-sidebar")
     assert page.select(".maatlog-layout-main .maatlog-sidebar") == []
 
 
-def test_sidebar_items_carry_label_and_count_inside_the_link(make_project: ProjectFactory) -> None:
+def test_sidebar_items_carry_label_and_count_inside_the_link(built_projects: BuiltProjects) -> None:
     # Issue #95: カウントはリンクの内側に置く。行全体が hover のサーフェスになる。
-    result = make_project(files=LAYOUT_PROJECT, theme="maatlog-default").build()
+    result = built_projects.project(files=LAYOUT_PROJECT, theme="maatlog-default")
     page = result.html("about.html")
 
     item = page.select_one(".maatlog-taxonomy-tags a.maatlog-taxonomy-item")
@@ -224,15 +228,15 @@ def test_sidebar_items_carry_label_and_count_inside_the_link(make_project: Proje
     ) in page.text
 
 
-def test_sidebar_lists_carry_the_navigation_list_class(make_project: ProjectFactory) -> None:
-    result = make_project(files=LAYOUT_PROJECT, theme="maatlog-default").build()
+def test_sidebar_lists_carry_the_navigation_list_class(built_projects: BuiltProjects) -> None:
+    result = built_projects.project(files=LAYOUT_PROJECT, theme="maatlog-default")
     page = result.html("about.html")
 
     assert page.select_one(".maatlog-taxonomy ul.maatlog-taxonomy-list") is not None
 
 
-def test_sidebar_marks_the_archive_the_reader_is_on(make_project: ProjectFactory) -> None:
-    result = make_project(files=LAYOUT_PROJECT, theme="maatlog-default").build()
+def test_sidebar_marks_the_archive_the_reader_is_on(built_projects: BuiltProjects) -> None:
+    result = built_projects.project(files=LAYOUT_PROJECT, theme="maatlog-default")
     page = result.html("blog/tag/sphinx.html")
 
     current = page.select('.maatlog-taxonomy-item[aria-current="page"]')
@@ -244,15 +248,15 @@ def test_sidebar_marks_the_archive_the_reader_is_on(make_project: ProjectFactory
     ) in page.text
 
 
-def test_sidebar_marks_nothing_on_a_plain_page(make_project: ProjectFactory) -> None:
-    result = make_project(files=LAYOUT_PROJECT, theme="maatlog-default").build()
+def test_sidebar_marks_nothing_on_a_plain_page(built_projects: BuiltProjects) -> None:
+    result = built_projects.project(files=LAYOUT_PROJECT, theme="maatlog-default")
     page = result.html("about.html")
 
     assert page.select('.maatlog-taxonomy-item[aria-current="page"]') == []
 
 
-def test_archive_months_use_the_same_item_markup(make_project: ProjectFactory) -> None:
-    result = make_project(files=LAYOUT_PROJECT, theme="maatlog-default").build()
+def test_archive_months_use_the_same_item_markup(built_projects: BuiltProjects) -> None:
+    result = built_projects.project(files=LAYOUT_PROJECT, theme="maatlog-default")
     page = result.html("about.html")
 
     item = page.select_one(".maatlog-taxonomy-months a.maatlog-taxonomy-item")

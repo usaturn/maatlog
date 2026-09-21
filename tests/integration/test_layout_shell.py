@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from conftest import ProjectFactory
+from fixtures.integration_builds import BuiltProjects
 
 LAYOUT_PROJECT = {
     "post.md": """---
@@ -53,9 +53,10 @@ CHILD_LAYOUT_OPT_IN = """\
 """
 
 
+@pytest.mark.xdist_group("integration-shell-default")
 @pytest.mark.parametrize("page_name", SHELL_PAGES)
-def test_shell_is_present_on_every_page(make_project: ProjectFactory, page_name: str) -> None:
-    result = make_project(files=LAYOUT_PROJECT, theme="maatlog-default").build()
+def test_shell_is_present_on_every_page(built_projects: BuiltProjects, page_name: str) -> None:
+    result = built_projects.project(files=LAYOUT_PROJECT, theme="maatlog-default")
     page = result.html(page_name)
 
     assert page.select_one(".maatlog-layout[data-maatlog-component='layout']")
@@ -63,25 +64,28 @@ def test_shell_is_present_on_every_page(make_project: ProjectFactory, page_name:
     assert page.select_one(".maatlog-skip-link")
 
 
-def test_no_sphinx_related_bar_remains(make_project: ProjectFactory) -> None:
-    result = make_project(files=LAYOUT_PROJECT, theme="maatlog-default").build()
+@pytest.mark.xdist_group("integration-shell-default")
+def test_no_sphinx_related_bar_remains(built_projects: BuiltProjects) -> None:
+    result = built_projects.project(files=LAYOUT_PROJECT, theme="maatlog-default")
 
     for page_name in RELATED_BAR_PAGES:
         related_count = len(result.html(page_name).select("div.related"))
         assert related_count == 0, f"{page_name} still contains {related_count} Sphinx related bar(s)"
 
 
-def test_basic_body_wrappers_are_preserved(make_project: ProjectFactory) -> None:
+@pytest.mark.xdist_group("integration-shell-default")
+def test_basic_body_wrappers_are_preserved(built_projects: BuiltProjects) -> None:
     # basic.css / sphinx-copybutton / 利用者の custom.css がこの入れ子に依存している。
-    result = make_project(files=LAYOUT_PROJECT, theme="maatlog-default").build()
+    result = built_projects.project(files=LAYOUT_PROJECT, theme="maatlog-default")
     page = result.html("post.html")
 
     assert page.select_one(".maatlog-layout-main .documentwrapper .bodywrapper .body")
     assert page.select_one(".maatlog-layout-main .body .maatlog-post")
 
 
-def test_skip_link_targets_the_main_element(make_project: ProjectFactory) -> None:
-    result = make_project(files=LAYOUT_PROJECT, theme="maatlog-default").build()
+@pytest.mark.xdist_group("integration-shell-default")
+def test_skip_link_targets_the_main_element(built_projects: BuiltProjects) -> None:
+    result = built_projects.project(files=LAYOUT_PROJECT, theme="maatlog-default")
     page = result.html("about.html")
 
     skip = page.select_one(".maatlog-skip-link")
@@ -92,8 +96,8 @@ def test_skip_link_targets_the_main_element(make_project: ProjectFactory) -> Non
     assert page.text.index('class="maatlog-skip-link"') < page.text.index('class="maatlog-banner"')
 
 
-def test_base_theme_gets_the_same_shell(make_project: ProjectFactory) -> None:
-    result = make_project(files=LAYOUT_PROJECT, theme="maatlog-base").build()
+def test_base_theme_gets_the_same_shell(built_projects: BuiltProjects) -> None:
+    result = built_projects.project(files=LAYOUT_PROJECT, theme="maatlog-base")
     page = result.html("post.html")
 
     assert page.select_one(".maatlog-layout[data-maatlog-component='layout']")
@@ -101,6 +105,7 @@ def test_base_theme_gets_the_same_shell(make_project: ProjectFactory) -> None:
     assert len(page.select("div.related")) == 0
 
 
+@pytest.mark.xdist_group("integration-shell-default")
 @pytest.mark.parametrize(
     ("page_name", "expected"),
     [
@@ -112,37 +117,34 @@ def test_base_theme_gets_the_same_shell(make_project: ProjectFactory) -> None:
     ],
 )
 def test_layout_marks_only_pages_that_render_a_toc(
-    make_project: ProjectFactory, page_name: str, expected: bool
+    built_projects: BuiltProjects, page_name: str, expected: bool
 ) -> None:
     # 空の TOC トラックを作らないため、レイアウトは TOC の有無を状態クラスで公開する。
-    result = make_project(files=LAYOUT_PROJECT, theme="maatlog-default").build()
+    result = built_projects.project(files=LAYOUT_PROJECT, theme="maatlog-default")
     page = result.html(page_name)
 
     assert (page.select_one(".maatlog-layout.maatlog-layout-has-toc") is not None) is expected
     assert (page.select_one(".maatlog-toc") is not None) is expected
 
 
-def test_child_layout_can_opt_in_to_toc_state(make_project: ProjectFactory) -> None:
+def test_child_layout_can_opt_in_to_toc_state(built_projects: BuiltProjects) -> None:
     # 派生テンプレートが root-level で maatlog_has_toc を明示し、標準より広い
     # 条件で maatlog_right_rail を出せば、状態クラスと aside は両方存在する。
     files = {
         **LAYOUT_PROJECT,
         "_templates/layout.html": CHILD_LAYOUT_OPT_IN,
     }
-    page = (
-        make_project(
-            files=files,
-            theme="maatlog-default",
-            config={"templates_path": ["_templates"]},
-        )
-        .build()
-        .html("about.html")
-    )
+    page = built_projects.project(
+        files=files,
+        theme="maatlog-default",
+        config={"templates_path": ["_templates"]},
+    ).html("about.html")
 
     assert page.select_one(".maatlog-toc") is not None
     assert page.select_one(".maatlog-layout.maatlog-layout-has-toc") is not None
 
 
+@pytest.mark.xdist_group("integration-shell-default")
 @pytest.mark.parametrize(
     ("page_name", "page_kind"),
     [
@@ -153,22 +155,18 @@ def test_child_layout_can_opt_in_to_toc_state(make_project: ProjectFactory) -> N
     ],
 )
 def test_layout_exposes_the_page_kind_as_a_state_class(
-    make_project: ProjectFactory, page_name: str, page_kind: str
+    built_projects: BuiltProjects, page_name: str, page_kind: str
 ) -> None:
-    page = make_project(files=LAYOUT_PROJECT, theme="maatlog-default").build().html(page_name)
+    page = built_projects.project(files=LAYOUT_PROJECT, theme="maatlog-default").html(page_name)
 
     assert page.select_one(f".maatlog-layout.maatlog-layout-page-{page_kind}") is not None
 
 
-def test_home_layout_exposes_the_home_page_kind(make_project: ProjectFactory) -> None:
-    page = (
-        make_project(
-            files=LAYOUT_PROJECT,
-            theme="maatlog-default",
-            config={"maatlog_home_docname": "index"},
-        )
-        .build()
-        .html("index.html")
-    )
+def test_home_layout_exposes_the_home_page_kind(built_projects: BuiltProjects) -> None:
+    page = built_projects.project(
+        files=LAYOUT_PROJECT,
+        theme="maatlog-default",
+        config={"maatlog_home_docname": "index"},
+    ).html("index.html")
 
     assert page.select_one(".maatlog-layout.maatlog-layout-page-home") is not None

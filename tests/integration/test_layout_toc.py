@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from conftest import ProjectFactory
+import pytest
+from fixtures.integration_builds import BuiltProjects
 
 LAYOUT_PROJECT = {
     "post.md": """---
@@ -27,8 +28,9 @@ Second section body.
 }
 
 
-def test_post_cards_carry_anchor_ids(make_project: ProjectFactory) -> None:
-    result = make_project(files=LAYOUT_PROJECT, theme="maatlog-default").build()
+@pytest.mark.xdist_group("integration-toc-default")
+def test_post_cards_carry_anchor_ids(built_projects: BuiltProjects) -> None:
+    result = built_projects.project(files=LAYOUT_PROJECT, theme="maatlog-default")
     page = result.html("blog.html")
 
     card = page.select_one(".maatlog-post-card[data-slug='hello']")
@@ -36,8 +38,9 @@ def test_post_cards_carry_anchor_ids(make_project: ProjectFactory) -> None:
     assert card["id"] == "maatlog-post-hello"
 
 
-def test_post_page_shows_its_headings(make_project: ProjectFactory) -> None:
-    result = make_project(files=LAYOUT_PROJECT, theme="maatlog-default").build()
+@pytest.mark.xdist_group("integration-toc-default")
+def test_post_page_shows_its_headings(built_projects: BuiltProjects) -> None:
+    result = built_projects.project(files=LAYOUT_PROJECT, theme="maatlog-default")
     page = result.html("post.html")
 
     assert page.select_one(".maatlog-toc[data-maatlog-component='toc']")
@@ -46,34 +49,36 @@ def test_post_page_shows_its_headings(make_project: ProjectFactory) -> None:
     assert "#section-b" in hrefs
 
 
-def test_single_heading_page_has_no_toc_sidebar(make_project: ProjectFactory) -> None:
-    result = make_project(files=LAYOUT_PROJECT, theme="maatlog-default").build()
+@pytest.mark.xdist_group("integration-toc-default")
+def test_single_heading_page_has_no_toc_sidebar(built_projects: BuiltProjects) -> None:
+    result = built_projects.project(files=LAYOUT_PROJECT, theme="maatlog-default")
     page = result.html("about.html")
 
     assert page.select_one(".maatlog-toc") is None
 
 
-def test_archive_page_links_to_the_cards_on_that_page(make_project: ProjectFactory) -> None:
-    result = make_project(files=LAYOUT_PROJECT, theme="maatlog-default").build()
+@pytest.mark.xdist_group("integration-toc-default")
+def test_archive_page_links_to_the_cards_on_that_page(built_projects: BuiltProjects) -> None:
+    result = built_projects.project(files=LAYOUT_PROJECT, theme="maatlog-default")
     page = result.html("blog.html")
 
     hrefs = [item.get("href", "") for item in page.select(".maatlog-toc-posts a")]
     assert hrefs == ["#maatlog-post-hello"]
 
 
-def test_home_page_links_to_the_cards_on_that_page(make_project: ProjectFactory) -> None:
-    result = make_project(
+def test_home_page_links_to_the_cards_on_that_page(built_projects: BuiltProjects) -> None:
+    result = built_projects.project(
         files=LAYOUT_PROJECT,
         theme="maatlog-default",
         config={"maatlog_home_docname": "index"},
-    ).build()
+    )
     page = result.html("index.html")
 
     hrefs = [item.get("href", "") for item in page.select(".maatlog-toc-posts a")]
     assert hrefs == ["#maatlog-post-hello"]
 
 
-def test_home_post_list_does_not_duplicate_card_anchor(make_project: ProjectFactory) -> None:
+def test_home_post_list_does_not_duplicate_card_anchor(built_projects: BuiltProjects) -> None:
     files = {
         "index.rst": """Home
 ====
@@ -87,15 +92,11 @@ def test_home_post_list_does_not_duplicate_card_anchor(make_project: ProjectFact
 """,
         "post.md": LAYOUT_PROJECT["post.md"],
     }
-    page = (
-        make_project(
-            files=files,
-            theme="maatlog-default",
-            config={"maatlog_home_docname": "index"},
-        )
-        .build()
-        .html("index.html")
-    )
+    page = built_projects.project(
+        files=files,
+        theme="maatlog-default",
+        config={"maatlog_home_docname": "index"},
+    ).html("index.html")
 
     cards = page.select('.maatlog-post-card[data-slug="hello"]')
     assert len(cards) == 2
@@ -103,19 +104,20 @@ def test_home_post_list_does_not_duplicate_card_anchor(make_project: ProjectFact
     assert [item.get("href") for item in page.select(".maatlog-toc-posts a")] == ["#maatlog-post-hello"]
 
 
-def test_toc_sidebar_is_absent_without_posts_or_headings(make_project: ProjectFactory) -> None:
-    result = make_project(
+def test_toc_sidebar_is_absent_without_posts_or_headings(built_projects: BuiltProjects) -> None:
+    result = built_projects.project(
         files={"about.rst": "About\n=====\n\nNo posts, one heading.\n"}, theme="maatlog-default"
-    ).build()
+    )
     page = result.html("about.html")
 
     assert page.select_one(".maatlog-toc") is None
     assert page.select_one(".maatlog-layout-has-toc") is None
 
 
-def test_state_class_matches_the_rendered_rail(make_project: ProjectFactory) -> None:
+@pytest.mark.xdist_group("integration-toc-default")
+def test_state_class_matches_the_rendered_rail(built_projects: BuiltProjects) -> None:
     # 状態クラスと実際の right rail がずれると、空の列や欠けた列が生まれる。
-    result = make_project(files=LAYOUT_PROJECT, theme="maatlog-default").build()
+    result = built_projects.project(files=LAYOUT_PROJECT, theme="maatlog-default")
     for page_name in ("post.html", "about.html", "blog.html"):
         page = result.html(page_name)
         has_rail_element = page.select_one(".maatlog-right-rail") is not None

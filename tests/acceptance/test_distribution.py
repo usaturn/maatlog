@@ -14,21 +14,15 @@ from pathlib import Path
 from unittest.mock import create_autospec
 
 import pytest
+from fixtures.distribution import MANIFEST_NAME, DistributionArtifacts
 from sphinx.application import Sphinx
 
 import maatlog
 from maatlog.feeds import default_generator
 from maatlog.version import PACKAGE_VERSION
 
-# This module and tools/public_sync/tests/test_distribution_gate.py both run
-# `uv build --out-dir dist --clear` against the same repo-root dist/ from a
-# module-scoped fixture. Under `quick`'s `--dist loadgroup` (issue #263) this
-# keeps them on one worker, so the builds are serial instead of concurrent.
-pytestmark = pytest.mark.xdist_group("distribution")
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ACCEPTANCE_SOURCE = REPO_ROOT / "tests" / "acceptance" / "project"
-DIST_DIR = REPO_ROOT / "dist"
 WHEEL_NAME = "maatlog-0.6.0-py3-none-any.whl"
 SDIST_NAME = "maatlog-0.6.0.tar.gz"
 EXPECTED_DESCRIPTION = "A Sphinx extension that turns documentation projects into static blogs."
@@ -177,34 +171,6 @@ def create_isolated_venv(tmp_path: Path) -> IsolatedEnv:
     return IsolatedEnv(root=root, python=python)
 
 
-def _wheel() -> Path:
-    path = DIST_DIR / WHEEL_NAME
-    if not path.is_file():
-        pytest.fail(f"missing {path}; run `uv build --out-dir dist --clear` first")
-    return path
-
-
-def _sdist() -> Path:
-    path = DIST_DIR / SDIST_NAME
-    if not path.is_file():
-        pytest.fail(f"missing {path}; run `uv build --out-dir dist --clear` first")
-    return path
-
-
-@pytest.fixture(scope="module")
-def built_wheel() -> Path:
-    completed = subprocess.run(
-        ["uv", "build", "--out-dir", "dist", "--clear"],
-        cwd=str(REPO_ROOT),
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    if completed.returncode != 0:
-        pytest.fail(f"uv build failed:\n{completed.stdout}\n{completed.stderr}")
-    return _wheel()
-
-
 @pytest.fixture
 def repo_root() -> Path:
     return REPO_ROOT
@@ -308,17 +274,28 @@ def test_docs_release_matches_distribution_version() -> None:
     assert 'release = "0.7.0"' not in text
 
 
-def test_clean_dist_contains_exactly_one_wheel_and_sdist(built_wheel: Path) -> None:
-    assert built_wheel.name == WHEEL_NAME
-    wheels = sorted(path.name for path in DIST_DIR.glob("*.whl"))
-    sdists = sorted(path.name for path in DIST_DIR.glob("*.tar.gz"))
+def test_artifact_dir_contains_exactly_one_wheel_and_sdist(
+    distribution_artifacts: DistributionArtifacts,
+) -> None:
+    assert distribution_artifacts.wheel.name == WHEEL_NAME
+    assert distribution_artifacts.sdist.name == SDIST_NAME
+    wheels = sorted(path.name for path in distribution_artifacts.directory.glob("*.whl"))
+    sdists = sorted(path.name for path in distribution_artifacts.directory.glob("*.tar.gz"))
     assert wheels == [WHEEL_NAME]
     assert sdists == [SDIST_NAME]
+    assert (distribution_artifacts.directory / MANIFEST_NAME).is_file()
 
 
-def test_twine_check_strict_passes(built_wheel: Path) -> None:
+def test_twine_check_strict_passes(distribution_artifacts: DistributionArtifacts) -> None:
     completed = subprocess.run(
-        ["uvx", "twine", "check", "--strict", str(built_wheel), str(_sdist())],
+        [
+            "uvx",
+            "twine",
+            "check",
+            "--strict",
+            str(distribution_artifacts.wheel),
+            str(distribution_artifacts.sdist),
+        ],
         check=False,
         capture_output=True,
         text=True,
@@ -326,8 +303,8 @@ def test_twine_check_strict_passes(built_wheel: Path) -> None:
     assert completed.returncode == 0, f"{completed.stdout}\n{completed.stderr}"
 
 
-def test_wheel_core_metadata_is_0_6_0(built_wheel: Path) -> None:
-    with zipfile.ZipFile(built_wheel) as archive:
+def test_wheel_core_metadata_is_0_6_0(distribution_artifacts: DistributionArtifacts) -> None:
+    with zipfile.ZipFile(distribution_artifacts.wheel) as archive:
         metadata_name = next(name for name in archive.namelist() if name.endswith(".dist-info/METADATA"))
         metadata = archive.read(metadata_name).decode("utf-8")
     assert "Name: maatlog\n" in metadata
@@ -339,9 +316,8 @@ def test_wheel_core_metadata_is_0_6_0(built_wheel: Path) -> None:
         assert f"Classifier: {classifier}\n" in metadata
 
 
-def test_sdist_core_metadata_is_0_6_0(built_wheel: Path) -> None:
-    del built_wheel
-    with tarfile.open(_sdist(), "r:gz") as archive:
+def test_sdist_core_metadata_is_0_6_0(distribution_artifacts: DistributionArtifacts) -> None:
+    with tarfile.open(distribution_artifacts.sdist, "r:gz") as archive:
         pkg_info = archive.extractfile("maatlog-0.6.0/PKG-INFO")
         assert pkg_info is not None
         metadata = pkg_info.read().decode("utf-8")
@@ -367,17 +343,20 @@ def _isolated_version(tmp_path: Path, package: Path) -> str:
     return completed.stdout.strip()
 
 
-def test_wheel_isolated_install_reports_version_0_6_0(tmp_path: Path, built_wheel: Path) -> None:
-    assert _isolated_version(tmp_path, built_wheel) == "0.6.0"
+def test_wheel_isolated_install_reports_version_0_6_0(
+    tmp_path: Path, distribution_artifacts: DistributionArtifacts
+) -> None:
+    assert _isolated_version(tmp_path, distribution_artifacts.wheel) == "0.6.0"
 
 
-def test_sdist_isolated_install_reports_version_0_6_0(tmp_path: Path, built_wheel: Path) -> None:
-    del built_wheel
-    assert _isolated_version(tmp_path, _sdist()) == "0.6.0"
+def test_sdist_isolated_install_reports_version_0_6_0(
+    tmp_path: Path, distribution_artifacts: DistributionArtifacts
+) -> None:
+    assert _isolated_version(tmp_path, distribution_artifacts.sdist) == "0.6.0"
 
 
-def test_wheel_contains_themes_and_package_data(built_wheel: Path) -> None:
-    with zipfile.ZipFile(built_wheel) as archive:
+def test_wheel_contains_themes_and_package_data(distribution_artifacts: DistributionArtifacts) -> None:
+    with zipfile.ZipFile(distribution_artifacts.wheel) as archive:
         names = set(archive.namelist())
         metadata_name = next(n for n in names if n.endswith(".dist-info/METADATA"))
         metadata = archive.read(metadata_name).decode("utf-8")
@@ -387,9 +366,9 @@ def test_wheel_contains_themes_and_package_data(built_wheel: Path) -> None:
     assert "License-File: LICENSE\n" in metadata
 
 
-def test_wheel_bundled_themes_declare_theme_api_1_23(built_wheel: Path) -> None:
+def test_wheel_bundled_themes_declare_theme_api_1_23(distribution_artifacts: DistributionArtifacts) -> None:
     """Both bundled manifests declare the current Theme API version."""
-    with zipfile.ZipFile(built_wheel) as archive:
+    with zipfile.ZipFile(distribution_artifacts.wheel) as archive:
         manifests = {
             name: tomllib.loads(archive.read(name).decode("utf-8"))
             for name in archive.namelist()
@@ -407,20 +386,18 @@ def _assert_no_frontend_dev_tooling(names: set[str]) -> None:
     assert not leaked, f"frontend developer tooling leaked into distribution: {leaked}"
 
 
-def test_wheel_excludes_frontend_dev_tooling(built_wheel: Path) -> None:
-    with zipfile.ZipFile(built_wheel) as archive:
+def test_wheel_excludes_frontend_dev_tooling(distribution_artifacts: DistributionArtifacts) -> None:
+    with zipfile.ZipFile(distribution_artifacts.wheel) as archive:
         _assert_no_frontend_dev_tooling(set(archive.namelist()))
 
 
-def test_sdist_excludes_frontend_dev_tooling(built_wheel: Path) -> None:
-    del built_wheel
-    with tarfile.open(_sdist(), "r:gz") as archive:
+def test_sdist_excludes_frontend_dev_tooling(distribution_artifacts: DistributionArtifacts) -> None:
+    with tarfile.open(distribution_artifacts.sdist, "r:gz") as archive:
         _assert_no_frontend_dev_tooling(set(archive.getnames()))
 
 
-def test_sdist_exists_alongside_wheel(built_wheel: Path) -> None:
-    del built_wheel
-    sdist = _sdist()
+def test_sdist_exists_alongside_wheel(distribution_artifacts: DistributionArtifacts) -> None:
+    sdist = distribution_artifacts.sdist
     assert sdist.is_file()
     assert sdist.stat().st_size > 0
 
@@ -431,8 +408,8 @@ def _assert_license_included(names: set[str]) -> None:
     )
 
 
-def test_wheel_contains_license(built_wheel: Path) -> None:
-    with zipfile.ZipFile(built_wheel) as archive:
+def test_wheel_contains_license(distribution_artifacts: DistributionArtifacts) -> None:
+    with zipfile.ZipFile(distribution_artifacts.wheel) as archive:
         _assert_license_included(set(archive.namelist()))
         metadata_name = next(name for name in archive.namelist() if name.endswith(".dist-info/METADATA"))
         metadata = archive.read(metadata_name).decode("utf-8")
@@ -440,9 +417,8 @@ def test_wheel_contains_license(built_wheel: Path) -> None:
         assert "License-File: LICENSE\n" in metadata
 
 
-def test_sdist_contains_license(built_wheel: Path) -> None:
-    del built_wheel
-    with tarfile.open(_sdist(), "r:gz") as archive:
+def test_sdist_contains_license(distribution_artifacts: DistributionArtifacts) -> None:
+    with tarfile.open(distribution_artifacts.sdist, "r:gz") as archive:
         _assert_license_included(set(archive.getnames()))
 
 
@@ -483,14 +459,13 @@ def _isolated_install_builds_acceptance_site(tmp_path: Path, package: Path) -> N
     assert (outdir / "blog" / "atom.xml").is_file()
 
 
-def test_wheel_builds_acceptance_site(tmp_path: Path, built_wheel: Path) -> None:
-    _isolated_install_builds_acceptance_site(tmp_path, built_wheel)
+def test_wheel_builds_acceptance_site(tmp_path: Path, distribution_artifacts: DistributionArtifacts) -> None:
+    _isolated_install_builds_acceptance_site(tmp_path, distribution_artifacts.wheel)
 
 
-def test_sdist_builds_acceptance_site(tmp_path: Path, built_wheel: Path) -> None:
+def test_sdist_builds_acceptance_site(tmp_path: Path, distribution_artifacts: DistributionArtifacts) -> None:
     """Spec §7: isolated install from sdist must build the same acceptance project."""
-    del built_wheel  # ensures uv build ran; install from sdist, not the wheel
-    _isolated_install_builds_acceptance_site(tmp_path, _sdist())
+    _isolated_install_builds_acceptance_site(tmp_path, distribution_artifacts.sdist)
 
 
 def test_setup_metadata_declares_parallel_write_safe() -> None:
@@ -732,8 +707,8 @@ def _assert_backend_missing(completed: subprocess.CompletedProcess[str]) -> None
     assert "maatlog[images]" in output
 
 
-def test_wheel_metadata_scopes_pillow_to_images_extra(built_wheel: Path) -> None:
-    with zipfile.ZipFile(built_wheel) as archive:
+def test_wheel_metadata_scopes_pillow_to_images_extra(distribution_artifacts: DistributionArtifacts) -> None:
+    with zipfile.ZipFile(distribution_artifacts.wheel) as archive:
         metadata_name = next(name for name in archive.namelist() if name.endswith(".dist-info/METADATA"))
         metadata = archive.read(metadata_name).decode("utf-8")
     assert "Provides-Extra: images\n" in metadata
@@ -745,12 +720,12 @@ def test_wheel_metadata_scopes_pillow_to_images_extra(built_wheel: Path) -> None
         assert 'extra == "images"' in line.replace("'", '"')
 
 
-def test_wheel_without_images_extra(built_wheel: Path, tmp_path: Path) -> None:
+def test_wheel_without_images_extra(distribution_artifacts: DistributionArtifacts, tmp_path: Path) -> None:
     """Wheel alone: PIL absent, OFF stays single-source, ON fails cleanly."""
     from fixtures.responsive_real_build import create_project
 
     no_images = create_isolated_venv(tmp_path / "without-images")
-    no_images.pip_install(built_wheel)
+    no_images.pip_install(distribution_artifacts.wheel)
 
     completed = _isolated_python(
         no_images,
@@ -799,12 +774,12 @@ def test_wheel_without_images_extra(built_wheel: Path, tmp_path: Path) -> None:
     _assert_singlehtml_cell(tmp_path, no_images.python, context="without-images-on-singlehtml")
 
 
-def test_wheel_with_images_extra(built_wheel: Path, tmp_path: Path) -> None:
+def test_wheel_with_images_extra(distribution_artifacts: DistributionArtifacts, tmp_path: Path) -> None:
     """Wheel + [images]: OFF never runs a generator, ON publishes real variants."""
     from fixtures.responsive_real_build import create_project
 
     with_images = create_isolated_venv(tmp_path / "with-images")
-    with_images.pip_install(f"{built_wheel}[images]")
+    with_images.pip_install(f"{distribution_artifacts.wheel}[images]")
 
     completed = _isolated_python(
         with_images,
@@ -847,12 +822,12 @@ def test_wheel_with_images_extra(built_wheel: Path, tmp_path: Path) -> None:
     _assert_singlehtml_cell(tmp_path, with_images.python, context="with-images-on-singlehtml")
 
 
-def test_wheel_with_minimum_pillow(built_wheel: Path, tmp_path: Path) -> None:
+def test_wheel_with_minimum_pillow(distribution_artifacts: DistributionArtifacts, tmp_path: Path) -> None:
     """Wheel + [images] pinned to Pillow 11.3.0 keeps the full pipeline."""
     from fixtures.responsive_real_build import create_project
 
     minimum = create_isolated_venv(tmp_path / "minimum-images")
-    minimum.pip_install(f"{built_wheel}[images]", "Pillow==11.3.0")
+    minimum.pip_install(f"{distribution_artifacts.wheel}[images]", "Pillow==11.3.0")
 
     completed = _isolated_python(
         minimum,

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from html.parser import HTMLParser
 from io import StringIO
 from pathlib import Path
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 import pytest
 from sphinx.application import Sphinx
@@ -14,6 +14,9 @@ from sphinx.application import Sphinx
 from maatlog.domain import MaatlogDomain
 from maatlog.model import Post
 from maatlog.taxonomy import DomainIndex
+
+if TYPE_CHECKING:
+    from fixtures.integration_builds import BuiltProjects
 
 
 class SphinxFactory(Protocol):
@@ -269,12 +272,7 @@ class SphinxProject:
         self.doctreedir = root / "doctrees"
         self.builder = builder
         self.source_date_epoch = source_date_epoch
-        self.config = dict(config or {})
-        # Official MaatLog HTML default so Theme API validation hard-fails cleanly
-        # for third-party themes without a final-theme manifest (no alabaster soft-skip).
-        self.config.setdefault("html_theme", theme if theme is not None else "maatlog-default")
-        # Feeds default on; provide a valid base so builder-inited validation passes.
-        self.config.setdefault("html_baseurl", "https://example.test/")
+        self.config = _merge_config(config, theme=theme)
         self.extensions = ["maatlog", *(extensions or ())]
         self.conf_py_prefix = conf_py_prefix
         self._monkeypatch = monkeypatch
@@ -382,6 +380,8 @@ def _merge_config(
     theme: str | None,
 ) -> dict[str, object]:
     merged = dict(config or {})
+    # Official MaatLog HTML default so Theme API validation hard-fails cleanly
+    # for third-party themes without a final-theme manifest (no alabaster soft-skip).
     merged.setdefault("html_theme", theme if theme is not None else "maatlog-default")
     # Feeds default on; provide a valid base so builder-inited validation passes.
     merged.setdefault("html_baseurl", "https://example.test/")
@@ -514,3 +514,11 @@ def make_project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> ProjectFact
         )
 
     return factory
+
+
+@pytest.fixture(scope="session")
+def built_projects(tmp_path_factory: pytest.TempPathFactory) -> BuiltProjects:
+    """Worker-local shared builds: one manager per test process (issue #364)."""
+    from fixtures.integration_builds import BuiltProjects
+
+    return BuiltProjects(tmp_path_factory.mktemp("integration-builds"))

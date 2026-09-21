@@ -1,5 +1,3 @@
-:orphan:
-
 ======
 用語集
 ======
@@ -66,3 +64,10 @@
         画像の色を機器間で一貫して再現するための色情報である。
         :term:`MaatLog` はバリアントへ ICC プロファイルを保持し、
         パレット形式の画像は sRGB プロファイルへ変換する
+
+    投稿
+        ``maatlog-post: true`` を指定した Sphinx ドキュメントである。
+        reStructuredText ではタイトル前の docinfo フィールドリスト、
+        MyST Markdown では YAML front matter に記述する。
+        1 つのソースファイルにつき投稿は最大 1 つで、それ以外のドキュメントは
+        通常の Sphinx ページのままである

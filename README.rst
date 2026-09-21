@@ -158,12 +158,19 @@ profiles differ in what they cover, not only in how long they take:
     the frontend checks (``npm ci`` and ``npm run check``).
 
 ``quick``
-    The same static checks, followed by ``pytest -m "not browser"``.
+    The Python static checks (``ruff check``, ``ruff format --check`` and
+    ``pyright``; the frontend ``npm`` pair runs only in ``static`` and
+    ``full``), then a single parallel run covering every non-browser test
+    (``pytest -n auto --dist loadgroup -m "not browser"``). The distribution
+    tests share that run: ``xdist_group`` keeps them on one worker, whose
+    session fixture builds the archives once.
 
 ``full``
-    The release gate: the static checks, the whole test suite including the
-    browser-driven accessibility tests, then the distribution build
-    (``uv build``, ``twine check``) and the distribution tests.
+    The release gate: static checks, non-browser/non-distribution tests with
+    ``-n auto --dist loadgroup``, browser/non-distribution tests with
+    ``-n 2 --dist loadscope``, then one distribution build (``uv build``) and
+    one serial distribution test run (including ``twine check``). These stages
+    run in sequence. Browser tests include accessibility checks.
 
 ``minimum`` / ``latest``
     The Sphinx compatibility matrix that CI runs. These swap Sphinx versions
@@ -174,19 +181,25 @@ exactly as ``uv sync`` left it and both profiles can be repeated freely while
 developing. They also stop at the first failing static check, before the test
 suite starts. ``full`` remains the authoritative check.
 
-Measured on an 8-core / 31 GB Dev Container (2026-09-11), with a warm
-``uv sync`` and ``npm ci``:
+``full`` defaults to two browser workers. Set ``VERIFY_BROWSER_WORKERS`` to
+an integer from 1 to 4 to override this; browser tests never use ``-n auto``.
+The worker limit does not affect the non-browser or distribution stages::
 
-``quick`` runs its tests in parallel (``-n auto``), so its wall time tracks the
-number of cores available.
+    VERIFY_BROWSER_WORKERS=1 ./scripts/ci/verify.sh full
 
-===========  ================
-profile      wall time
-===========  ================
-``static``   ~17 seconds
-``quick``    ~1.3-1.7 minutes
-``full``     ~12-16 minutes
-===========  ================
+Test counts change as coverage evolves. Collect the current selection instead
+of relying on a fixed count::
+
+    uv run --no-sync pytest tests --collect-only -q
+    uv run --no-sync pytest tests --collect-only -q -m 'not browser and not distribution'
+    uv run --no-sync pytest tests --collect-only -q -m 'browser and not distribution'
+    uv run --no-sync pytest tests --collect-only -q -m distribution
+
+Wall time depends on CPU capacity, dependencies, cache state and the selected
+revision. Compare the entire script on identical inputs and environment
+conditions. Once log initialization succeeds, the script prints its log path
+and records its final ``EXIT=`` status. Use a separate
+``VERIFY_LOG_DIR`` for each measurement to preserve the logs.
 
 License and status
 ------------------

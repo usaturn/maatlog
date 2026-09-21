@@ -154,12 +154,18 @@ full プロファイルはブラウザを使うアクセシビリティテスト
     および frontend の検査（``npm ci`` と ``npm run check``）を実行します。
 
 ``quick``
-    static と同じ検査に続けて、``pytest -m "not browser"`` を実行します。
+    Python の静的検査（``ruff check``、``ruff format --check``、``pyright``。
+    frontend の ``npm`` 系は ``static`` と ``full`` のみ実行）に続けて、
+    ブラウザを使わないテスト全てを1回の並列実行で検査します
+    （``pytest -n auto --dist loadgroup -m "not browser"``）。配布物のテストも
+    この実行に含まれ、``xdist_group`` で単一 worker に固定されます。
 
 ``full``
-    リリース前のゲートです。static チェック、ブラウザを使うアクセシビリティテストを
-    含む全テスト、配布物のビルド（``uv build``、``twine check``）、配布物のテストを
-    実行します。
+    リリース前のゲートです。static チェック、非browser・非distributionのテスト
+    （``-n auto --dist loadgroup``）、browser・非distributionのテスト
+    （``-n 2 --dist loadscope``）、配布物のビルド（``uv build``）1回、配布物の
+    テストの直列実行1回（``twine check`` を含む）の順に実行します。
+    ブラウザのテストにはアクセシビリティ検査も含まれます。
 
 ``minimum`` / ``latest``
     CI が実行する Sphinx の互換性マトリクスです。``uv pip install`` で Sphinx の
@@ -170,19 +176,23 @@ full プロファイルはブラウザを使うアクセシビリティテスト
 チェックが失敗した時点で停止し、テストには進みません。authoritative な検証入口は
 引き続き ``full`` です。
 
-8コア / 31GB の Dev Container で、``uv sync`` と ``npm ci`` が済んだ状態での実測値
-（2026-09-11）:
+``full`` のブラウザ実行は既定で2 workersです。``VERIFY_BROWSER_WORKERS`` に
+1〜4の整数を指定して変更できます。browserに ``-n auto`` は使いません。
+この設定は非browserと配布物の実行には影響しません::
 
-``quick`` はテストを並列実行する（``-n auto``）ため、実行時間は使えるコア数に
-依存します。
+    VERIFY_BROWSER_WORKERS=1 ./scripts/ci/verify.sh full
 
-=====================  ================
-プロファイル           実行時間
-=====================  ================
-``static``             約17秒
-``quick``              約1.3〜1.7分
-``full``               約12〜16分
-=====================  ================
+テスト件数は追加・変更に伴って変わります。固定件数に頼らず、現在の対象を収集します::
+
+    uv run --no-sync pytest tests --collect-only -q
+    uv run --no-sync pytest tests --collect-only -q -m 'not browser and not distribution'
+    uv run --no-sync pytest tests --collect-only -q -m 'browser and not distribution'
+    uv run --no-sync pytest tests --collect-only -q -m distribution
+
+実行時間はCPU、依存、キャッシュ状態、対象revisionに依存します。比較時は入力と環境を
+揃えてスクリプト全体を測ります。
+ログの初期化に成功すると、保存先を表示し、末尾に ``EXIT=`` で終了状態を記録します。
+測定ごとに ``VERIFY_LOG_DIR`` を分けると、ログのローテーションによる消失を防げます。
 
 ライセンスとステータス
 ----------------------

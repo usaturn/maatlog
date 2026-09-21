@@ -6,6 +6,7 @@ import re
 
 import pytest
 from conftest import ProjectFactory
+from fixtures.theme_assets import theme_stylesheet
 
 TOKEN_PROJECT = {
     "about.rst": "About\n=====\n\n.. code-block:: python\n\n   def f():\n       return 1\n",
@@ -33,11 +34,6 @@ COLOR_TOKENS = (
 
 DARK_MEDIA_SELECTOR = ':root:not([data-theme="light"])'
 DARK_ATTRIBUTE_SELECTOR = ':root[data-theme="dark"]'
-
-
-def _stylesheet(make_project: ProjectFactory, theme: str) -> str:
-    result = make_project(files=TOKEN_PROJECT, theme=theme).build()
-    return result.asset("_static/maatlog.css").read_text(encoding="utf-8")
 
 
 def block_tokens(css: str, selector: str) -> dict[str, str]:
@@ -86,30 +82,30 @@ def _balanced_block(css: str, start: int) -> str:
 
 @pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
 @pytest.mark.parametrize("token", COLOR_TOKENS)
-def test_light_palette_declares_every_color_token(make_project: ProjectFactory, theme: str, token: str) -> None:
-    assert token in block_tokens(_stylesheet(make_project, theme), ":root")
+def test_light_palette_declares_every_color_token(theme: str, token: str) -> None:
+    assert token in block_tokens(theme_stylesheet(theme), ":root")
 
 
 @pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
-def test_both_dark_blocks_declare_the_same_values(make_project: ProjectFactory, theme: str) -> None:
+def test_both_dark_blocks_declare_the_same_values(theme: str) -> None:
     # ダークの値は media クエリ側と data-theme 側の 2 箇所に書く必要がある。
     # 片方だけ更新する事故をここで止める。
-    css = _stylesheet(make_project, theme)
+    css = theme_stylesheet(theme)
 
     assert block_tokens(css, DARK_MEDIA_SELECTOR) == block_tokens(css, DARK_ATTRIBUTE_SELECTOR)
 
 
 @pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
-def test_dark_palette_overrides_every_color_token(make_project: ProjectFactory, theme: str) -> None:
-    dark = block_tokens(_stylesheet(make_project, theme), DARK_ATTRIBUTE_SELECTOR)
+def test_dark_palette_overrides_every_color_token(theme: str) -> None:
+    dark = block_tokens(theme_stylesheet(theme), DARK_ATTRIBUTE_SELECTOR)
 
     assert set(COLOR_TOKENS) <= set(dark)
 
 
-def test_base_and_default_agree_on_every_color_token(make_project: ProjectFactory) -> None:
+def test_base_and_default_agree_on_every_color_token() -> None:
     # Issue #58 の指摘: base と default でリンク色・カード背景がずれていた。
-    base = _stylesheet(make_project, "maatlog-base")
-    default = _stylesheet(make_project, "maatlog-default")
+    base = theme_stylesheet("maatlog-base")
+    default = theme_stylesheet("maatlog-default")
 
     for selector in (":root", DARK_MEDIA_SELECTOR, DARK_ATTRIBUTE_SELECTOR):
         base_colors = {k: v for k, v in block_tokens(base, selector).items() if k in COLOR_TOKENS}
@@ -118,9 +114,9 @@ def test_base_and_default_agree_on_every_color_token(make_project: ProjectFactor
 
 
 @pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
-def test_every_palette_block_declares_a_color_scheme(make_project: ProjectFactory, theme: str) -> None:
+def test_every_palette_block_declares_a_color_scheme(theme: str) -> None:
     # color-scheme を書かないと検索フォームやスクロールバーが常にライトで描かれる。
-    css = _stylesheet(make_project, theme)
+    css = theme_stylesheet(theme)
 
     assert block_declaration(css, ":root", "color-scheme") == "light"
     assert block_declaration(css, DARK_MEDIA_SELECTOR, "color-scheme") == "dark"
@@ -128,8 +124,8 @@ def test_every_palette_block_declares_a_color_scheme(make_project: ProjectFactor
 
 
 @pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
-def test_page_and_code_surfaces_use_tokens(make_project: ProjectFactory, theme: str) -> None:
-    css = _stylesheet(make_project, theme)
+def test_page_and_code_surfaces_use_tokens(theme: str) -> None:
+    css = theme_stylesheet(theme)
 
     assert "background: var(--maatlog-color-background" in css
     assert "background: var(--maatlog-code-background" in css
@@ -137,10 +133,10 @@ def test_page_and_code_surfaces_use_tokens(make_project: ProjectFactory, theme: 
 
 
 @pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
-def test_inline_code_does_not_reuse_the_block_surface(make_project: ProjectFactory, theme: str) -> None:
+def test_inline_code_does_not_reuse_the_block_surface(theme: str) -> None:
     # コードブロックはライトでもダーク地にする。同じトークンを inline code に
     # 使うと本文の途中が黒く抜ける。
-    css = _stylesheet(make_project, theme)
+    css = theme_stylesheet(theme)
     rule = _css_rule_body(css, ".maatlog-layout-main code")
 
     assert "var(--maatlog-inline-code-background" in rule
@@ -177,19 +173,19 @@ def _colour_literals_outside_tokens(css: str) -> list[str]:
 
 
 @pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
-def test_components_never_hard_code_a_colour(make_project: ProjectFactory, theme: str) -> None:
+def test_components_never_hard_code_a_colour(theme: str) -> None:
     # Issue #58 の実装方針: 各コンポーネントに直接色を書かず、必ずトークンを参照する。
-    assert _colour_literals_outside_tokens(_stylesheet(make_project, theme)) == []
+    assert _colour_literals_outside_tokens(theme_stylesheet(theme)) == []
 
 
 PALETTE_SELECTORS = (":root", DARK_MEDIA_SELECTOR, DARK_ATTRIBUTE_SELECTOR)
 
 
 @pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
-def test_palette_blocks_declare_no_motion(make_project: ProjectFactory, theme: str) -> None:
+def test_palette_blocks_declare_no_motion(theme: str) -> None:
     # 配色の切替は一瞬で終わらせる。パレットブロックにトランジションを足すと
     # ライト／ダークの切替がにじみ、モーション設定への分岐も必要になる。
-    css = _stylesheet(make_project, theme)
+    css = theme_stylesheet(theme)
 
     for selector in PALETTE_SELECTORS:
         start = css.index(f"{selector} {{")
@@ -203,9 +199,9 @@ def test_palette_blocks_declare_no_motion(make_project: ProjectFactory, theme: s
 
 
 @pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
-def test_motion_is_cancelled_for_reduced_motion(make_project: ProjectFactory, theme: str) -> None:
+def test_motion_is_cancelled_for_reduced_motion(theme: str) -> None:
     # モーションを 1 つでも宣言するなら、必ず打ち消しを併せて出荷する。
-    css = _stylesheet(make_project, theme)
+    css = theme_stylesheet(theme)
     if "transition" not in css:
         pytest.skip("this theme declares no motion")
 
@@ -217,9 +213,9 @@ def test_motion_is_cancelled_for_reduced_motion(make_project: ProjectFactory, th
 
 
 @pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
-def test_motion_uses_only_the_duration_token(make_project: ProjectFactory, theme: str) -> None:
+def test_motion_uses_only_the_duration_token(theme: str) -> None:
     # 継続時間を各所に直書きすると、あとから一括で調整できなくなる。
-    css = re.sub(r"/\*.*?\*/", "", _stylesheet(make_project, theme), flags=re.DOTALL)
+    css = re.sub(r"/\*.*?\*/", "", theme_stylesheet(theme), flags=re.DOTALL)
 
     for declaration in re.findall(r"transition:[^;}]*", css):
         if "none" in declaration:
@@ -245,66 +241,66 @@ STRUCTURE_TOKENS = (
 
 @pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
 @pytest.mark.parametrize("token", STRUCTURE_TOKENS)
-def test_light_palette_declares_every_structure_token(make_project: ProjectFactory, theme: str, token: str) -> None:
+def test_light_palette_declares_every_structure_token(theme: str, token: str) -> None:
     # 半径・影・タイポグラフィはライトの :root で一度だけ定義する。
     # ダーク側で変わるのは影の色（--maatlog-shadow-color）だけ。
-    assert token in block_tokens(_stylesheet(make_project, theme), ":root")
+    assert token in block_tokens(theme_stylesheet(theme), ":root")
 
 
 @pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
-def test_primary_is_an_alias_of_the_link_token(make_project: ProjectFactory, theme: str) -> None:
+def test_primary_is_an_alias_of_the_link_token(theme: str) -> None:
     # link がリテラルの持ち主。逆向きにすると輝度計算がトークン値を読めなくなる。
-    tokens = block_tokens(_stylesheet(make_project, theme), ":root")
+    tokens = block_tokens(theme_stylesheet(theme), ":root")
 
     assert tokens["--maatlog-color-primary"] == "var(--maatlog-color-link)"
     assert tokens["--maatlog-color-link"].startswith("#")
 
 
 @pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
-def test_banner_height_is_a_concrete_length(make_project: ProjectFactory, theme: str) -> None:
+def test_banner_height_is_a_concrete_length(theme: str) -> None:
     # banner の支柱の最小高さを固定する（sticky offset は --maatlog-space-md を使用）。
-    tokens = block_tokens(_stylesheet(make_project, theme), ":root")
+    tokens = block_tokens(theme_stylesheet(theme), ":root")
 
     assert tokens["--maatlog-banner-height"] == "4rem"
 
 
 @pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
-def test_shadows_are_built_from_the_shadow_colour_token(make_project: ProjectFactory, theme: str) -> None:
+def test_shadows_are_built_from_the_shadow_colour_token(theme: str) -> None:
     # ダークでは影を濃くする。色は 1 トークンに集約しておく。
-    tokens = block_tokens(_stylesheet(make_project, theme), ":root")
+    tokens = block_tokens(theme_stylesheet(theme), ":root")
 
     assert "var(--maatlog-shadow-color)" in tokens["--maatlog-shadow-sm"]
     assert "var(--maatlog-shadow-color)" in tokens["--maatlog-shadow-md"]
 
 
 @pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
-def test_new_badge_selector_uses_the_badge_tokens(make_project: ProjectFactory, theme: str) -> None:
+def test_new_badge_selector_uses_the_badge_tokens(theme: str) -> None:
     # Issue #62: NEW バッジは両テーマで同じ badge トークンを使ってスタイルされる。
-    css = _stylesheet(make_project, theme)
+    css = theme_stylesheet(theme)
 
     assert block_declaration(css, ".maatlog-new-badge", "background") == "var(--maatlog-badge-background)"
     assert block_declaration(css, ".maatlog-new-badge", "color") == "var(--maatlog-badge-text)"
 
 
-def test_default_theme_styles_the_profile_avatar_and_interests(make_project: ProjectFactory) -> None:
-    css = _stylesheet(make_project, "maatlog-default")
+def test_default_theme_styles_the_profile_avatar_and_interests() -> None:
+    css = theme_stylesheet("maatlog-default")
 
     assert ".maatlog-profile-avatar-image" in css
     assert ".maatlog-profile-avatar-initials" in css
     assert ".maatlog-profile-interest" in css
 
 
-def test_default_theme_mirrors_the_profile_width_tokens(make_project: ProjectFactory) -> None:
+def test_default_theme_mirrors_the_profile_width_tokens() -> None:
     """default は自前の maatlog.css を持ち、base のファイルを丸ごと上書きする。"""
-    css = _stylesheet(make_project, "maatlog-default")
+    css = theme_stylesheet("maatlog-default")
 
     assert "--maatlog-profile-main-width:" in css
     assert "--maatlog-profile-content-width:" in css
     assert ".maatlog-layout-page-profile .maatlog-layout-main" not in css
 
 
-def test_profile_styles_hard_code_no_colour(make_project: ProjectFactory) -> None:
+def test_profile_styles_hard_code_no_colour() -> None:
     """同ファイルの色トークン契約をプロフィールのスタイルにも適用する。"""
-    css = _stylesheet(make_project, "maatlog-default")
+    css = theme_stylesheet("maatlog-default")
 
     assert _colour_literals_outside_tokens(_css_rule_body(css, ".maatlog-profile-interest")) == []

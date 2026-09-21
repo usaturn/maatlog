@@ -21,6 +21,11 @@
    maatlog-default も同じルールを持つ。 */
 img {
   max-width: 100%;
+}
+
+/* 高さだけを指定した単位なし :height: を尊重し、両属性を持つ画像は比率を保って縮める。
+   :where() で詳細度を上げず、トップ画像などの専用 height 指定を優先する。 */
+img:where(:not([height]), [width][height], [data-maatlog-srcset]) {
   height: auto;
 }
 

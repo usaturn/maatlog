@@ -10,13 +10,15 @@ from __future__ import annotations
 
 import html
 import json
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import asdict
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final, TypedDict, cast
 from urllib.parse import unquote
 
+import pytest
+from acceptance.built_sites import BuiltSite, BuiltSites, SiteKey
 from fixtures.responsive_image_fixtures import (
     make_test_png,
     sample_responsive_image_entry,
@@ -28,6 +30,25 @@ from maatlog.image_contracts import ImageUsage, ResponsiveImageEntry, scaled_hei
 if TYPE_CHECKING:
     from playwright.sync_api import Page, Response
     from sphinx.application import Sphinx
+
+    # Bare ``conftest`` resolves to acceptance/conftest.py for the type checker;
+    # the app factory lives in the parent tests/conftest.py (see site.py).
+    def _create_sphinx_app(
+        *,
+        root: Path,
+        files: Mapping[str, str | bytes],
+        source_date_epoch: str,
+        config: Mapping[str, object] | None,
+        builder: str,
+        theme: str | None,
+        extensions: Sequence[str] | None,
+        conf_py_prefix: str,
+        parallel: int,
+        freshenv: bool,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> Sphinx: ...
+else:
+    from conftest import _create_sphinx_app
 
 _BASE_STATIC = Path(__file__).resolve().parents[2] / "src" / "maatlog" / "themes" / "maatlog-base" / "static"
 
@@ -307,6 +328,9 @@ MAIN_WIDTHS: Final = [390, 768, 1280, 1920, 2560, 3840]
 
 THIRD_PARTY_THEME: Final = "task4-override"
 
+#: Fixed epoch shared by the fake sites (the make_sphinx factory default).
+_SITE_SOURCE_DATE_EPOCH: Final = "1785542400"
+
 _POST_COUNT: Final = 12
 _PORTRAIT_SLUG: Final = "post11"
 _TINY_SLUG: Final = "post12"
@@ -479,15 +503,15 @@ def _card_with_view(card: dict[str, Any], usage: ImageUsage) -> dict[str, Any]:
 
 
 def build_image_site(
-    make_sphinx: Callable[..., Sphinx],
+    sites: BuiltSites,
     *,
     builder: str,
     theme: str,
     responsive: bool,
     featured_count: int = 3,
     has_rail: bool = True,
-) -> Sphinx:
-    """Build the Task 4 photo-blog site and materialise its image bytes.
+) -> BuiltSite:
+    """Shared build of the Task 4 photo-blog site (issue #314).
 
     Twelve posts (``post11`` portrait, ``post12`` single-candidate tiny,
     ``post1``–``post6`` by alice for the profile page), a home page, a legacy
@@ -496,10 +520,10 @@ def build_image_site(
     no page 2 (and no Infinite Scroll append) can move cards across grids while
     a test measures. With *responsive* true, sample views are injected per page
     kind and card position; otherwise the build stays on single-src fallbacks.
-    Returns the built Sphinx app.
+    Identical inputs are built and served once per worker via *sites*.
     """
-    return _build(
-        make_sphinx,
+    return _shared_site(
+        sites,
         builder=builder,
         theme=theme,
         responsive=responsive,
@@ -511,22 +535,22 @@ def build_image_site(
 
 
 def build_archive_site(
-    make_sphinx: Callable[..., Sphinx],
+    sites: BuiltSites,
     *,
     builder: str,
     theme: str,
     responsive: bool,
     post_count: int,
     has_rail: bool = True,
-) -> Sphinx:
-    """Build a single-page plain-archive site with exactly *post_count* cards.
+) -> BuiltSite:
+    """Shared build of the single-page plain-archive variant.
 
     Page 1 holds every post, so there is no page 2 and no Infinite Scroll
     append can move cards across grids while a test measures. Covers the
     1/2/4/9-card archive grids ``build_image_site`` cannot size.
     """
-    return _build(
-        make_sphinx,
+    return _shared_site(
+        sites,
         builder=builder,
         theme=theme,
         responsive=responsive,
@@ -537,8 +561,8 @@ def build_archive_site(
     )
 
 
-def _build(
-    make_sphinx: Callable[..., Sphinx],
+def _shared_site(
+    sites: BuiltSites,
     *,
     builder: str,
     theme: str,
@@ -547,8 +571,34 @@ def _build(
     has_rail: bool,
     post_count: int,
     page_size: int,
-) -> Sphinx:
-    files = _site_files(post_count)
+) -> BuiltSite:
+    key = SiteKey(
+        fixture="responsive-fake",
+        input_id=f"task4:posts={post_count}:featured={featured_count}:rail={int(has_rail)}",
+        builder=builder,
+        theme=theme,
+        config=_site_config(post_count=post_count, featured_count=featured_count, page_size=page_size),
+        source_date_epoch=_SITE_SOURCE_DATE_EPOCH,
+        responsive_images=responsive,
+    )
+
+    def build(root: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+        return _build(
+            root,
+            monkeypatch,
+            builder=builder,
+            theme=theme,
+            responsive=responsive,
+            featured_count=featured_count,
+            has_rail=has_rail,
+            post_count=post_count,
+            page_size=page_size,
+        )
+
+    return sites.get(key, build)
+
+
+def _site_config(*, post_count: int, featured_count: int, page_size: int) -> dict[str, object]:
     config: dict[str, object] = {
         "maatlog_home_docname": "index",
         "maatlog_page_size": page_size,
@@ -568,11 +618,40 @@ def _build(
             if f"post{number}" not in (_PORTRAIT_SLUG, _TINY_SLUG)
         ]
         config["maatlog_featured_posts"] = landscapes[:featured_count]
+    return config
+
+
+def _build(
+    root: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    builder: str,
+    theme: str,
+    responsive: bool,
+    featured_count: int,
+    has_rail: bool,
+    post_count: int,
+    page_size: int,
+) -> Path:
+    files = _site_files(post_count)
+    config = _site_config(post_count=post_count, featured_count=featured_count, page_size=page_size)
     conf_py_prefix = ""
     if theme == THIRD_PARTY_THEME:
         files.update(_override_theme_files())
         conf_py_prefix = _override_conf_prefix()
-    app = make_sphinx(files=files, builder=builder, theme=theme, config=config, conf_py_prefix=conf_py_prefix)
+    app = _create_sphinx_app(
+        root=root,
+        files=files,
+        source_date_epoch=_SITE_SOURCE_DATE_EPOCH,
+        config=config,
+        builder=builder,
+        theme=theme,
+        extensions=None,
+        conf_py_prefix=conf_py_prefix,
+        parallel=0,
+        freshenv=True,
+        monkeypatch=monkeypatch,
+    )
 
     def inject(app: Sphinx, pagename: str, templatename: str, context: dict[str, Any], doctree: object) -> None:
         del app, templatename, doctree
@@ -605,7 +684,7 @@ def _build(
     app.connect("html-page-context", inject, priority=999)
     app.build()
     _write_referenced_images(Path(str(app.outdir)))
-    return app
+    return Path(str(app.outdir))
 
 
 def _inject_post(maatlog: dict[str, Any]) -> None:

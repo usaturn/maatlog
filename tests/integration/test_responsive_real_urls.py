@@ -17,13 +17,13 @@ from __future__ import annotations
 
 import html
 from pathlib import Path
-from typing import TYPE_CHECKING, Final, cast
+from typing import Final, cast
 from urllib.parse import unquote, urlsplit
 
 import pytest
 from conftest import HtmlPage
+from fixtures.integration_builds import BuiltProject, BuiltProjects
 from fixtures.responsive_image_html import img_attrs
-from fixtures.responsive_real_build import create_project
 from fixtures.responsive_real_inspect import (
     collect_managed_refs,
     local_image_path,
@@ -31,9 +31,6 @@ from fixtures.responsive_real_inspect import (
 )
 from fixtures.responsive_real_project import image_cases, project_config, project_files
 from social_metadata import json_ld_objects
-
-if TYPE_CHECKING:
-    from fixtures.responsive_real_build import RealProject
 
 MANAGED_SEGMENT: Final = "/_images/maatlog/"
 
@@ -89,12 +86,12 @@ def _all_pages(outdir: Path) -> list[tuple[str, Path]]:
     return [(page.relative_to(outdir).as_posix(), page) for page in sorted(outdir.rglob("*.html"))]
 
 
-def _source_payloads(project: RealProject) -> dict[str, bytes]:
+def _source_payloads(project: BuiltProject) -> dict[str, bytes]:
     """Map every image source basename under ``images/`` to its bytes."""
     return {path.name: path.read_bytes() for path in sorted((project.srcdir / "images").iterdir()) if path.is_file()}
 
 
-def _original_bytes(project: RealProject, url: str, page_path: str) -> bytes:
+def _original_bytes(project: BuiltProject, url: str, page_path: str) -> bytes:
     """Resolve *url* and return bytes, asserting it is a published original."""
     path = urlsplit(url).path
     assert MANAGED_SEGMENT not in path, f"managed URL leaked into metadata: {url}"
@@ -106,29 +103,24 @@ def _original_bytes(project: RealProject, url: str, page_path: str) -> bytes:
 
 
 def _build_pair(
-    root: Path,
+    built_projects: BuiltProjects,
     *,
     source_name: str,
     files: dict[str, str | bytes] | None = None,
-) -> tuple[RealProject, RealProject]:
+) -> tuple[BuiltProject, BuiltProject]:
     """Build the same project ON and OFF into two independent output trees."""
     config = project_config(enabled=True) | {"maatlog_generate_feeds": True}
-    on = create_project(root / "on", files=files, source_name=source_name, post_count=4, config=config)
-    off = create_project(
-        root / "off",
+    on = built_projects.real(files=files, source_name=source_name, post_count=4, config=config)
+    off = built_projects.real(
         files=files,
         source_name=source_name,
         post_count=4,
         config=config | {"maatlog_responsive_images": False},
     )
-    on_result = on.build()
-    off_result = off.build()
-    assert on_result.returncode == 0, on_result.stderr + on_result.stdout
-    assert off_result.returncode == 0, off_result.stderr + off_result.stdout
     return on, off
 
 
-def _assert_page_metadata_parity(on: RealProject, off: RealProject) -> None:
+def _assert_page_metadata_parity(on: BuiltProject, off: BuiltProject) -> None:
     """Head metadata must be identical between the ON and OFF output trees."""
     for relpath, page in _all_pages(on.outdir):
         off_page = off.outdir / relpath
@@ -138,7 +130,7 @@ def _assert_page_metadata_parity(on: RealProject, off: RealProject) -> None:
         assert on_meta == off_meta, f"{relpath}: head metadata differs between ON and OFF"
 
 
-def _assert_original_image_urls(project: RealProject) -> None:
+def _assert_original_image_urls(project: BuiltProject) -> None:
     """Every OG/X/JSON-LD image URL resolves to byte-identical original files."""
     payloads = _source_payloads(project)
     for relpath, path in _all_pages(project.outdir):
@@ -156,8 +148,9 @@ def _assert_original_image_urls(project: RealProject) -> None:
             assert data == payloads[name], f"{relpath}: {url} is not the original bytes"
 
 
-def test_social_and_jsonld_keep_original_urls(tmp_path: Path) -> None:
-    on, off = _build_pair(tmp_path, source_name="photo.jpg")
+@pytest.mark.xdist_group("integration-real-url-photo-pair")
+def test_social_and_jsonld_keep_original_urls(built_projects: BuiltProjects) -> None:
+    on, off = _build_pair(built_projects, source_name="photo.jpg")
     _assert_page_metadata_parity(on, off)
     _assert_original_image_urls(on)
     _assert_original_image_urls(off)
@@ -167,8 +160,9 @@ def test_social_and_jsonld_keep_original_urls(tmp_path: Path) -> None:
     assert collect_managed_refs(off.outdir) == {}
 
 
-def test_atom_feeds_are_identical_on_and_off(tmp_path: Path) -> None:
-    on, off = _build_pair(tmp_path, source_name="photo.jpg")
+@pytest.mark.xdist_group("integration-real-url-photo-pair")
+def test_atom_feeds_are_identical_on_and_off(built_projects: BuiltProjects) -> None:
+    on, off = _build_pair(built_projects, source_name="photo.jpg")
     on_feeds = {p.relative_to(on.outdir).as_posix(): p for p in on.outdir.rglob("atom.xml")}
     off_feeds = {p.relative_to(off.outdir).as_posix(): p for p in off.outdir.rglob("atom.xml")}
     assert on_feeds, "no Atom feeds emitted"
@@ -184,8 +178,8 @@ def test_atom_feeds_are_identical_on_and_off(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("source_name", SPECIAL_NAMES, ids=["space", "comma", "japanese", "percent"])
-def test_special_named_sources_keep_original_urls(tmp_path: Path, source_name: str) -> None:
-    on, off = _build_pair(tmp_path, source_name=source_name)
+def test_special_named_sources_keep_original_urls(built_projects: BuiltProjects, source_name: str) -> None:
+    on, off = _build_pair(built_projects, source_name=source_name)
     _assert_page_metadata_parity(on, off)
     _assert_original_image_urls(on)
     _assert_original_image_urls(off)
@@ -200,7 +194,7 @@ def test_special_named_sources_keep_original_urls(tmp_path: Path, source_name: s
         local_image_path(on.outdir, "posts/p01.html", url)
 
 
-def test_body_avatar_and_external_images_are_not_managed(tmp_path: Path) -> None:
+def test_body_avatar_and_external_images_are_not_managed(built_projects: BuiltProjects) -> None:
     files = project_files(source_name="photo.jpg", post_count=4)
     files["posts/external.md"] = (
         "---\nmaatlog-post: true\nmaatlog-slug: external\n"
@@ -212,7 +206,7 @@ def test_body_avatar_and_external_images_are_not_managed(tmp_path: Path) -> None
     index = files["index.rst"]
     assert isinstance(index, str)
     files["index.rst"] = index.replace("   posts/p01\n", "   posts/external\n   posts/p01\n")
-    on, _off = _build_pair(tmp_path, source_name="photo.jpg", files=files)
+    on, _off = _build_pair(built_projects, source_name="photo.jpg", files=files)
     payloads = _source_payloads(on)
 
     general = HtmlPage((on.outdir / "general.html").read_text(encoding="utf-8"))

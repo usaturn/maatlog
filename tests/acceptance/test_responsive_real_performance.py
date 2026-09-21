@@ -13,13 +13,15 @@ from __future__ import annotations
 import hashlib
 import platform
 import subprocess
-from collections.abc import Callable, Generator, Mapping
+from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Final, TypedDict, cast
 from urllib.parse import urljoin
 
 import pytest
+from acceptance.built_sites import BuiltSite
+from acceptance.real_built_sites import RealSites
 from acceptance.responsive_image_site import (
     MAIN_WIDTHS,
     decode_all_images,
@@ -32,7 +34,6 @@ from acceptance.responsive_real_browser import (
     ImageTransfer,
     RiEvents,
     TransferSamples,
-    build_sites,
     candidate_urls,
     decode_in_viewport,
     decode_managed,
@@ -51,13 +52,8 @@ from acceptance.responsive_real_browser import (
     two_frames,
     wait_layout_stable,
 )
-from acceptance.server import serve_directory
-from fixtures.responsive_real_build import RealProject, create_project
 from fixtures.responsive_real_project import image_cases
-from playwright.sync_api import (
-    Browser,
-    sync_playwright,
-)
+from playwright.sync_api import Browser
 from playwright.sync_api import (
     TimeoutError as PlaywrightTimeoutError,
 )
@@ -228,25 +224,22 @@ _BRANCHES: Final = [
 
 _LCP_PAGES: Final = ("index", "posts/p01", "representative-only")
 
+#: (builder, dpr, width) for the initial-phase transfer observation.
+#:
+#: The matrix only opens ``index``, and ``page_path`` returns ``index.html``
+#: for both builders there, so crossing every row with dirhtml would repeat
+#: the same request set. dirhtml keeps two evidence rows; its nested-page
+#: URL resolution is asserted by test_all_images_scrolled_decode and
+#: test_top_roles_and_priority.
+_TRANSFER_CASES: Final[list[tuple[str, int, int]]] = [
+    *[("html", dpr, width) for dpr in (1, 2) for width in MAIN_WIDTHS],
+    ("dirhtml", 1, 390),
+    ("dirhtml", 1, 1280),
+]
+
 #: Sources exercised for the visual/format cases: JPEG blocks, RGBA PNG
 #: (transparency), WebP and an EXIF-orientation JPEG.
 _FORMAT_SOURCES: Final = ("photo.jpg", "rgba.png", "still.webp", "orientation-6.jpg")
-
-
-@pytest.fixture(scope="module")
-def browser() -> Generator[Browser, None, None]:
-    with sync_playwright() as playwright:
-        launched = playwright.chromium.launch()
-        try:
-            yield launched
-        finally:
-            launched.close()
-
-
-@pytest.fixture(scope="module")
-def sites(tmp_path_factory: pytest.TempPathFactory) -> dict[tuple[str, bool], RealProject]:
-    """html/dirhtml x OFF/ON real builds, made once for the whole module."""
-    return build_sites(tmp_path_factory.mktemp("real-perf-sites"))
 
 
 def _utc_now() -> str:
@@ -310,8 +303,7 @@ def _num(value: object) -> float:
 
 def _initial_phase(
     browser: Browser,
-    project: RealProject,
-    base: str,
+    site: BuiltSite,
     docname: str,
     *,
     enabled: bool,
@@ -326,7 +318,7 @@ def _initial_phase(
     is in flight and the sample list has been stable for 200ms (15s ceiling).
     The page is never scrolled while waiting.
     """
-    url = base + page_path(project.builder, docname)
+    url = site.base_url + page_path(site.builder, docname)
     context = new_context(browser, width=width, height=height, dpr=dpr, color=color)
     try:
         page = context.new_page()
@@ -350,7 +342,7 @@ def _initial_phase(
     return {
         "url": url,
         "docname": docname,
-        "builder": project.builder,
+        "builder": site.builder,
         "enabled": enabled,
         "viewport": {"width": width, "height": height},
         "dpr": dpr,
@@ -391,20 +383,24 @@ def _assert_clean_phase(phase: Mapping[str, object]) -> None:
 
 
 @pytest.mark.browser
-@pytest.mark.parametrize("builder", ["html", "dirhtml"])
 def test_mobile_transfer_savings_gate(
-    sites: dict[tuple[str, bool], RealProject],
+    real_sites: RealSites,
     tmp_path: Path,
-    browser: Browser,
-    builder: str,
+    shared_browser: Browser,
 ) -> None:
-    """390x900/DPR1/light: ON must beat OFF on lead-image and total bytes."""
+    """390x900/DPR1/light: ON must beat OFF on lead-image and total bytes.
+
+    Only ``index`` is opened, where page_path returns index.html for both
+    builders, so dirhtml would repeat the same request set. dirhtml byte
+    integrity is asserted by test_all_images_scrolled_decode.
+    """
+    builder = "html"
     out = tmp_path / "mobile-transfers.json"
     phases: dict[bool, dict[str, object]] = {}
     lead_files: dict[bool, dict[str, object]] = {}
 
     def _persist() -> None:
-        records: list[dict[str, object]] = [{"kind": "env", "builder": builder, **_env_meta(browser)}]
+        records: list[dict[str, object]] = [{"kind": "env", "builder": builder, **_env_meta(shared_browser)}]
         for enabled in (True, False):
             if enabled in phases:
                 records.append({"kind": "initial-phase", **phases[enabled]})
@@ -413,15 +409,12 @@ def test_mobile_transfer_savings_gate(
         write_observations(out, records)
 
     for enabled in (True, False):
-        project = sites[builder, enabled]
-        with serve_directory(project.outdir) as base:
-            phases[enabled] = _initial_phase(
-                browser, project, base, "index", enabled=enabled, width=390, height=900, dpr=1
-            )
+        site = real_sites.standard(builder, enabled=enabled)
+        phases[enabled] = _initial_phase(shared_browser, site, "index", enabled=enabled, width=390, height=900, dpr=1)
         _persist()
         lead_src = phases[enabled]["lead_current_src"]
         assert isinstance(lead_src, str) and lead_src, phases[enabled]["url"]
-        lead_files[enabled] = _image_file_info(served_file(project.outdir, lead_src))
+        lead_files[enabled] = _image_file_info(served_file(site.outdir, lead_src))
         _persist()
 
     on, off = phases[True], phases[False]
@@ -439,50 +432,50 @@ def test_mobile_transfer_savings_gate(
 
 
 @pytest.mark.browser
-@pytest.mark.parametrize("builder", ["html", "dirhtml"])
-@pytest.mark.parametrize("color", ["light", "dark"])
-@pytest.mark.parametrize("dpr", [1, 2])
-@pytest.mark.parametrize("width", MAIN_WIDTHS)
+@pytest.mark.parametrize(
+    ("builder", "dpr", "width"),
+    _TRANSFER_CASES,
+    ids=[f"{builder}-dpr{dpr}-{width}" for builder, dpr, width in _TRANSFER_CASES],
+)
 def test_transfer_observation_matrix(
-    sites: dict[tuple[str, bool], RealProject],
+    real_sites: RealSites,
     tmp_path: Path,
-    browser: Browser,
+    shared_browser: Browser,
     builder: str,
-    color: Color,
     dpr: int,
     width: int,
 ) -> None:
-    """Record initial-phase ON/OFF transfers at every width/dpr/builder/color.
+    """Record initial-phase ON/OFF transfers at each (builder, dpr, width) case.
 
     Only the mobile gate enforces byte reduction; here the requirement is a
     valid chosen candidate plus clean decode -- the numbers are evidence.
+    The color scheme is fixed to light; dark screenshots and decoded
+    served-file facts live in test_visual_format_cases.
     """
     out = tmp_path / "transfers.json"
     records: list[dict[str, object]] = [
         {
             "kind": "env",
             "builder": builder,
-            "color_scheme": color,
+            "color_scheme": "light",
             "dpr": dpr,
             "viewport": {"width": width, "height": 900},
-            **_env_meta(browser),
+            **_env_meta(shared_browser),
         }
     ]
     phases: dict[bool, dict[str, object]] = {}
     for enabled in (True, False):
-        project = sites[builder, enabled]
-        with serve_directory(project.outdir) as base:
-            phases[enabled] = _initial_phase(
-                browser,
-                project,
-                base,
-                "index",
-                enabled=enabled,
-                width=width,
-                height=900,
-                dpr=dpr,
-                color=color,
-            )
+        site = real_sites.standard(builder, enabled=enabled)
+        phases[enabled] = _initial_phase(
+            shared_browser,
+            site,
+            "index",
+            enabled=enabled,
+            width=width,
+            height=900,
+            dpr=dpr,
+            color="light",
+        )
         records.append({"kind": "initial-phase", **phases[enabled]})
         write_observations(out, records)
     on, off = phases[True], phases[False]
@@ -507,14 +500,28 @@ def test_transfer_observation_matrix(
             assert state["current_src"] in candidates, state["current_src"]
         if state["in_viewport"]:
             assert state["complete"] and state["natural_width"] > 0, state["current_src"]
+    if dpr == 2:
+        lead_src = on["lead_current_src"]
+        assert isinstance(lead_src, str) and lead_src, on["url"]
+        lead_state = next(state for state in cast(list[ImageState], on["images"]) if state["current_src"] == lead_src)
+        # naturalWidth is normalized by the srcset density back to the slot
+        # width, so the candidate's real pixels come from the served file.
+        on_site = real_sites.standard(builder, enabled=True)
+        lead_file = _image_file_info(served_file(on_site.outdir, lead_src))
+        # At DPR 2 the chosen candidate must carry roughly twice the CSS
+        # pixels of the slot; a single-candidate srcset fails this.
+        assert cast(int, lead_file["width"]) >= lead_state["width"] * 1.5, (
+            lead_file["width"],
+            lead_state["width"],
+        )
 
 
 @pytest.mark.browser
 @pytest.mark.parametrize("builder", ["html", "dirhtml"])
 def test_all_images_scrolled_decode(
-    sites: dict[tuple[str, bool], RealProject],
+    real_sites: RealSites,
     tmp_path: Path,
-    browser: Browser,
+    shared_browser: Browser,
     builder: str,
 ) -> None:
     """All-images series: scroll every managed image, decode, all 200.
@@ -522,48 +529,47 @@ def test_all_images_scrolled_decode(
     A separate series from the initial phase -- its numbers never mix into
     the initial-phase totals.
     """
-    project = sites[builder, True]
+    site = real_sites.standard(builder, enabled=True)
     out = tmp_path / "all-images.json"
-    records: list[dict[str, object]] = [{"kind": "env", "builder": builder, **_env_meta(browser)}]
-    with serve_directory(project.outdir) as base:
-        for docname in ("index", "nested/blog"):
-            # Fresh context per page: a shared HTTP cache serves the second
-            # page's repeated candidates from cache, and request.sizes()
-            # reports a negative responseBodySize for cache hits.
-            context = new_context(browser, width=390, height=900)
+    records: list[dict[str, object]] = [{"kind": "env", "builder": builder, **_env_meta(shared_browser)}]
+    for docname in ("index", "nested/blog"):
+        # Fresh context per page: a shared HTTP cache serves the second
+        # page's repeated candidates from cache, and request.sizes()
+        # reports a negative responseBodySize for cache hits.
+        context = new_context(shared_browser, width=390, height=900)
+        try:
+            page = context.new_page()
             try:
-                page = context.new_page()
-                try:
-                    samples = TransferSamples()
-                    record_transfers(page, samples)
-                    url = base + page_path(builder, docname)
-                    page.goto(url, wait_until="load")
-                    decode_managed(page)
-                    settled = settle_transfers(page, samples)
-                    images = image_states(page)
-                    allowed = sorted(
-                        {urljoin(url, raw) for raw in candidate_urls(page)}
-                        | {urljoin(url, str(state["src"])) for state in images if state["src"]}
-                    )
-                    records.append(
-                        {
-                            "kind": "all-images",
-                            "docname": docname,
-                            "url": url,
-                            "settled": settled,
-                            "managed_count": sum(1 for i in images if i["marker"] == "w-v1"),
-                            "samples": [dict(s) for s in samples],
-                            "failures": [dict(f) for f in samples.failures],
-                            "record_errors": list(samples.record_errors),
-                            "allowed_urls": allowed,
-                            "images": [dict(i) for i in images],
-                        }
-                    )
-                    write_observations(out, records)
-                finally:
-                    page.close()
+                samples = TransferSamples()
+                record_transfers(page, samples)
+                url = site.base_url + page_path(site.builder, docname)
+                page.goto(url, wait_until="load")
+                decode_managed(page)
+                settled = settle_transfers(page, samples)
+                images = image_states(page)
+                allowed = sorted(
+                    {urljoin(url, raw) for raw in candidate_urls(page)}
+                    | {urljoin(url, str(state["src"])) for state in images if state["src"]}
+                )
+                records.append(
+                    {
+                        "kind": "all-images",
+                        "docname": docname,
+                        "url": url,
+                        "settled": settled,
+                        "managed_count": sum(1 for i in images if i["marker"] == "w-v1"),
+                        "samples": [dict(s) for s in samples],
+                        "failures": [dict(f) for f in samples.failures],
+                        "record_errors": list(samples.record_errors),
+                        "allowed_urls": allowed,
+                        "images": [dict(i) for i in images],
+                    }
+                )
+                write_observations(out, records)
             finally:
-                context.close()
+                page.close()
+        finally:
+            context.close()
     for record in records[1:]:
         assert record["settled"], record["url"]
         assert cast(int, record["managed_count"]) > 0
@@ -658,32 +664,34 @@ def _observe_reservation(
 @pytest.mark.browser
 @pytest.mark.parametrize("strip", [False, True], ids=["reserved", "control"])
 @pytest.mark.parametrize("branch", _BRANCHES, ids=[branch["name"] for branch in _BRANCHES])
-@pytest.mark.parametrize("builder", ["html", "dirhtml"])
 def test_reserved_space_and_shift(
-    sites: dict[tuple[str, bool], RealProject],
+    real_sites: RealSites,
     tmp_path: Path,
-    browser: Browser,
-    builder: str,
+    shared_browser: Browser,
     branch: _Branch,
     strip: bool,
 ) -> None:
     """Reserved box stays put on release; the stripped control must move >1px.
 
-    ``strip=True`` is the negative control: the same page in a separate
-    context with the width/height attributes and the CSS reservation removed
-    test-side. If the control detects no change, the reserved run's PASS is
-    not evidence -- so the control asserts a >1px change instead.
+    Reservation is a layout property of the same CSS and markup in both
+    builders; only the image URL depth differs, and that is asserted
+    elsewhere. The sweep runs on html only.
     """
-    project = sites[builder, True]
+    builder = "html"
+    site = real_sites.standard(builder, enabled=True)
     out = tmp_path / "reservation.json"
 
     def _persist(record: Mapping[str, object]) -> None:
-        write_observations(out, [{"kind": "env", "builder": builder, **_env_meta(browser)}, dict(record)])
+        write_observations(out, [{"kind": "env", "builder": builder, **_env_meta(shared_browser)}, dict(record)])
 
-    with serve_directory(project.outdir) as base:
-        record = _observe_reservation(
-            browser, base, page_path(builder, branch["docname"]), branch, strip=strip, persist=_persist
-        )
+    record = _observe_reservation(
+        shared_browser,
+        site.base_url,
+        page_path(site.builder, branch["docname"]),
+        branch,
+        strip=strip,
+        persist=_persist,
+    )
     record["builder"] = builder
     _persist(record)
     assert record["layout_stable"], record["url"]
@@ -716,12 +724,10 @@ def test_reserved_space_and_shift(
 @pytest.mark.parametrize("height", [720, 900])
 @pytest.mark.parametrize("width", [390, 1280, 3840])
 @pytest.mark.parametrize("docname", _LCP_PAGES)
-@pytest.mark.parametrize("builder", ["html", "dirhtml"])
 def test_lcp_observation(
-    sites: dict[tuple[str, bool], RealProject],
+    real_sites: RealSites,
     tmp_path: Path,
-    browser: Browser,
-    builder: str,
+    shared_browser: Browser,
     docname: str,
     width: int,
     height: int,
@@ -731,7 +737,8 @@ def test_lcp_observation(
     A text LCP is recorded, not treated as an image-LCP failure. No claim is
     made about field CWV from this synthetic, input-free observation.
     """
-    project = sites[builder, True]
+    builder = "html"
+    site = real_sites.standard(builder, enabled=True)
     out = tmp_path / "lcp.json"
     url = ""
     supported: list[str] = []
@@ -739,40 +746,39 @@ def test_lcp_observation(
     images: list[ImageState] = []
     events: RiEvents = {"shifts": [], "lcp": [], "release": None}
     record: dict[str, object] = {}
-    with serve_directory(project.outdir) as base:
-        url = base + page_path(builder, docname)
-        context = new_context(browser, width=width, height=height)
+    url = site.base_url + page_path(site.builder, docname)
+    context = new_context(shared_browser, width=width, height=height)
+    try:
+        page = context.new_page()
         try:
-            page = context.new_page()
+            page.add_init_script(PERFORMANCE_OBSERVER_JS)
+            page.goto(url, wait_until="load")
+            supported = observer_types(page)
             try:
-                page.add_init_script(PERFORMANCE_OBSERVER_JS)
-                page.goto(url, wait_until="load")
-                supported = observer_types(page)
-                try:
-                    page.wait_for_function("() => window.__ri.lcp.length > 0", timeout=10000)
-                    lcp_seen = True
-                except PlaywrightTimeoutError:
-                    lcp_seen = False
-                events = ri_events(page)
-                images = image_states(page)
-            finally:
-                page.close()
+                page.wait_for_function("() => window.__ri.lcp.length > 0", timeout=10000)
+                lcp_seen = True
+            except PlaywrightTimeoutError:
+                lcp_seen = False
+            events = ri_events(page)
+            images = image_states(page)
         finally:
-            context.close()
-        lazy_in_viewport = [dict(state) for state in images if state["in_viewport"] and state["loading"] == "lazy"]
-        record = {
-            "url": url,
-            "docname": docname,
-            "builder": builder,
-            "viewport": {"width": width, "height": height},
-            "observer_types": supported,
-            "lcp_seen": lcp_seen,
-            "lcp": events["lcp"],
-            "shifts": events["shifts"],
-            "lazy_in_viewport": lazy_in_viewport,
-            "images": [dict(state) for state in images],
-        }
-        write_observations(out, [{"kind": "env", **_env_meta(browser)}, record])
+            page.close()
+    finally:
+        context.close()
+    lazy_in_viewport = [dict(state) for state in images if state["in_viewport"] and state["loading"] == "lazy"]
+    record = {
+        "url": url,
+        "docname": docname,
+        "builder": builder,
+        "viewport": {"width": width, "height": height},
+        "observer_types": supported,
+        "lcp_seen": lcp_seen,
+        "lcp": events["lcp"],
+        "shifts": events["shifts"],
+        "lazy_in_viewport": lazy_in_viewport,
+        "images": [dict(state) for state in images],
+    }
+    write_observations(out, [{"kind": "env", **_env_meta(shared_browser)}, record])
     assert {"layout-shift", "largest-contentful-paint"} <= set(supported)
     assert lcp_seen, url
     for state in cast(list[dict[str, object]], record["lazy_in_viewport"]):
@@ -784,32 +790,11 @@ def test_lcp_observation(
             assert entry.get("loading") != "lazy", entry
 
 
-@pytest.fixture(scope="module")
-def format_sites(tmp_path_factory: pytest.TempPathFactory) -> dict[tuple[str, bool], RealProject]:
-    """Real ON/OFF builds for the non-JPEG source cases (PNG/WebP/EXIF)."""
-    built: dict[tuple[str, bool], RealProject] = {}
-    for source_name in ("rgba.png", "still.webp", "orientation-6.jpg"):
-        for enabled in (False, True):
-            project = create_project(
-                tmp_path_factory.mktemp(f"perf-{source_name}-{int(enabled)}") / "html",
-                builder="html",
-                enabled=enabled,
-                page_size=20,
-                source_name=source_name,
-                post_count=3,
-            )
-            result = project.build()
-            assert result.returncode == 0, result.stdout + result.stderr
-            built[source_name, enabled] = project
-    return built
-
-
 @pytest.mark.browser
 def test_visual_format_cases(
-    sites: dict[tuple[str, bool], RealProject],
-    format_sites: dict[tuple[str, bool], RealProject],
+    real_sites: RealSites,
     tmp_path: Path,
-    browser: Browser,
+    shared_browser: Browser,
 ) -> None:
     """Light/dark screenshots + decoded file facts for each image format.
 
@@ -822,7 +807,8 @@ def test_visual_format_cases(
     shots_dir.mkdir()
     out = tmp_path / "visual-formats.json"
     env_records: list[dict[str, object]] = [
-        {"kind": "env", "source": source_name, **_env_meta(browser, source_name)} for source_name in _FORMAT_SOURCES
+        {"kind": "env", "source": source_name, **_env_meta(shared_browser, source_name)}
+        for source_name in _FORMAT_SOURCES
     ]
     records: list[dict[str, object]] = [env_records[0]]
     for source_index, source_name in enumerate(_FORMAT_SOURCES):
@@ -830,51 +816,54 @@ def test_visual_format_cases(
         write_observations(out, records)
         case = image_cases()[source_name]
         for enabled in (True, False):
-            project = sites["html", enabled] if source_name == "photo.jpg" else format_sites[source_name, enabled]
-            with serve_directory(project.outdir) as base:
-                for color in ("light", "dark"):
-                    context = new_context(browser, width=1280, height=900, color=color)
+            site = (
+                real_sites.standard("html", enabled=enabled)
+                if source_name == "photo.jpg"
+                else real_sites.format(source_name, enabled=enabled)
+            )
+            for color in ("light", "dark"):
+                context = new_context(shared_browser, width=1280, height=900, color=color)
+                try:
+                    page = context.new_page()
                     try:
-                        page = context.new_page()
-                        try:
-                            url = base + page_path("html", "posts/p01")
-                            page.goto(url, wait_until="load")
-                            decode_all_images(page)
-                            entry: dict[str, object] = {
-                                "kind": "visual-format",
-                                "source": source_name,
-                                "enabled": enabled,
-                                "color_scheme": color,
-                                "url": url,
-                                "expected_format": case.format,
-                                "expected_size": [case.width, case.height],
-                            }
-                            stem = f"{Path(source_name).stem}-{'on' if enabled else 'off'}-{color}"
-                            for label, selector in (
-                                ("top", ".maatlog-post-top-image"),
-                                ("hero", ".maatlog-post-hero-image"),
-                            ):
-                                locator = page.locator(selector)
-                                if locator.count():
-                                    shot = shots_dir / f"{stem}-{label}.png"
-                                    locator.screenshot(path=str(shot))
-                                    entry[f"{label}_screenshot"] = str(shot)
-                            served: list[dict[str, object]] = []
-                            for state in image_states(page):
-                                if not state["current_src"]:
-                                    continue
-                                info = _image_file_info(served_file(project.outdir, state["current_src"]))
-                                info["css_class"] = state["css_class"]
-                                info["natural_width"] = state["natural_width"]
-                                info["managed"] = state["marker"] == "w-v1"
-                                served.append(info)
-                            entry["served_files"] = served
-                            records.append(entry)
-                            write_observations(out, records)
-                        finally:
-                            page.close()
+                        url = site.base_url + page_path(site.builder, "posts/p01")
+                        page.goto(url, wait_until="load")
+                        decode_all_images(page)
+                        entry: dict[str, object] = {
+                            "kind": "visual-format",
+                            "source": source_name,
+                            "enabled": enabled,
+                            "color_scheme": color,
+                            "url": url,
+                            "expected_format": case.format,
+                            "expected_size": [case.width, case.height],
+                        }
+                        stem = f"{Path(source_name).stem}-{'on' if enabled else 'off'}-{color}"
+                        for label, selector in (
+                            ("top", ".maatlog-post-top-image"),
+                            ("hero", ".maatlog-post-hero-image"),
+                        ):
+                            locator = page.locator(selector)
+                            if locator.count():
+                                shot = shots_dir / f"{stem}-{label}.png"
+                                locator.screenshot(path=str(shot))
+                                entry[f"{label}_screenshot"] = str(shot)
+                        served: list[dict[str, object]] = []
+                        for state in image_states(page):
+                            if not state["current_src"]:
+                                continue
+                            info = _image_file_info(served_file(site.outdir, state["current_src"]))
+                            info["css_class"] = state["css_class"]
+                            info["natural_width"] = state["natural_width"]
+                            info["managed"] = state["marker"] == "w-v1"
+                            served.append(info)
+                        entry["served_files"] = served
+                        records.append(entry)
+                        write_observations(out, records)
                     finally:
-                        context.close()
+                        page.close()
+                finally:
+                    context.close()
     for record in records[1:]:
         served = cast(list[dict[str, object]], record["served_files"])
         managed = [info for info in served if info["managed"]]

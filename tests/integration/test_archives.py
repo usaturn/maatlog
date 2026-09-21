@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 from conftest import ProjectFactory
+from fixtures.integration_builds import BuiltProjects
 
 from maatlog.errors import MaatlogBuildError
 
@@ -79,7 +80,7 @@ Non-sphinx post for pagination contrast.
     ],
 )
 def test_archive_uses_builder_uri(
-    make_project: ProjectFactory,
+    built_projects: BuiltProjects,
     builder: str,
     archive_path: str,
     page_two_path: str,
@@ -89,11 +90,11 @@ def test_archive_uses_builder_uri(
     card_href_page2: str,
 ) -> None:
     """Tag archive paths and relative hrefs follow html vs dirhtml Builder URI rules."""
-    result = make_project(
+    result = built_projects.project(
         files=MULTIPAGE_PROJECT,
         builder=builder,
         config={"maatlog_page_size": 1},
-    ).build()
+    )
     assert result.path(archive_path).exists()
     assert result.path(page_two_path).exists()
 
@@ -153,7 +154,7 @@ def test_archive_uses_builder_uri(
     ],
 )
 def test_all_posts_archive_paginates(
-    make_project: ProjectFactory,
+    built_projects: BuiltProjects,
     builder: str,
     all_posts_path: str,
     page_two_path: str,
@@ -163,11 +164,11 @@ def test_all_posts_archive_paginates(
     card_hrefs_page1: tuple[str, ...],
     card_href_page2: str,
 ) -> None:
-    result = make_project(
+    result = built_projects.project(
         files=MULTIPAGE_PROJECT,
         builder=builder,
         config={"maatlog_page_size": 2},
-    ).build()
+    )
     assert result.path(all_posts_path).exists()
     assert result.path(page_two_path).exists()
 
@@ -194,8 +195,8 @@ def test_all_posts_archive_paginates(
     assert page2.select_one(f"[href='{card_href_page2}']") is not None
 
 
-def test_empty_all_posts_archive_is_generated(make_project: ProjectFactory) -> None:
-    result = make_project(files={"notes.rst": "Notes\n=====\n\nNo posts here.\n"}).build()
+def test_empty_all_posts_archive_is_generated(built_projects: BuiltProjects) -> None:
+    result = built_projects.project(files={"notes.rst": "Notes\n=====\n\nNo posts here.\n"})
     assert result.path("blog.html").exists()
     page = result.html("blog.html")
     assert page.select_one(".maatlog-archive")
@@ -262,9 +263,9 @@ Body.
     assert "User-owned blog page" in blog_html.read_text(encoding="utf-8")
 
 
-def test_post_card_date_is_time_element(make_project: ProjectFactory) -> None:
+def test_post_card_date_is_time_element(built_projects: BuiltProjects) -> None:
     """Card dates expose machine-readable ISO 8601 and a locale-free display form."""
-    result = make_project(files=MULTIPAGE_PROJECT).build()
+    result = built_projects.project(files=MULTIPAGE_PROJECT)
     page = result.html("blog.html")
 
     date = page.select_one("time.maatlog-post-card-date")
@@ -289,9 +290,10 @@ Body of post {n}.
 }
 
 
-def test_home_features_three_posts(make_project: ProjectFactory) -> None:
+@pytest.mark.xdist_group("integration-arch-four-default")
+def test_home_features_three_posts(built_projects: BuiltProjects) -> None:
     """The archive root page 1 promotes the newest three posts."""
-    result = make_project(files=FOUR_POST_PROJECT).build()
+    result = built_projects.project(files=FOUR_POST_PROJECT)
     page = result.html("blog.html")
 
     featured = page.select(".maatlog-post-featured .maatlog-post-card")
@@ -303,28 +305,30 @@ def test_home_features_three_posts(make_project: ProjectFactory) -> None:
     assert len(page.select(".maatlog-post-list .maatlog-post-card")) == 4
 
 
-def test_home_with_three_posts_has_no_older_heading(make_project: ProjectFactory) -> None:
+def test_home_with_three_posts_has_no_older_heading(built_projects: BuiltProjects) -> None:
     """With three or fewer posts there is no Latest articles heading."""
     files = {name: body for name, body in FOUR_POST_PROJECT.items() if name != "post1.md"}
-    result = make_project(files=files).build()
+    result = built_projects.project(files=files)
     page = result.html("blog.html")
 
     assert len(page.select(".maatlog-post-featured .maatlog-post-card")) == 3
     assert "Older posts" not in page
 
 
-def test_taxonomy_archive_has_no_featured_grid(make_project: ProjectFactory) -> None:
+@pytest.mark.xdist_group("integration-arch-four-default")
+def test_taxonomy_archive_has_no_featured_grid(built_projects: BuiltProjects) -> None:
     """Featured promotion belongs to the home page only."""
-    result = make_project(files=FOUR_POST_PROJECT).build()
+    result = built_projects.project(files=FOUR_POST_PROJECT)
     page = result.html("blog/tag/sphinx.html")
 
     assert page.select_one(".maatlog-post-featured") is None
     assert page.select_one(".maatlog-post-card") is not None
 
 
-def test_home_page_two_has_no_featured_grid(make_project: ProjectFactory) -> None:
+@pytest.mark.xdist_group("integration-arch-four-ps2")
+def test_home_page_two_has_no_featured_grid(built_projects: BuiltProjects) -> None:
     """Only page 1 of the archive root is the home page."""
-    result = make_project(files=FOUR_POST_PROJECT, config={"maatlog_page_size": 2}).build()
+    result = built_projects.project(files=FOUR_POST_PROJECT, config={"maatlog_page_size": 2})
     page = result.html("blog/page/2.html")
 
     assert page.select_one(".maatlog-post-featured") is None
@@ -332,9 +336,10 @@ def test_home_page_two_has_no_featured_grid(make_project: ProjectFactory) -> Non
     assert page.select_one(".maatlog-post-card") is not None
 
 
-def test_pagination_offers_an_older_posts_link(make_project: ProjectFactory) -> None:
+@pytest.mark.xdist_group("integration-arch-four-ps2")
+def test_pagination_offers_an_older_posts_link(built_projects: BuiltProjects) -> None:
     """Numbered pagination is joined by an explicit 'keep reading' affordance."""
-    result = make_project(files=FOUR_POST_PROJECT, config={"maatlog_page_size": 2}).build()
+    result = built_projects.project(files=FOUR_POST_PROJECT, config={"maatlog_page_size": 2})
     page1 = result.html("blog.html")
 
     more = page1.select_one("a.maatlog-pagination-more")
@@ -348,12 +353,12 @@ def test_pagination_offers_an_older_posts_link(make_project: ProjectFactory) -> 
     assert last.select_one("a.maatlog-pagination-more") is None
 
 
-def test_archive_root_first_page_is_home_and_has_site(make_project: ProjectFactory) -> None:
+def test_archive_root_first_page_is_home_and_has_site(built_projects: BuiltProjects) -> None:
     """Without maatlog_home_docname, the archive root page 1 is the blog home."""
-    result = make_project(
+    result = built_projects.project(
         files=MULTIPAGE_PROJECT,
         config={"maatlog_page_size": 2, "project": "Example Blog", "maatlog_tagline": "Notes"},
-    ).build()
+    )
 
     page = result.html("blog.html")
     assert page.select_one(".maatlog-hero") is not None
@@ -363,23 +368,23 @@ def test_archive_root_first_page_is_home_and_has_site(make_project: ProjectFacto
     assert page2.select_one(".maatlog-hero") is None
 
 
-def test_archive_cards_expose_taxonomy_links(make_project: ProjectFactory) -> None:
-    result = make_project(files=MULTIPAGE_PROJECT, config={"maatlog_page_size": 10}).build()
+def test_archive_cards_expose_taxonomy_links(built_projects: BuiltProjects) -> None:
+    result = built_projects.project(files=MULTIPAGE_PROJECT, config={"maatlog_page_size": 10})
     page = result.html("blog.html")
     assert page.select_one(".maatlog-post-card [href='blog/tag/sphinx.html']") is not None
     assert page.select_one(".maatlog-post-card [href='blog/category/engineering.html']") is not None
     assert page.select_one(".maatlog-post-card [href='blog/author/alice.html']") is not None
 
 
-def test_home_renders_hero(make_project: ProjectFactory) -> None:
+def test_home_renders_hero(built_projects: BuiltProjects) -> None:
     """The archive root page 1 leads with site identity, scale and feed links."""
-    result = make_project(
+    result = built_projects.project(
         files=FOUR_POST_PROJECT,
         config={
             "project": "Example Blog",
             "maatlog_tagline": "Notes on Sphinx",
         },
-    ).build()
+    )
     page = result.html("blog.html")
 
     hero = page.select_one(".maatlog-hero[data-maatlog-component='hero']")
@@ -396,18 +401,20 @@ def test_home_renders_hero(make_project: ProjectFactory) -> None:
     assert page.select_one(".maatlog-hero .maatlog-feed-link") is not None
 
 
-def test_hero_omits_tagline_when_unset(make_project: ProjectFactory) -> None:
+@pytest.mark.xdist_group("integration-arch-four-default")
+def test_hero_omits_tagline_when_unset(built_projects: BuiltProjects) -> None:
     """No tagline configured means no empty paragraph in the markup."""
-    result = make_project(files=FOUR_POST_PROJECT).build()
+    result = built_projects.project(files=FOUR_POST_PROJECT)
     page = result.html("blog.html")
 
     assert page.select_one(".maatlog-hero") is not None
     assert page.select_one(".maatlog-hero-tagline") is None
 
 
-def test_taxonomy_archive_keeps_plain_header(make_project: ProjectFactory) -> None:
+@pytest.mark.xdist_group("integration-arch-four-default")
+def test_taxonomy_archive_keeps_plain_header(built_projects: BuiltProjects) -> None:
     """Only the home page gets the hero; other archives keep label + count."""
-    result = make_project(files=FOUR_POST_PROJECT).build()
+    result = built_projects.project(files=FOUR_POST_PROJECT)
     page = result.html("blog/tag/sphinx.html")
 
     assert page.select_one(".maatlog-hero") is None
@@ -415,10 +422,10 @@ def test_taxonomy_archive_keeps_plain_header(make_project: ProjectFactory) -> No
     assert page.select_one(".maatlog-archive-count") is not None
 
 
-def test_empty_home_keeps_hero_and_explains(make_project: ProjectFactory) -> None:
+def test_empty_home_keeps_hero_and_explains(built_projects: BuiltProjects) -> None:
     """A blog with no posts still renders as a site, and says what to do next."""
     files = {"about.md": "# About\n\nNo posts here yet.\n"}
-    result = make_project(files=files).build()
+    result = built_projects.project(files=files)
     page = result.html("blog.html")
 
     assert page.select_one(".maatlog-hero") is not None
@@ -455,9 +462,10 @@ Post B.
 }
 
 
-def test_sidebar_truncates_tags_to_top_five(make_project: ProjectFactory) -> None:
+@pytest.mark.xdist_group("integration-arch-many-taxonomy")
+def test_sidebar_truncates_tags_to_top_five(built_projects: BuiltProjects) -> None:
     """Long tag lists stay a fixed height; the rest goes behind a disclosure."""
-    result = make_project(files=MANY_TAXONOMY_PROJECT).build()
+    result = built_projects.project(files=MANY_TAXONOMY_PROJECT)
     page = result.html("blog.html")
 
     # The helper's selector parser supports descendant combinators only, so count
@@ -468,9 +476,10 @@ def test_sidebar_truncates_tags_to_top_five(make_project: ProjectFactory) -> Non
     assert "All tags (7)" in page
 
 
-def test_sidebar_groups_months_by_year(make_project: ProjectFactory) -> None:
+@pytest.mark.xdist_group("integration-arch-many-taxonomy")
+def test_sidebar_groups_months_by_year(built_projects: BuiltProjects) -> None:
     """Month archives nest under their calendar year."""
-    result = make_project(files=MANY_TAXONOMY_PROJECT).build()
+    result = built_projects.project(files=MANY_TAXONOMY_PROJECT)
     page = result.html("blog.html")
 
     years = page.select("details.maatlog-taxonomy-year")
@@ -479,8 +488,9 @@ def test_sidebar_groups_months_by_year(make_project: ProjectFactory) -> None:
     assert "2025" in page
 
 
-def test_post_taxonomy_links_include_screen_reader_separators(make_project: ProjectFactory) -> None:
-    result = make_project(files=MANY_TAXONOMY_PROJECT).build()
+@pytest.mark.xdist_group("integration-arch-many-taxonomy")
+def test_post_taxonomy_links_include_screen_reader_separators(built_projects: BuiltProjects) -> None:
+    result = built_projects.project(files=MANY_TAXONOMY_PROJECT)
 
     # カードも記事ページと同じく、区切りは読み上げ専用にする。pill の外へ
     # カンマが落ちると二重の区切りになる。
@@ -496,7 +506,7 @@ def test_post_taxonomy_links_include_screen_reader_separators(make_project: Proj
 
 
 def test_scheduled_post_does_not_link_to_missing_taxonomy_archive(
-    make_project: ProjectFactory,
+    built_projects: BuiltProjects,
 ) -> None:
     files = {
         "published.md": """---
@@ -516,7 +526,7 @@ maatlog-tags: [shared, secret]
 # Scheduled
 """,
     }
-    result = make_project(files=files).build()
+    result = built_projects.project(files=files)
     page = result.html("scheduled.html")
 
     assert page.select_one(".maatlog-post-tags [href='blog/tag/shared.html']") is not None
@@ -558,10 +568,11 @@ Scheduled body.
     assert second.path("blog/tag/secret.html").exists()
 
 
-def test_non_featured_cards_are_wrapped_in_a_grid(make_project: ProjectFactory) -> None:
+@pytest.mark.xdist_group("integration-arch-four-default")
+def test_non_featured_cards_are_wrapped_in_a_grid(built_projects: BuiltProjects) -> None:
     # featured の下に並ぶカードだけをグリッドに載せるため、専用のラッパが要る。
     # .maatlog-post-list 直下のままだと hero / featured / 見出しまでグリッドの子になる。
-    result = make_project(files=FOUR_POST_PROJECT).build()
+    result = built_projects.project(files=FOUR_POST_PROJECT)
     page = result.html("blog.html")
 
     grid = page.select_one(".maatlog-post-list .maatlog-post-grid")
@@ -571,9 +582,10 @@ def test_non_featured_cards_are_wrapped_in_a_grid(make_project: ProjectFactory) 
     assert page.select_one(".maatlog-post-grid .maatlog-post-list-heading") is None
 
 
-def test_taxonomy_archive_cards_also_ride_the_grid(make_project: ProjectFactory) -> None:
+@pytest.mark.xdist_group("integration-arch-four-default")
+def test_taxonomy_archive_cards_also_ride_the_grid(built_projects: BuiltProjects) -> None:
     # featured を出さない一覧でも、カードは同じグリッドで並ぶ。
-    result = make_project(files=FOUR_POST_PROJECT).build()
+    result = built_projects.project(files=FOUR_POST_PROJECT)
     page = result.html("blog/tag/sphinx.html")
 
     assert page.select_one(".maatlog-post-featured") is None

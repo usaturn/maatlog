@@ -5,24 +5,29 @@ from __future__ import annotations
 import re
 
 import pytest
-from conftest import ProjectFactory
+from fixtures.integration_builds import BuiltProjects
 
 RUNTIME_PROJECT = {
     "about.rst": "About\n=====\n\nA plain page.\n",
 }
 
+THEMES = [
+    pytest.param("maatlog-base", marks=pytest.mark.xdist_group("integration-runtime-base")),
+    pytest.param("maatlog-default", marks=pytest.mark.xdist_group("integration-runtime-default")),
+]
 
-@pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
-def test_official_themes_ship_the_theme_javascript(make_project: ProjectFactory, theme: str) -> None:
-    result = make_project(files=RUNTIME_PROJECT, theme=theme).build()
+
+@pytest.mark.parametrize("theme", THEMES)
+def test_official_themes_ship_the_theme_javascript(built_projects: BuiltProjects, theme: str) -> None:
+    result = built_projects.project(files=RUNTIME_PROJECT, theme=theme)
 
     assert result.asset("_static/maatlog.js").exists()
 
 
-@pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
-def test_theme_javascript_is_render_blocking_in_the_head(make_project: ProjectFactory, theme: str) -> None:
+@pytest.mark.parametrize("theme", THEMES)
+def test_theme_javascript_is_render_blocking_in_the_head(built_projects: BuiltProjects, theme: str) -> None:
     # 保存済みテーマを初期描画前に反映するため、defer も module もあってはならない。
-    result = make_project(files=RUNTIME_PROJECT, theme=theme).build()
+    result = built_projects.project(files=RUNTIME_PROJECT, theme=theme)
     page = result.html("about.html")
     head = page.text[: page.text.index("</head>")]
 
@@ -33,29 +38,29 @@ def test_theme_javascript_is_render_blocking_in_the_head(make_project: ProjectFa
     assert "type=" not in match.group(0)
 
 
-@pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
-def test_theme_javascript_url_carries_a_cache_busting_version(make_project: ProjectFactory, theme: str) -> None:
+@pytest.mark.parametrize("theme", THEMES)
+def test_theme_javascript_url_carries_a_cache_busting_version(built_projects: BuiltProjects, theme: str) -> None:
     from maatlog.version import PACKAGE_VERSION
 
-    result = make_project(files=RUNTIME_PROJECT, theme=theme).build()
+    result = built_projects.project(files=RUNTIME_PROJECT, theme=theme)
 
     assert f"_static/maatlog.js?v={PACKAGE_VERSION}" in result.html("about.html").text
 
 
-@pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
+@pytest.mark.parametrize("theme", THEMES)
 def test_theme_javascript_runs_before_the_pygments_dark_link_is_needed(
-    make_project: ProjectFactory, theme: str
+    built_projects: BuiltProjects, theme: str
 ) -> None:
     # JS は #pygments_dark_css の media を書き換える。link が script より前にあること。
-    result = make_project(files=RUNTIME_PROJECT, theme=theme).build()
+    result = built_projects.project(files=RUNTIME_PROJECT, theme=theme)
     text = result.html("about.html").text
 
     assert text.index("pygments_dark_css") < text.index("maatlog.js")
 
 
-@pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
-def test_theme_javascript_marks_the_document_and_resolves_the_theme(make_project: ProjectFactory, theme: str) -> None:
-    result = make_project(files=RUNTIME_PROJECT, theme=theme).build()
+@pytest.mark.parametrize("theme", THEMES)
+def test_theme_javascript_marks_the_document_and_resolves_the_theme(built_projects: BuiltProjects, theme: str) -> None:
+    result = built_projects.project(files=RUNTIME_PROJECT, theme=theme)
     script = result.asset("_static/maatlog.js").read_text(encoding="utf-8")
 
     assert 'classList.add("maatlog-js")' in script
@@ -63,10 +68,10 @@ def test_theme_javascript_marks_the_document_and_resolves_the_theme(make_project
     assert "pygments_dark_css" in script
 
 
-@pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
-def test_theme_javascript_marks_the_toc_heading_in_view(make_project: ProjectFactory, theme: str) -> None:
+@pytest.mark.parametrize("theme", THEMES)
+def test_theme_javascript_marks_the_toc_heading_in_view(built_projects: BuiltProjects, theme: str) -> None:
     # TOC の現在位置は aria-current="true" で表す（Sidebar の "page" とは別の意味）。
-    result = make_project(files=RUNTIME_PROJECT, theme=theme).build()
+    result = built_projects.project(files=RUNTIME_PROJECT, theme=theme)
     script = result.asset("_static/maatlog.js").read_text(encoding="utf-8")
 
     assert ".maatlog-toc-headings" in script
@@ -74,19 +79,19 @@ def test_theme_javascript_marks_the_toc_heading_in_view(make_project: ProjectFac
     assert "IntersectionObserver" in script
 
 
-@pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
-def test_toc_scrollspy_is_progressive_enhancement(make_project: ProjectFactory, theme: str) -> None:
+@pytest.mark.parametrize("theme", THEMES)
+def test_toc_scrollspy_is_progressive_enhancement(built_projects: BuiltProjects, theme: str) -> None:
     # IntersectionObserver が無い環境では何もせずに戻る。
-    result = make_project(files=RUNTIME_PROJECT, theme=theme).build()
+    result = built_projects.project(files=RUNTIME_PROJECT, theme=theme)
     script = result.asset("_static/maatlog.js").read_text(encoding="utf-8")
 
     assert 'typeof IntersectionObserver !== "function"' in script
 
 
-@pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
-def test_theme_javascript_exposes_one_enhancer_registry(make_project: ProjectFactory, theme: str) -> None:
+@pytest.mark.parametrize("theme", THEMES)
+def test_theme_javascript_exposes_one_enhancer_registry(built_projects: BuiltProjects, theme: str) -> None:
     # 機能ごとに独自の初期化機構を作らせないための共有 registry（tmp/FRONTEND.md）。
-    result = make_project(files=RUNTIME_PROJECT, theme=theme).build()
+    result = built_projects.project(files=RUNTIME_PROJECT, theme=theme)
     script = result.asset("_static/maatlog.js").read_text(encoding="utf-8")
 
     assert "function registerEnhancer(" in script
@@ -96,27 +101,27 @@ def test_theme_javascript_exposes_one_enhancer_registry(make_project: ProjectFac
     assert 'registerEnhancer("theme-toggle"' in script
 
 
-@pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
-def test_enhancers_are_applied_at_most_once_per_element(make_project: ProjectFactory, theme: str) -> None:
+@pytest.mark.parametrize("theme", THEMES)
+def test_enhancers_are_applied_at_most_once_per_element(built_projects: BuiltProjects, theme: str) -> None:
     # WeakSet で適用済みを覚える。data-* マーカーは取得 HTML に残留しうるので使わない。
-    result = make_project(files=RUNTIME_PROJECT, theme=theme).build()
+    result = built_projects.project(files=RUNTIME_PROJECT, theme=theme)
     script = result.asset("_static/maatlog.js").read_text(encoding="utf-8")
 
     assert "new WeakSet()" in script
 
 
-@pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
-def test_the_theme_ships_exactly_one_runtime_script(make_project: ProjectFactory, theme: str) -> None:
+@pytest.mark.parametrize("theme", THEMES)
+def test_the_theme_ships_exactly_one_runtime_script(built_projects: BuiltProjects, theme: str) -> None:
     # tmp/FRONTEND.md: 機能別 script を独立ロードしない。runtime は maatlog.js 一本。
-    result = make_project(files=RUNTIME_PROJECT, theme=theme).build()
+    result = built_projects.project(files=RUNTIME_PROJECT, theme=theme)
     text = result.html("about.html").text
 
     assert len(re.findall(r"<script[^>]*maatlog[^>]*\.js", text)) == 1
 
 
-@pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
-def test_the_theme_ships_no_other_javascript(make_project: ProjectFactory, theme: str) -> None:
-    result = make_project(files=RUNTIME_PROJECT, theme=theme).build()
+@pytest.mark.parametrize("theme", THEMES)
+def test_the_theme_ships_no_other_javascript(built_projects: BuiltProjects, theme: str) -> None:
+    result = built_projects.project(files=RUNTIME_PROJECT, theme=theme)
     static = result.asset("_static")
 
     assert sorted(path.name for path in static.glob("maatlog*.js")) == ["maatlog.js"]
@@ -133,9 +138,9 @@ def test_theme_conf_does_not_add_script_files() -> None:
     assert "script_files" not in (theme_root / "theme.conf").read_text(encoding="utf-8")
 
 
-@pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
-def test_theme_javascript_loads_the_next_archive_page(make_project: ProjectFactory, theme: str) -> None:
-    result = make_project(files=RUNTIME_PROJECT, theme=theme).build()
+@pytest.mark.parametrize("theme", THEMES)
+def test_theme_javascript_loads_the_next_archive_page(built_projects: BuiltProjects, theme: str) -> None:
+    result = built_projects.project(files=RUNTIME_PROJECT, theme=theme)
     script = result.asset("_static/maatlog.js").read_text(encoding="utf-8")
 
     assert 'registerEnhancer("infinite-scroll"' in script
@@ -146,11 +151,11 @@ def test_theme_javascript_loads_the_next_archive_page(make_project: ProjectFacto
     assert "maatlog-infinite-sentinel" in script
 
 
-@pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
-def test_loaded_posts_are_announced_politely(make_project: ProjectFactory, theme: str) -> None:
+@pytest.mark.parametrize("theme", THEMES)
+def test_loaded_posts_are_announced_politely(built_projects: BuiltProjects, theme: str) -> None:
     # 自動追加はフォーカスを動かさない。読み上げは aria-live に任せる。
     # （モバイル Sidebar など別 enhancer のフォーカス管理は対象外）
-    result = make_project(files=RUNTIME_PROJECT, theme=theme).build()
+    result = built_projects.project(files=RUNTIME_PROJECT, theme=theme)
     script = result.asset("_static/maatlog.js").read_text(encoding="utf-8")
     start = script.index("function enhanceInfiniteScroll")
     end = script.index('registerEnhancer("infinite-scroll"')
@@ -162,20 +167,20 @@ def test_loaded_posts_are_announced_politely(make_project: ProjectFactory, theme
     assert ".focus()" not in infinite
 
 
-@pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
-def test_appended_cards_go_through_the_same_registry(make_project: ProjectFactory, theme: str) -> None:
+@pytest.mark.parametrize("theme", THEMES)
+def test_appended_cards_go_through_the_same_registry(built_projects: BuiltProjects, theme: str) -> None:
     # 追加カードにも登録済み enhancer が当たり、他機能が購読できるイベントが出る。
-    result = make_project(files=RUNTIME_PROJECT, theme=theme).build()
+    result = built_projects.project(files=RUNTIME_PROJECT, theme=theme)
     script = result.asset("_static/maatlog.js").read_text(encoding="utf-8")
 
     assert "enhance(card)" in script
     assert "maatlog:content-added" in script
 
 
-@pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
-def test_theme_javascript_prefetches_likely_next_pages(make_project: ProjectFactory, theme: str) -> None:
+@pytest.mark.parametrize("theme", THEMES)
+def test_theme_javascript_prefetches_likely_next_pages(built_projects: BuiltProjects, theme: str) -> None:
     # Issue #66: Prefetch は単一 runtime 内の enhancer。機能別 script は増やさない。
-    result = make_project(files=RUNTIME_PROJECT, theme=theme).build()
+    result = built_projects.project(files=RUNTIME_PROJECT, theme=theme)
     script = result.asset("_static/maatlog.js").read_text(encoding="utf-8")
 
     assert 'registerEnhancer("prefetch"' in script
@@ -189,10 +194,10 @@ def test_theme_javascript_prefetches_likely_next_pages(make_project: ProjectFact
     assert "maatlog:content-added" in script
 
 
-@pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
-def test_theme_javascript_marks_new_posts(make_project: ProjectFactory, theme: str) -> None:
+@pytest.mark.parametrize("theme", THEMES)
+def test_theme_javascript_marks_new_posts(built_projects: BuiltProjects, theme: str) -> None:
     # Issue #62: NEW 表示は単一 runtime の enhancer。機能別 script は増やさない。
-    result = make_project(files=RUNTIME_PROJECT, theme=theme).build()
+    result = built_projects.project(files=RUNTIME_PROJECT, theme=theme)
     script = result.asset("_static/maatlog.js").read_text(encoding="utf-8")
 
     assert 'registerEnhancer("new-posts"' in script
@@ -206,10 +211,10 @@ def test_theme_javascript_marks_new_posts(make_project: ProjectFactory, theme: s
     assert "maatlog-new-badge" in script
 
 
-@pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
-def test_theme_javascript_filters_archive_cards(make_project: ProjectFactory, theme: str) -> None:
+@pytest.mark.parametrize("theme", THEMES)
+def test_theme_javascript_filters_archive_cards(built_projects: BuiltProjects, theme: str) -> None:
     # Issue #60: アーカイブ絞り込みは単一 runtime の enhancer。機能別 script は増やさない。
-    result = make_project(files=RUNTIME_PROJECT, theme=theme).build()
+    result = built_projects.project(files=RUNTIME_PROJECT, theme=theme)
     script = result.asset("_static/maatlog.js").read_text(encoding="utf-8")
 
     assert 'registerEnhancer("archive-filter"' in script
@@ -218,10 +223,10 @@ def test_theme_javascript_filters_archive_cards(make_project: ProjectFactory, th
     assert "maatlog-archive-empty-filtered" in script
 
 
-@pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
-def test_theme_javascript_opens_mobile_sidebar(make_project: ProjectFactory, theme: str) -> None:
+@pytest.mark.parametrize("theme", THEMES)
+def test_theme_javascript_opens_mobile_sidebar(built_projects: BuiltProjects, theme: str) -> None:
     # Issue #65: モバイル Sidebar は単一 runtime の enhancer。機能別 script は増やさない。
-    result = make_project(files=RUNTIME_PROJECT, theme=theme).build()
+    result = built_projects.project(files=RUNTIME_PROJECT, theme=theme)
     script = result.asset("_static/maatlog.js").read_text(encoding="utf-8")
 
     assert 'registerEnhancer("mobile-sidebar"' in script

@@ -13,6 +13,7 @@ from urllib.parse import unquote, urlparse
 from xml.etree import ElementTree as ET
 
 import pytest
+from acceptance.built_sites import BuildSite, SiteKey
 from sphinx.application import Sphinx
 from sphinx.errors import SphinxError
 
@@ -641,6 +642,47 @@ class AcceptanceSite:
         for name, value in overrides.items():
             lines.append(f"{name} = {value!r}")
         conf_path.write_text(text + "\n".join(lines) + "\n", encoding="utf-8")
+
+
+def build_acceptance_site(
+    key: SiteKey,
+    *,
+    config_overrides: Mapping[str, object] | None = None,
+) -> BuildSite:
+    """Return a managed-build callback for one immutable acceptance project."""
+    if key.project_root is None:
+        msg = "acceptance site builds require SiteKey.project_root"
+        raise ValueError(msg)
+    project_root = key.project_root
+    expected_config = SiteKey(
+        fixture=key.fixture,
+        input_id=key.input_id,
+        builder=key.builder,
+        theme=key.theme,
+        config=config_overrides,
+        source_date_epoch=key.source_date_epoch,
+        responsive_images=key.responsive_images,
+        warningiserror=key.warningiserror,
+        project_root=project_root,
+    ).config
+    if key.config != expected_config:
+        msg = "SiteKey.config does not match the acceptance build overrides"
+        raise ValueError(msg)
+
+    def build(root: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+        site = AcceptanceSite(root, monkeypatch, project_root=project_root)
+        result = site.build(
+            key.builder,
+            theme=key.theme,
+            warningiserror=key.warningiserror,
+            source_date_epoch=key.source_date_epoch,
+            config_overrides=config_overrides,
+        )
+        if result.exception is not None:
+            raise result.exception
+        return result.outdir
+
+    return build
 
 
 def _is_internal_relative_href(href: str) -> bool:
