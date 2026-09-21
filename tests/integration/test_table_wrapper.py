@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 from conftest import ProjectFactory, SphinxFactory
+from fixtures.integration_builds import BuiltProjects
 from sphinx.application import Sphinx
 
 from maatlog.builders import FULL_HTML_BUILDERS
@@ -178,8 +179,9 @@ def test_full_html_builders_constant_names_the_full_capability_tier() -> None:
     assert TableWrapperPostTransform.builders == FULL_HTML_BUILDERS
 
 
-def test_every_docutils_table_is_wrapped_exactly_once(make_project: ProjectFactory) -> None:
-    page = make_project(files=WRAPPER_PROJECT, config=CONFIG).build().html("tables.html")
+@pytest.mark.xdist_group("integration-table-html")
+def test_every_docutils_table_is_wrapped_exactly_once(built_projects: BuiltProjects) -> None:
+    page = built_projects.project(files=WRAPPER_PROJECT, config=CONFIG).html("tables.html")
 
     assert page.text.count(WRAPPER_START) == 6
     assert len(DOCUTILS_TABLE.findall(page.text)) == 6
@@ -188,8 +190,9 @@ def test_every_docutils_table_is_wrapped_exactly_once(make_project: ProjectFacto
     assert (WRAPPER_START + "\n" + WRAPPER_START) not in page.text
 
 
-def test_wrapper_carries_keyboard_tabindex(make_project: ProjectFactory) -> None:
-    page = make_project(files=WRAPPER_PROJECT, config=CONFIG).build().html("tables.html")
+@pytest.mark.xdist_group("integration-table-html")
+def test_wrapper_carries_keyboard_tabindex(built_projects: BuiltProjects) -> None:
+    page = built_projects.project(files=WRAPPER_PROJECT, config=CONFIG).html("tables.html")
 
     wrappers = page.select(f".{WRAPPER_CLASS}")
 
@@ -197,8 +200,9 @@ def test_wrapper_carries_keyboard_tabindex(make_project: ProjectFactory) -> None
     assert all(wrapper.get("tabindex") == "0" for wrapper in wrappers)
 
 
-def test_caption_id_widths_and_align_stay_on_the_table(make_project: ProjectFactory) -> None:
-    page = make_project(files=WRAPPER_PROJECT, config=CONFIG).build().html("tables.html")
+@pytest.mark.xdist_group("integration-table-html")
+def test_caption_id_widths_and_align_stay_on_the_table(built_projects: BuiltProjects) -> None:
+    page = built_projects.project(files=WRAPPER_PROJECT, config=CONFIG).html("tables.html")
 
     # docutils starttag は属性をアルファベット順（class → id）に出す。
     assert '<table class="docutils align-center" id="tbl-planets">' in page.text
@@ -213,8 +217,9 @@ def test_caption_id_widths_and_align_stay_on_the_table(make_project: ProjectFact
     assert 'colspan="2"' in page.text
 
 
-def test_reference_and_numref_point_at_the_table_id(make_project: ProjectFactory) -> None:
-    result = make_project(files=WRAPPER_PROJECT, config=CONFIG).build()
+@pytest.mark.xdist_group("integration-table-html")
+def test_reference_and_numref_point_at_the_table_id(built_projects: BuiltProjects) -> None:
+    result = built_projects.project(files=WRAPPER_PROJECT, config=CONFIG)
 
     refs = result.html("refs.html")
 
@@ -222,8 +227,9 @@ def test_reference_and_numref_point_at_the_table_id(make_project: ProjectFactory
     assert refs.text.count('href="tables.html#tbl-planets"') == 2
 
 
-def test_nested_table_gets_its_own_wrapper(make_project: ProjectFactory) -> None:
-    page = make_project(files=WRAPPER_PROJECT, config=CONFIG).build().html("tables.html")
+@pytest.mark.xdist_group("integration-table-html")
+def test_nested_table_gets_its_own_wrapper(built_projects: BuiltProjects) -> None:
+    page = built_projects.project(files=WRAPPER_PROJECT, config=CONFIG).html("tables.html")
 
     assert re.search(
         r"<td>\s*" + re.escape(WRAPPER_START) + r'\s*<table[^>]*class="[^"]*nested-inner',
@@ -231,15 +237,17 @@ def test_nested_table_gets_its_own_wrapper(make_project: ProjectFactory) -> None
     )
 
 
-def test_myst_pipe_table_is_wrapped(make_project: ProjectFactory) -> None:
-    page = make_project(files=WRAPPER_PROJECT, config=CONFIG).build().html("mdpage.html")
+@pytest.mark.xdist_group("integration-table-html")
+def test_myst_pipe_table_is_wrapped(built_projects: BuiltProjects) -> None:
+    page = built_projects.project(files=WRAPPER_PROJECT, config=CONFIG).html("mdpage.html")
 
     assert page.text.count(WRAPPER_START) == 1
     assert len(WRAPPED_TABLE.findall(page.text)) == 1
 
 
-def test_linenos_tables_and_parsed_literal_are_not_wrapped(make_project: ProjectFactory) -> None:
-    page = make_project(files=WRAPPER_PROJECT, config=CONFIG).build().html("code.html")
+@pytest.mark.xdist_group("integration-table-html")
+def test_linenos_tables_and_parsed_literal_are_not_wrapped(built_projects: BuiltProjects) -> None:
+    page = built_projects.project(files=WRAPPER_PROJECT, config=CONFIG).html("code.html")
 
     assert WRAPPER_START not in page.text
     # :linenos: の 2 ブロック分は出力された。Sphinx 9.1 は行番号を pre 内の
@@ -249,8 +257,9 @@ def test_linenos_tables_and_parsed_literal_are_not_wrapped(make_project: Project
     assert '<pre class="literal-block">' in page.text
 
 
-def test_hlist_and_citation_do_not_add_wrappers(make_project: ProjectFactory) -> None:
-    page = make_project(files=WRAPPER_PROJECT, config=CONFIG).build().html("tables.html")
+@pytest.mark.xdist_group("integration-table-html")
+def test_hlist_and_citation_do_not_add_wrappers(built_projects: BuiltProjects) -> None:
+    page = built_projects.project(files=WRAPPER_PROJECT, config=CONFIG).html("tables.html")
 
     assert 'class="hlist"' in page.text
     assert "citation" in page.text
@@ -272,8 +281,8 @@ EXTRA_TABLE_RST = """
 """
 
 
-def test_dirhtml_build_emits_the_same_wrappers(make_project: ProjectFactory) -> None:
-    result = make_project(files=WRAPPER_PROJECT, config=CONFIG, builder="dirhtml").build()
+def test_dirhtml_build_emits_the_same_wrappers(built_projects: BuiltProjects) -> None:
+    result = built_projects.project(files=WRAPPER_PROJECT, config=CONFIG, builder="dirhtml")
 
     page = result.html("tables/index.html")
 
@@ -375,8 +384,8 @@ def test_parallel_write_matches_serial(make_project: ProjectFactory) -> None:
         assert serial.html(name).text == parallel.html(name).text
 
 
-def test_base_theme_gets_the_wrapper_without_wrapper_css(make_project: ProjectFactory) -> None:
-    result = make_project(files=WRAPPER_PROJECT, config=CONFIG, theme="maatlog-base").build()
+def test_base_theme_gets_the_wrapper_without_wrapper_css(built_projects: BuiltProjects) -> None:
+    result = built_projects.project(files=WRAPPER_PROJECT, config=CONFIG, theme="maatlog-base")
 
     assert result.html("tables.html").text.count(WRAPPER_START) == 6
     # base CSS は無変更（Spec §4.5）。wrapper のスタイルは default テーマだけが持つ。
@@ -389,10 +398,9 @@ def _css_rule(css: str, selector: str) -> str:
     return css[start : css.index("}", start) + 1]
 
 
-def test_default_stylesheet_carries_the_wrapper_baseline(make_project: ProjectFactory) -> None:
+def test_default_stylesheet_carries_the_wrapper_baseline(built_projects: BuiltProjects) -> None:
     css = (
-        make_project(files=PLAIN_TABLE_PROJECT, theme="maatlog-default")
-        .build()
+        built_projects.project(files=PLAIN_TABLE_PROJECT, theme="maatlog-default")
         .asset("_static/maatlog.css")
         .read_text(encoding="utf-8")
     )

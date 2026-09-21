@@ -5,6 +5,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$repo_root"
 
 profile="${1:-full}"
+target_set="${2-local}"
 
 # ---- disk-space gate (issue #145) ------------------------------------------
 # Runs before log setup: writing the log itself needs free space too, so a
@@ -123,6 +124,7 @@ trap _verify_exit_trap EXIT
 verify_head_sha="$(git rev-parse HEAD 2>/dev/null || printf 'unknown')"
 printf 'verify.sh log: %s\n' "$verify_log_file"
 printf 'profile: %s\n' "$profile"
+printf 'target set: %s\n' "$target_set"
 printf 'start (UTC): %s\n' "$verify_log_timestamp"
 printf 'HEAD: %s\n' "$verify_head_sha"
 printf 'workdir: %s\n' "$repo_root"
@@ -156,37 +158,90 @@ _verify_rotate_logs() {
 }
 _verify_rotate_logs "$verify_log_dir"
 
-quality_targets=(src tests)
-if [[ -d tools/public_sync ]]; then
-  quality_targets+=(tools)
+quality_targets=()
+pytest_targets=()
+case "$target_set" in
+  local)
+    # Local full/quick keep the complete layout-aware target set. Parent-only
+    # paths remain guarded because this shared script also runs after export.
+    quality_targets=(src tests)
+    pytest_targets=(tests)
+    if [[ -d tools/public_sync ]]; then
+      quality_targets+=(tools)
+    fi
+    if [[ -d tools/public_sync/tests ]]; then
+      pytest_targets+=(tools/public_sync/tests)
+    fi
+    if [[ -d .agents ]]; then
+      quality_targets+=(.agents)
+      pytest_targets+=(.agents)
+    fi
+    ;;
+  ci-shared)
+    # Parent CI's compatibility matrix owns only paths shipped publicly.
+    # Parent-only checks have their own private-contract job.
+    if [[ ! -d src && ! -d tests ]]; then
+      printf 'no verification targets found for target set: %s\n' "$target_set" >&2
+      exit 64
+    fi
+    for required_target in src tests; do
+      if [[ ! -d "$required_target" ]]; then
+        printf 'missing required verification target: %s\n' "$required_target" >&2
+        exit 64
+      fi
+    done
+    quality_targets=(src tests)
+    pytest_targets=(tests)
+    ;;
+  "")
+    printf 'empty verification target set\n' >&2
+    exit 64
+    ;;
+  *)
+    printf 'unknown verification target set: %s\n' "$target_set" >&2
+    exit 64
+    ;;
+esac
+
+if ((${#quality_targets[@]} == 0 || ${#pytest_targets[@]} == 0)); then
+  printf 'no verification targets found for target set: %s\n' "$target_set" >&2
+  exit 64
 fi
-# .agents is parent-only (see sync/public-files.toml) and absent from the
-# public layout, so it is added here with the same existence guard.
-# The shared pyproject.toml must keep only paths present in both layouts.
-if [[ -d .agents ]]; then
-  quality_targets+=(.agents)
+
+# Issue #320 measured the browser suite with 1/2/4 workers. Two workers with
+# loadscope were the fastest stable candidate; four workers timed out. Keep the
+# override bounded so a host cannot accidentally turn this into `-n auto`.
+verify_browser_workers="${VERIFY_BROWSER_WORKERS-2}"
+if [[ "$profile" == "full" ]]; then
+  if [[ ! "$verify_browser_workers" =~ ^[0-9]+$ ]] \
+    || ((10#$verify_browser_workers < 1 || 10#$verify_browser_workers > 4)); then
+    printf 'ERROR: VERIFY_BROWSER_WORKERS must be an integer from 1 to 4, got: %s\n' \
+      "$verify_browser_workers" >&2
+    exit 65
+  fi
+  verify_browser_workers=$((10#$verify_browser_workers))
+  printf 'browser workers: %d\n' "$verify_browser_workers"
+  printf 'browser distribution: loadscope\n'
 fi
-# The shared pyproject.toml only lists test paths present in both layouts;
-# the parent-side sync tests are added here where they exist.
-pytest_targets=(tests)
-if [[ -d tools/public_sync/tests ]]; then
-  pytest_targets+=(tools/public_sync/tests)
-fi
-if [[ -d .agents ]]; then
-  pytest_targets+=(.agents)
-fi
-# The static checks shared by `full`, `static` and `quick` (issue #264). One
-# definition, so adding a tool or changing the targets is a single edit.
-# Fail-fast order (issue #148): these cost seconds, so every profile runs them
-# before its pytest invocation and a lint or type error surfaces immediately
-# instead of after the suite. `npm ci` must precede `npm run check`, which needs
-# node_modules (eslint / prettier / tsc / stylelint). `set -e` applies inside
+# The Python-side static checks shared by `full`, `static` and `quick`
+# (issue #264). One definition, so adding a tool or changing the targets is a
+# single edit. Fail-fast order (issue #148): these cost seconds, so the
+# quality profiles (`full`, `static` and `quick`) run them first — `full`
+# and `quick` before pytest — so a lint or type error surfaces
+# immediately instead of after the suite. `set -e` applies inside
 # the body and every call site below is a plain command, so the first failing
 # check still aborts the whole script.
-run_static_checks() {
+run_python_static_checks() {
   uv run --no-sync ruff check "${quality_targets[@]}"
   uv run --no-sync ruff format --check "${quality_targets[@]}"
   uv run --no-sync pyright "${quality_targets[@]}"
+}
+
+# `full` and `static` additionally run the frontend checks. `npm ci` must
+# precede `npm run check`, which needs node_modules (eslint / prettier / tsc /
+# stylelint).
+run_static_checks() {
+  run_python_static_checks
   npm ci
   npm run check
 }
@@ -200,13 +255,16 @@ case "$profile" in
     # tests/acceptance/test_accessibility.py requires the installed
     # node_modules/axe-core/axe.min.js fixture.
     run_static_checks
-    uv run --no-sync pytest -v "${pytest_targets[@]}"
+    # Issue #320: keep the three marker partitions sequential. Browser-less
+    # tests use the group-aware quick-profile scheduling, browser tests use the
+    # measured bounded worker count, and distribution remains serial after its
+    # single archive build (issue #318).
+    uv run --no-sync pytest -n auto --dist loadgroup -m "not browser and not distribution" -v "${pytest_targets[@]}"
+    uv run --no-sync pytest -n "$verify_browser_workers" --dist loadscope \
+      -m "browser and not distribution" -v "${pytest_targets[@]}"
     uv build --out-dir dist --clear
-    uvx twine check --strict dist/*
-    uv run --no-sync pytest tests/acceptance/test_distribution.py -v
-    if [[ -d tools/public_sync ]]; then
-      uv run --no-sync pytest tools/public_sync/tests/test_distribution_gate.py -v
-    fi
+    uv run --no-sync python tests/fixtures/distribution.py dist
+    uv run --no-sync pytest -m distribution --distribution-artifacts-dir "$repo_root/dist" -v "${pytest_targets[@]}"
     ;;
   static)
     # `static` and `quick` (issue #260) are the development-time profiles: they
@@ -215,18 +273,18 @@ case "$profile" in
     run_static_checks
     ;;
   quick)
-    # Same static checks as `static`, then one browser-less pytest run. Dropping
-    # the browser marker takes out 268 of 2235 tests that account for roughly
-    # two thirds of pytest wall time, at the cost of the browser-based
-    # acceptance coverage — so packaging work, theme layout changes, or anything
-    # touching tests/acceptance still needs `full`.
-    # Issue #263: `-n auto` because `quick` is development-time only — CI runs
-    # full / minimum / latest, never this profile — so it executes on whatever
-    # core count the developer has, and a fixed worker count would be wrong
-    # everywhere but one machine. `--dist loadgroup` because the distribution
-    # tests share the repo-root dist/ and must stay on one worker; the guard
-    # for that lives in tools/public_sync/tests/test_xdist_distribution_group.py.
-    run_static_checks
+    # Issue #360: `quick` keeps only the Python static checks. The `npm ci` /
+    # `npm run check` pair guards frontend tooling that `full` already owns —
+    # every path it protects (theme assets under src/maatlog/themes/, the npm
+    # manifests, the frontend tooling root configs) selects the `full`
+    # profile — so quick paid ~5-7 s for no coverage. A single browser-less
+    # pytest run then covers everything else:
+    # `xdist_group("distribution")` holds all distribution tests on one worker
+    # under `--dist loadgroup`, and that worker's session fixture builds the
+    # archives once into its run-private basetemp while the other workers
+    # proceed — the serial follow-up run from issue #318 only pays off in
+    # `full`, where the gate must verify a specific repo-root dist/ tree.
+    run_python_static_checks
     uv run --no-sync pytest -n auto --dist loadgroup -m "not browser" -v "${pytest_targets[@]}"
     ;;
   minimum)

@@ -383,9 +383,11 @@ def test_foreign_origin_redirect_is_dropped(tmp_path: Path, builder: str) -> Non
                 ' data-slug="foreign"><h2>Foreign</h2></article>'
                 "</div></div></section></body></html>"
             )
+            redirected_urls: list[str] = []
 
             def redirect(route: Route, request: Request) -> None:
                 if request.resource_type in {"fetch", "xhr"} and request.url == requested_url:
+                    redirected_urls.append(request.url)
                     route.fulfill(
                         status=302,
                         headers={"location": "https://example.invalid/foreign.html"},
@@ -400,10 +402,10 @@ def test_foreign_origin_redirect_is_dropped(tmp_path: Path, builder: str) -> Non
             page.route(f"{base}nested/**", redirect)
             page.route("https://example.invalid/*", foreign)
             page.goto(base + path)
-            page.wait_for_selector(".maatlog-infinite-sentinel", state="attached")
             page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
             # The loader gives up without importing: one card, no sentinel.
             page.wait_for_selector(".maatlog-infinite-sentinel", state="detached")
+            assert redirected_urls == [requested_url]
             assert page.locator(".maatlog-post-card").count() == 1
             assert page.locator('[data-slug="foreign"]').count() == 0
             assert page.locator('[data-slug="page-two"]').count() == 0

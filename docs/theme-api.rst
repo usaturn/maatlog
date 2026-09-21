@@ -187,8 +187,9 @@ Theme API の現在のバージョンは **1.23** です。
 * **任意 CSS カスタムプロパティ** — ``--maatlog-top-image-title-color``、
   ``--maatlog-top-image-title-font``
 
-``maatlog_post_top_image`` を上書きするテーマは、``maatlog_post_header`` の
-``<h1>`` の可視性も併せて調整してください。標準実装は
+``maatlog_post_top_image`` を上書きするテーマは、 ``maatlog_post_header`` の
+``<h1>`` の可視性も併せて調整してください。
+標準実装は
 ``maatlog.post.top_image_url`` があるとき ``<h1>`` に
 ``maatlog-visually-hidden`` を付け、タイトルをオーバーレイ側で描画します
 
@@ -217,7 +218,8 @@ Theme API の現在のバージョンは **1.23** です。
 ``maatlog-base`` は ``.maatlog-archive-filter`` を既定で ``display: none`` にし、
 テーマ runtime が付ける ``.maatlog-js`` で開きます。
 0 件メッセージ ``.maatlog-archive-empty-filtered`` は ``role="status"`` を
-持ちます。チップ操作は URL 遷移もフォーカス移動も伴わないためです
+持ちます。
+チップ操作は URL 遷移もフォーカス移動も伴わないためです
 
 1.10 から 1.11 で追加された任意の仕様:
 
@@ -234,13 +236,15 @@ Theme API の現在のバージョンは **1.23** です。
 
 狭い viewport（``width <= 48rem``）かつ ``.maatlog-js`` のときだけ、
 テーマ runtime の ``mobile-sidebar`` enhancer が Sidebar を off-canvas
-ドロワーとして開閉します。JavaScript が無いときは従来どおり本文下部の
+ドロワーとして開閉します。
+JavaScript が無いときは従来どおり本文下部の
 縦積みレイアウトで Sidebar 情報へ到達できます。
 ``--maatlog-z-sidebar-*`` と safe-area padding は後続の固定 UI
 （Back to Top など）が衝突しないためのレイヤー仕様です
 
 ドロワーを開いている間、トグルは ``--maatlog-z-sidebar-toggle`` の層へ固定配置され、
-ドロワーの Close コントロールとして機能します。バナーの残りは
+ドロワーの Close コントロールとして機能します。
+バナーの残りは
 ``visibility: hidden`` で描画・hit test・アクセシビリティツリーから外れます。
 トグルの ``aria-label`` はテーマ runtime が開閉のたびに書き換えますが、文言は
 ``data-maatlog-label-open`` / ``data-maatlog-label-close`` から読みます。
@@ -251,7 +255,7 @@ Theme API の現在のバージョンは **1.23** です。
 * **必須テンプレートの追加** — ``maatlog/profile.html``、
   ``maatlog/components/author-links.html``
 * **必須ブロックの追加** — ``maatlog_profile_header``、 ``maatlog_profile_body``
-* **非互換になるのは standalone テーマのみ**。
+* **非互換になるのは standalone テーマのみ** 。
   ``implementation = "inherits-base"`` のテーマは継承チェーン経由で自動追随します
 * **``page_kind``** — ``"profile"`` が加わりました。
   プロフィールページでは TOC 列を出さないため ``maatlog-layout-has-toc`` は付きません
@@ -294,7 +298,8 @@ containing block がそこへ移るためです
 1.13 から 1.14 で追加された任意の仕様:
 
 * **任意ブロック** — ``maatlog_config_style`` （ ``layout.html`` 、
-  ``extrahead`` の末尾。 ``conf.py`` 由来の ``:root`` カスタムプロパティを
+  ``extrahead`` の末尾。
+  ``conf.py`` 由来の ``:root`` カスタムプロパティを
   1 つの ``<style>`` にまとめて出力します）
 * **任意キー** — ``maatlog.site.content_width``
   （ ``maatlog_content_width`` の値。未設定のときは ``None`` です）
@@ -312,7 +317,8 @@ containing block がそこへ移るためです
 ``:root`` のトークンである為、記事ページだけでなく全ページ種別で出ます
 
 ``--maatlog-content-width`` は ``conf.py`` の ``maatlog_content_width`` で
-上書きできます。テーマ側の既定値
+上書きできます。
+テーマ側の既定値
 ``clamp(42rem, 24rem + 16vw, 60rem)`` は変わっていません
 
 1.14 から 1.15 で追加された任意の仕様:
@@ -323,10 +329,12 @@ containing block がそこへ移るためです
 
 Share ボタンは記事ページのメタ情報直後に出力され、単一 runtime の ``share`` enhancer が
 Web Share API 対応環境では ``navigator.share()``、非対応環境では URL の Clipboard コピーを
-行います。共有 URL は ``link[rel="canonical"]`` を優先し、無ければ ``location.href`` です。
+行います。
+共有 URL は ``link[rel="canonical"]`` を優先し、無ければ ``location.href`` です。
 canonical が絶対 URL でない場合は ``location.href`` を使います。
 ``navigator.share`` をユーザーがキャンセルした場合（``AbortError``）は Clipboard へフォールバック
-しません。Clipboard が使えない場合は例外を出さず、URL を選択可能な状態で表示します。
+しません。
+Clipboard が使えない場合は例外を出さず、URL を選択可能な状態で表示します。
 ``.maatlog-share`` は既定で非表示で、JavaScript 有効時（``.maatlog-js``）にのみ表示されます
 
 Share を出すテーマは ``data-maatlog-component="share"`` を付けた要素の内側に
@@ -338,7 +346,7 @@ enhancer はこの 2 つをクラスで取得し、どちらかが欠けると�
 
 * **必須テンプレートの追加** — ``maatlog/components/right-rail.html``、
   ``maatlog/components/author-summary.html``
-* **非互換になるのは standalone テーマのみ**。
+* **非互換になるのは standalone テーマのみ** 。
   ``implementation = "inherits-base"`` のテーマは継承チェーン経由で自動追随します
 * **``maatlog.author_summaries``** — 右ペインが描く著者の **AuthorSummaryView**
   タプル（下記「コンテキスト名前空間」）
@@ -347,7 +355,7 @@ enhancer はこの 2 つをクラスで取得し、どちらかが欠けると�
   3 列グリッドの起動条件は ``maatlog-layout-has-rail`` に移りました。
   ``maatlog-layout-has-toc`` と ``maatlog-layout-has-author-summary`` は
   独立した状態クラスとして残ります
-* **``maatlog_toc`` ブロック** — ``maatlog_right_rail`` に改名しました。
+* **\`\`maatlog_toc\`\` ブロック** — ``maatlog_right_rail`` に改名しました。
   右目次は右列コンポーネント（``maatlog/components/right-rail.html``）の内側に移り、
   要素種別も ``<aside>`` から ``<nav>`` に変わりました
 * この更新は **破壊的変更** です。
@@ -378,16 +386,16 @@ enhancer はこの 2 つをクラスで取得し、どちらかが欠けると�
 ``location.href`` からフラグメントを落としたものに、permalink の ``href`` が持つ
 Sphinx 生成のアンカーを足したものです。
 テーマ runtime は独自の slug を作らないので、配布される URL は必ずページ内の
-既存アンカーと一致します。
+既存アンカーと一致します
 
 新しいマークアップは出力しません。
 昇格は ``title`` と ``aria-label`` の書き換えとイベントリスナの登録だけなので、
 JavaScript が無効な読者には Sphinx 既定の permalink がそのまま残り、
-見出しあたりのコントロールは常に 1 つです。
+見出しあたりのコントロールは常に 1 つです
 
 コピー結果は 2 経路で通知します。
 runtime は ``role="status"`` と ``aria-live="polite"`` を持つ
-``.maatlog-copy-link-status`` を**ページに 1 つだけ**生成し、
+``.maatlog-copy-link-status`` を **ページに 1 つだけ** 生成し、
 ``Copied`` または ``Copy failed`` を書きます。
 同時にアンカーへ ``data-maatlog-copy-state`` と ``data-maatlog-copy-label`` を立てるので、
 テーマは ``content: attr(data-maatlog-copy-label)`` で視覚的なバブルを描けます。
@@ -403,7 +411,8 @@ hover でしか permalink を開きません。
 1.17 から 1.18 で追加された任意の仕様:
 
 * **任意キー** — ``maatlog.featured``、 ``maatlog.latest`` （いずれも
-  ``tuple[PostCardView, ...]``。キーは常に存在し、非 Home では空タプル）
+  ``tuple[PostCardView, ...]``。
+  キーは常に存在し、非 Home では空タプル）
 * **任意クラス** — ``.maatlog-post-card-lead``、
   ``.maatlog-post-card-secondary``
 * **任意属性** — ``data-maatlog-card-variant`` （``lead`` / ``secondary`` /
@@ -413,14 +422,15 @@ hover でしか permalink を開きません。
 専用 Home では ``maatlog.posts`` は ``featured + latest`` である。
 アーカイブがトップを兼ねるページでは ``maatlog.posts`` は時系列のページ窓のまま
 で、 ``featured`` / ``latest`` はその表示投影である。
-``FEATURED_LIMIT`` は 3。4 件目以降の指定記事は表示 Featured に出ないことだけを
+``FEATURED_LIMIT`` は 3。
+4 件目以降の指定記事は表示 Featured に出ないことだけを
 理由に Latest から除外しない。
 公式テーマのマークアップ更新は任意であり、旧テーマは ``posts`` と
 ``featured_count`` スライスを使い続けてよい。
 ``featured`` は最大 3 件である。
 上位の選択処理は不足分を最新公開記事で補完した列を
 ``featured_posts`` 接続口へ渡す（設定 ``maatlog_featured_posts``）。
-選択処理の補完なしで 3 件未満を接続口へ直接渡した場合の旧テーマ互換は約束しない。
+選択処理の補完なしで 3 件未満を接続口へ直接渡した場合の旧テーマ互換は約束しない
 
 1.18 から 1.19 で追加された任意の仕様:
 
@@ -435,7 +445,8 @@ hover でしか permalink を開きません。
   セル内の入れ子表はそれぞれ独立に包まれ、同じ表が二重に包まれることはありません
 * ``tabindex="0"`` はビルド時構造であり、JavaScript 無効でも wrapper をキーボードフォーカスできます
 * 1.21 の ``maatlog-default`` では ``.maatlog-table-wrapper`` が横スクロールの実体です（``table.docutils`` の ``display: block`` 自己スクロールは 1.21 で解除されました）
-* スタイルは任意です。未定義のテーマでは素の block div として描画に影響しません。
+* スタイルは任意です。
+  未定義のテーマでは素の block div として描画に影響しません。
   公式 ``maatlog-default`` は ``overflow-x: auto`` と ``:focus-visible`` アウトライン
   を付け、 ``maatlog-base`` はスタイルを付けません
 * ``singlehtml`` 等の部分対応 builder と非 HTML builder の出力は変わりません
@@ -449,13 +460,14 @@ hover でしか permalink を開きません。
   ``margin: 0 auto`` で中央寄せします。
   上限到達後の余剰 viewport は shell の外側余白になります
 * rail が無いページは 2 列の合計だけを使い、空の 3 列目を確保しません
-* DOM と必須テンプレートは 1.19 のままです。``maatlog-base`` の CSS は
+* DOM と必須テンプレートは 1.19 のままです。
+  ``maatlog-base`` の CSS は
   この上限を適用しません
 
 1.20 から 1.21 で変わった仕様:
 
 * ``default`` の ``--maatlog-content-width`` の対象が、本文見出し（通常ページの
-  ``h2``–``h6`` を含む）・表の wrapper 外形・コード外形に広がりました
+  ``h2`` – ``h6`` を含む）・表の wrapper 外形・コード外形に広がりました
 * ``%`` は本文の参照ボックスで一度だけ解決します。
   入れ子や表セル内で重ねて適用しません
 * ``table.docutils`` の ``display: block`` による自己スクロールをやめ、
@@ -497,7 +509,7 @@ hover でしか permalink を開きません。
 内部投稿は ``BlogPosting``、外部投稿は JSON-LD を持たない website summary、
 プロフィール1ページ目は ``ProfilePage`` / ``Person``、実際のブログトップは
 ``WebSite``、その他のアーカイブは JSON-LD を持たない website summary です。
-通常ページの View は空のままです。
+通常ページの View は空のままです
 
 1.21 から 1.22 で変わった仕様:
 
@@ -544,11 +556,21 @@ hover でしか permalink を開きません。
   レスポンシブ画像は既存の ``.maatlog-post-top-image-img`` /
   ``.maatlog-post-hero-image`` / ``.maatlog-post-card-image`` をそのまま使います
 * **任意スタイル** — ``maatlog-base`` のスタイルシートは 1.23 からすべての
-  ``img`` を containing block に収めます
-  （``max-width: 100%; height: auto;``）。
-  レスポンシブ画像の有効・無効にかかわらず適用されるため、
+  ``img`` に ``max-width: 100%`` を適用し、containing block に収めます。
+  ``height: auto`` は ``height`` 属性のない画像、``width`` と ``height``
+  の両属性を持つ画像、``data-maatlog-srcset`` を持つ管理画像に適用します。
+  本文中の通常画像では、``width`` 属性を伴わない docutils の単位なし
+  ``:height:`` が出力する ``height`` 属性を尊重します。
+  本文中の通常画像で ``width`` と ``height`` の両属性を持つ場合は、
+  ``height`` 属性は使われず、常に元画像の縦横比で描画されます。
+  管理画像は、専用の高さ指定がない箇所では幅が縮んでも縦横比を保ち、
+  トップ画像などの専用の高さ指定は引き続き優先されます。
+  これらはレスポンシブ画像の有効・無効にかかわらず適用され、
   本文中の非管理画像も natural width で横にはみ出しません。
-  ``maatlog-default`` は従来から同じルールを持ちます。
+  ``maatlog-default`` も同じ規則を持ちます。
+  ``height`` 属性だけを持つ通常画像（単位なし ``:height:`` の指定や、
+  単位付き ``:width:`` と単位なし ``:height:`` の併記を含む）は、
+  幅が ``max-width`` で縮むと縦横比が崩れることがあります。
   この上限を上書きするテーマは、画像のはみ出しを抑える別の手段を用意し、
   スロット計測の ``overflow <= 1px`` 要件を満たせる状態にしてください
 
@@ -750,7 +772,7 @@ lead が画像を持たなくても ``high`` を secondary へ移譲しません
 第三者の ``inherits-base`` テーマは ``"1.0"`` から ``"1.23"`` のどれでも検証を通ります。
 旧テーマは ``maatlog.posts`` と ``featured_count`` スライスを使い続けてよい。
 ``maatlog/home.html`` が無いときは ``maatlog.theme.home-template-missing`` を警告し、
-アーカイブルート 1 ページ目がトップを兼ねます。
+アーカイブルート 1 ページ目がトップを兼ねます
 
 デフォルトテーマは次のように有効化します::
 
@@ -1138,7 +1160,7 @@ MaatLog のコアは必須の JavaScript を同梱しません。
 * ``.maatlog-post-card-secondary`` — Featured 2・3 件目のカード
 * ``.maatlog-post-card-featured`` — featured として描画された投稿カード
 * ``.maatlog-post-card-eyebrow`` — Home カードでタイトルの上に出すカテゴリ
-* ``.maatlog-post-list-heading`` — featured の下に続く一覧の見出し（Home では `Latest articles`）
+* ``.maatlog-post-list-heading`` — featured の下に続く一覧の見出し（Home では `Latest articles` ）
 * ``.maatlog-post-grid`` — featured 以外のカードを並べるグリッド
 * ``.maatlog-post-eyebrow`` — タイトルの上に出るカテゴリ
 * ``.maatlog-post-tagline`` — タイトルの下に出る抜粋

@@ -24,7 +24,6 @@ from acceptance.responsive_image_site import (
     evaluate_sizes,
     measure_images,
 )
-from fixtures.responsive_real_build import RealProject, create_project
 
 if TYPE_CHECKING:
     from playwright.sync_api import Browser, BrowserContext, Page, Request, Route
@@ -40,22 +39,6 @@ def page_path(builder: str, docname: str) -> str:
     if docname == "index":
         return "index.html"
     return f"{docname}.html" if builder == "html" else f"{docname}/index.html"
-
-
-def build_sites(root: Path, *, page_size: int = 20) -> dict[tuple[str, bool], RealProject]:
-    sites: dict[tuple[str, bool], RealProject] = {}
-    for builder in ("html", "dirhtml"):
-        for enabled in (False, True):
-            project = create_project(
-                root / f"{builder}-{int(enabled)}",
-                builder=builder,
-                enabled=enabled,
-                page_size=page_size,
-            )
-            result = project.build()
-            assert result.returncode == 0, result.stdout + result.stderr
-            sites[builder, enabled] = project
-    return sites
 
 
 def new_context(

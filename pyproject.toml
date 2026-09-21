@@ -44,9 +44,10 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["tests"]
-addopts = ["--import-mode=importlib"]
+addopts = ["--import-mode=importlib", "-p fixtures.distribution"]
 markers = [
     "browser: requires npm ci and an installed Playwright Chromium browser",
+    "distribution: needs built wheel/sdist artifacts via the shared distribution_artifacts fixture (tests/fixtures/distribution.py)",
 ]
 
 [tool.pyright]

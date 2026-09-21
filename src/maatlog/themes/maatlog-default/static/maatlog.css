@@ -975,6 +975,10 @@ button:focus-visible,
 
 img {
   max-width: 100%;
+}
+
+/* 高さだけを指定した単位なし :height: を尊重し、両属性の画像は比率を保って縮める。 */
+img:where(:not([height]), [width][height], [data-maatlog-srcset]) {
   height: auto;
 }
 

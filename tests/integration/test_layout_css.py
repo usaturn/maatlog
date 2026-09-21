@@ -6,6 +6,7 @@ import re
 
 import pytest
 from conftest import ProjectFactory
+from fixtures.theme_assets import theme_stylesheet
 
 LAYOUT_PROJECT = {
     "about.rst": "About\n=====\n\nA plain page.\n",
@@ -33,11 +34,6 @@ NEW_CUSTOM_PROPERTIES = (
     "--maatlog-banner-background",
     "--maatlog-banner-height",
 )
-
-
-def _stylesheet(make_project: ProjectFactory, theme: str) -> str:
-    result = make_project(files=LAYOUT_PROJECT, theme=theme).build()
-    return result.asset("_static/maatlog.css").read_text(encoding="utf-8")
 
 
 def _css_rule(css: str, selector: str) -> str:
@@ -158,8 +154,32 @@ def _supports_block(css: str, condition_head: str) -> str:
     raise AssertionError(msg)
 
 
-def test_default_keeps_required_shell_component_styles(make_project: ProjectFactory) -> None:
-    css = _stylesheet(make_project, "maatlog-default")
+@pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
+def test_theme_stylesheet_is_copied_verbatim_and_linked(make_project: ProjectFactory, theme: str) -> None:
+    """生成 ``_static/maatlog.css`` がソースと一致し、``about.html`` からリンクされる。
+
+    静的な宣言検査はソースを直接読むため、配布経路（static コピーと
+    テーマ継承による置き換え）の破損はここで検出する。
+    """
+    result = make_project(files=LAYOUT_PROJECT, theme=theme).build()
+
+    generated = result.asset("_static/maatlog.css")
+    assert generated.read_text(encoding="utf-8") == theme_stylesheet(theme)
+    hrefs = [
+        link["href"].partition("?")[0]
+        for link in result.html("about.html").select("link[rel='stylesheet']")
+        if "href" in link
+    ]
+    assert "_static/maatlog.css" in hrefs
+    if theme == "maatlog-default":
+        # 子テーマの同名ファイルが base を丸ごと置き換え、それ以外の
+        # 静的アセットは親から継承される。
+        assert result.asset("_static/maatlog.js").is_file()
+        assert result.asset("_static/palettes/neon.css").is_file()
+
+
+def test_default_keeps_required_shell_component_styles() -> None:
+    css = theme_stylesheet("maatlog-default")
 
     assert "left: -9999px" in _css_rule(css, ".maatlog-skip-link")
     assert "z-index: 1" in _css_rule(css, ".maatlog-skip-link:focus")
@@ -170,14 +190,14 @@ def test_default_keeps_required_shell_component_styles(make_project: ProjectFact
 
 @pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
 @pytest.mark.parametrize("prop", NEW_CUSTOM_PROPERTIES)
-def test_new_custom_properties_are_declared(make_project: ProjectFactory, theme: str, prop: str) -> None:
-    assert prop in _stylesheet(make_project, theme)
+def test_new_custom_properties_are_declared(theme: str, prop: str) -> None:
+    assert prop in theme_stylesheet(theme)
 
 
 @pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
-def test_width_tokens_use_fluid_clamp(make_project: ProjectFactory, theme: str) -> None:
+def test_width_tokens_use_fluid_clamp(theme: str) -> None:
     # Issue #110: 固定 rem ではなく clamp(floor, preferred, ceiling) で wide viewport に追従する。
-    css = _stylesheet(make_project, theme)
+    css = theme_stylesheet(theme)
     root = _css_rule(css, ":root")
 
     assert re.search(r"--maatlog-content-width:\s*clamp\(", root)
@@ -186,25 +206,28 @@ def test_width_tokens_use_fluid_clamp(make_project: ProjectFactory, theme: str) 
     assert "50rem" in root and "72rem" in root
 
 
-def test_base_neutralises_the_basic_theme_float(make_project: ProjectFactory) -> None:
-    css = _stylesheet(make_project, "maatlog-base")
+def test_base_neutralises_the_basic_theme_float() -> None:
+    css = theme_stylesheet("maatlog-base")
 
     assert ".maatlog-layout" in css
     assert ".maatlog-layout-main .documentwrapper" in css
     assert "float: none" in css
 
 
-def test_base_styles_the_skip_link(make_project: ProjectFactory) -> None:
-    css = _stylesheet(make_project, "maatlog-base")
+def test_base_styles_the_skip_link() -> None:
+    css = theme_stylesheet("maatlog-base")
 
     assert ".maatlog-skip-link" in css
 
 
-def test_base_caps_every_image_to_its_containing_block(make_project: ProjectFactory) -> None:
-    rule = _css_element_rule(_stylesheet(make_project, "maatlog-base"), "img")
+@pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
+def test_official_themes_cap_images_and_preserve_height_only_hints(theme: str) -> None:
+    css = theme_stylesheet(theme)
+    rule = _css_element_rule(css, "img")
 
     assert "max-width: 100%" in rule
-    assert "height: auto" in rule
+    assert "height:" not in rule
+    assert "height: auto" in _css_rule(css, "img:where(:not([height]), [width][height], [data-maatlog-srcset])")
 
 
 POST_TAXONOMY_SELECTORS = (
@@ -217,14 +240,14 @@ POST_TAXONOMY_SELECTORS = (
 
 @pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
 @pytest.mark.parametrize("selector", POST_TAXONOMY_SELECTORS)
-def test_post_taxonomy_styles_are_declared(make_project: ProjectFactory, theme: str, selector: str) -> None:
-    css = _stylesheet(make_project, theme)
+def test_post_taxonomy_styles_are_declared(theme: str, selector: str) -> None:
+    css = theme_stylesheet(theme)
     assert selector in css
 
 
 @pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
-def test_post_taxonomy_containers_use_flex_gap(make_project: ProjectFactory, theme: str) -> None:
-    css = _stylesheet(make_project, theme)
+def test_post_taxonomy_containers_use_flex_gap(theme: str) -> None:
+    css = theme_stylesheet(theme)
 
     taxonomies_rule = _css_rule(css, ".maatlog-post-taxonomies")
     assert "display: flex" in taxonomies_rule
@@ -236,8 +259,8 @@ def test_post_taxonomy_containers_use_flex_gap(make_project: ProjectFactory, the
 
 
 @pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
-def test_visually_hidden_is_out_of_flow(make_project: ProjectFactory, theme: str) -> None:
-    css = _stylesheet(make_project, theme)
+def test_visually_hidden_is_out_of_flow(theme: str) -> None:
+    css = theme_stylesheet(theme)
     rule = _css_rule(css, ".maatlog-visually-hidden")
 
     assert "position: absolute" in rule
@@ -245,8 +268,8 @@ def test_visually_hidden_is_out_of_flow(make_project: ProjectFactory, theme: str
 
 
 @pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
-def test_literal_blocks_scroll_within_main_content(make_project: ProjectFactory, theme: str) -> None:
-    css = _stylesheet(make_project, theme)
+def test_literal_blocks_scroll_within_main_content(theme: str) -> None:
+    css = theme_stylesheet(theme)
 
     rule = _css_rule(css, ".maatlog-layout-main pre")
     assert "max-width: 100%" in rule
@@ -254,17 +277,15 @@ def test_literal_blocks_scroll_within_main_content(make_project: ProjectFactory,
 
 
 @pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
-def test_highlight_blocks_scroll_within_main_content(make_project: ProjectFactory, theme: str) -> None:
-    css = _stylesheet(make_project, theme)
+def test_highlight_blocks_scroll_within_main_content(theme: str) -> None:
+    css = theme_stylesheet(theme)
 
     rule = _css_rule(css, ".maatlog-layout-main .highlight")
     assert "overflow-x: auto" in rule
 
 
-def test_default_wide_layout_caps_the_shell_and_centers_it(
-    make_project: ProjectFactory,
-) -> None:
-    css = _stylesheet(make_project, "maatlog-default")
+def test_default_wide_layout_caps_the_shell_and_centers_it() -> None:
+    css = theme_stylesheet("maatlog-default")
     rule = _css_rule(css, ".maatlog-layout")
     compact = _compact(rule)
 
@@ -280,10 +301,8 @@ def test_default_wide_layout_caps_the_shell_and_centers_it(
     assert 'grid-template-areas: "nav main";' in _normalise(rule)
 
 
-def test_default_rail_state_widens_the_shell_by_rail_and_gap(
-    make_project: ProjectFactory,
-) -> None:
-    css = _stylesheet(make_project, "maatlog-default")
+def test_default_rail_state_widens_the_shell_by_rail_and_gap() -> None:
+    css = theme_stylesheet("maatlog-default")
     base = _css_rule(css, ".maatlog-layout")
     with_rail = _css_rule(css, ".maatlog-layout-has-rail")
     rail_columns = (
@@ -301,8 +320,8 @@ def test_default_rail_state_widens_the_shell_by_rail_and_gap(
     assert len(_compact(with_rail)) > len(_compact(base)) // 2
 
 
-def test_default_main_declares_the_main_width_cap(make_project: ProjectFactory) -> None:
-    css = _stylesheet(make_project, "maatlog-default")
+def test_default_main_declares_the_main_width_cap() -> None:
+    css = theme_stylesheet("maatlog-default")
     # NOTE: 先頭の `@media (width <= 48rem)`（post/archive の 1 列化）は layout shell と無関係で、
     # `.maatlog-layout-main` の初出（desktop ルール）より前に現れる。そのため desktop 切り出しの
     # split ではなく全文の初出を使う。初出が desktop ルールであることは CSS 構造で保証される。
@@ -313,10 +332,8 @@ def test_default_main_declares_the_main_width_cap(make_project: ProjectFactory) 
     assert "min-width:0;" in compact
 
 
-def test_medium_has_rail_shell_uses_two_column_max_width(
-    make_project: ProjectFactory,
-) -> None:
-    block = _media_block(_stylesheet(make_project, "maatlog-default"), "width <= 64rem")
+def test_medium_has_rail_shell_uses_two_column_max_width() -> None:
+    block = _media_block(theme_stylesheet("maatlog-default"), "width <= 64rem")
     with_rail = _css_rule(block, ".maatlog-layout-has-rail")
     compact = _compact(with_rail)
 
@@ -325,10 +342,8 @@ def test_medium_has_rail_shell_uses_two_column_max_width(
         assert "--maatlog-rail-width" not in with_rail
 
 
-def test_default_sizes_sidebars_to_their_tracks(
-    make_project: ProjectFactory,
-) -> None:
-    css = _stylesheet(make_project, "maatlog-default")
+def test_default_sizes_sidebars_to_their_tracks() -> None:
+    css = theme_stylesheet("maatlog-default")
     nav = _css_rule(css, ".maatlog-nav")
     rail = _css_rule(css, ".maatlog-right-rail")
 
@@ -340,8 +355,8 @@ def test_default_sizes_sidebars_to_their_tracks(
     assert "max-width: var(--maatlog-rail-width, 14rem);" in rail
 
 
-def test_default_scrolls_the_toc_inside_a_sticky_rail(make_project: ProjectFactory) -> None:
-    css = _stylesheet(make_project, "maatlog-default")
+def test_default_scrolls_the_toc_inside_a_sticky_rail() -> None:
+    css = theme_stylesheet("maatlog-default")
     rail = _css_rule(css, ".maatlog-right-rail")
     toc = _css_rule(css, ".maatlog-toc")
 
@@ -355,30 +370,28 @@ def test_default_scrolls_the_toc_inside_a_sticky_rail(make_project: ProjectFacto
     assert "min-height: 0" not in toc
 
 
-def test_default_makes_the_sidebars_sticky(make_project: ProjectFactory) -> None:
-    css = _stylesheet(make_project, "maatlog-default")
+def test_default_makes_the_sidebars_sticky() -> None:
+    css = theme_stylesheet("maatlog-default")
 
     assert "position: sticky" in css
 
 
-def test_default_has_both_breakpoints(make_project: ProjectFactory) -> None:
-    css = _stylesheet(make_project, "maatlog-default")
+def test_default_has_both_breakpoints() -> None:
+    css = theme_stylesheet("maatlog-default")
 
     assert "@media (width <= 64rem)" in css
     assert "@media (width <= 48rem)" in css
 
 
-def test_default_uses_overflow_wrap_without_deprecated_word_break(make_project: ProjectFactory) -> None:
-    css = _stylesheet(make_project, "maatlog-default")
+def test_default_uses_overflow_wrap_without_deprecated_word_break() -> None:
+    css = theme_stylesheet("maatlog-default")
 
     assert "overflow-wrap: anywhere" in css
     assert "word-break: break-word" not in css
 
 
-def test_medium_breakpoint_places_the_rail_above_the_content(
-    make_project: ProjectFactory,
-) -> None:
-    block = _media_block(_stylesheet(make_project, "maatlog-default"), "width <= 64rem")
+def test_medium_breakpoint_places_the_rail_above_the_content() -> None:
+    block = _media_block(theme_stylesheet("maatlog-default"), "width <= 64rem")
 
     assert 'grid-template-areas: "nav main";' in _normalise(_css_rule(block, ".maatlog-layout"))
     assert 'grid-template-areas: "nav rail" "nav main";' in _normalise(_css_rule(block, ".maatlog-layout-has-rail"))
@@ -389,10 +402,8 @@ def test_medium_breakpoint_places_the_rail_above_the_content(
     assert "min-height: 0" in _css_rule(block, ".maatlog-toc")
 
 
-def test_narrow_breakpoint_stacks_the_summary_after_the_content(
-    make_project: ProjectFactory,
-) -> None:
-    block = _media_block(_stylesheet(make_project, "maatlog-default"), "width <= 48rem")
+def test_narrow_breakpoint_stacks_the_summary_after_the_content() -> None:
+    block = _media_block(theme_stylesheet("maatlog-default"), "width <= 48rem")
     layout = _css_rule(block, ".maatlog-layout")
 
     assert "display: flex" in layout
@@ -411,17 +422,17 @@ def test_narrow_breakpoint_stacks_the_summary_after_the_content(
     assert "padding: var(--maatlog-space-md" in _css_rule(block, ".maatlog-banner")
 
 
-def test_default_no_longer_reserves_a_body_sidebar_column(make_project: ProjectFactory) -> None:
+def test_default_no_longer_reserves_a_body_sidebar_column() -> None:
     # サイドバーはレイアウト左カラムへ出たので、本文内グリッドから sidebar 領域を落とす。
-    css = _stylesheet(make_project, "maatlog-default")
+    css = theme_stylesheet("maatlog-default")
 
     assert "body sidebar" not in css
     assert "grid-area: sidebar" not in css
 
 
-def test_post_list_is_limited_to_the_content_width(make_project: ProjectFactory) -> None:
+def test_post_list_is_limited_to_the_content_width() -> None:
     # maatlog:post-list は通常ページでは .body 直下に出るため、テーマ側で行長を揃える。
-    css = _stylesheet(make_project, "maatlog-default")
+    css = theme_stylesheet("maatlog-default")
     rules = [_normalise(rule) for rule in _css_rules(css, ".maatlog-post-list")]
 
     assert rules, ".maatlog-post-list のルールが見つからない"
@@ -433,10 +444,8 @@ def test_post_list_is_limited_to_the_content_width(make_project: ProjectFactory)
     assert any("margin-bottom: 0;" in rule for rule in rules)
 
 
-def test_default_lets_post_body_fill_the_main_column(
-    make_project: ProjectFactory,
-) -> None:
-    css = _stylesheet(make_project, "maatlog-default")
+def test_default_lets_post_body_fill_the_main_column() -> None:
+    css = theme_stylesheet("maatlog-default")
     rule = _css_rule(css, ".maatlog-post-body")
 
     assert "width: 100%;" in rule
@@ -444,10 +453,8 @@ def test_default_lets_post_body_fill_the_main_column(
     assert ".maatlog-layout-page-normal .body > section > :not(.maatlog-post-list)" not in css
 
 
-def test_normal_and_post_page_post_lists_fill_the_main_column(
-    make_project: ProjectFactory,
-) -> None:
-    css = _stylesheet(make_project, "maatlog-default")
+def test_normal_and_post_page_post_lists_fill_the_main_column() -> None:
+    css = theme_stylesheet("maatlog-default")
     # Palette media queries sit at the top; desktop layout rules follow until a width breakpoint.
     desktop = css.split("@media (width", 1)[0]
     rule = _css_rule(desktop, ".maatlog-layout-page-normal .maatlog-post-list")
@@ -458,10 +465,8 @@ def test_normal_and_post_page_post_lists_fill_the_main_column(
     assert "max-width: none;" in rule
 
 
-def test_medium_breakpoint_resets_normal_post_list_breakout(
-    make_project: ProjectFactory,
-) -> None:
-    block = _media_block(_stylesheet(make_project, "maatlog-default"), "width <= 64rem")
+def test_medium_breakpoint_resets_normal_post_list_breakout() -> None:
+    block = _media_block(theme_stylesheet("maatlog-default"), "width <= 64rem")
     rule = _css_rule(
         block,
         ".maatlog-layout-page-normal .body > section > .maatlog-post-list",
@@ -471,11 +476,9 @@ def test_medium_breakpoint_resets_normal_post_list_breakout(
     assert "max-width: none;" in rule
 
 
-def test_narrow_breakpoint_keeps_post_containers_inside_main(
-    make_project: ProjectFactory,
-) -> None:
+def test_narrow_breakpoint_keeps_post_containers_inside_main() -> None:
     block = _media_block_containing(
-        _stylesheet(make_project, "maatlog-default"),
+        theme_stylesheet("maatlog-default"),
         "width <= 48rem",
         ".maatlog-archive",
     )
@@ -484,9 +487,9 @@ def test_narrow_breakpoint_keeps_post_containers_inside_main(
     assert "max-width: 100%;" in rule
 
 
-def test_default_sets_the_blog_font_stack_on_the_body(make_project: ProjectFactory) -> None:
+def test_default_sets_the_blog_font_stack_on_the_body() -> None:
     # basic テーマ由来のブラウザ既定フォントを、ブログ向けのスタックで置き換える。
-    css = _stylesheet(make_project, "maatlog-default")
+    css = theme_stylesheet("maatlog-default")
     rule = _css_rule(css, "body")
 
     assert "font-family: var(--maatlog-font-sans" in rule
@@ -520,10 +523,9 @@ def test_default_post_body_fills_main_but_caps_prose_line_length(
 
 @pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
 def test_highlight_code_does_not_inherit_inline_code_spacing(
-    make_project: ProjectFactory,
     theme: str,
 ) -> None:
-    css = _stylesheet(make_project, theme)
+    css = theme_stylesheet(theme)
     rule = _css_rule(css, ".maatlog-layout-main .highlight code")
 
     assert "padding: 0;" in rule
@@ -532,26 +534,26 @@ def test_highlight_code_does_not_inherit_inline_code_spacing(
 
 
 @pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
-def test_sticky_offset_is_derived_from_the_banner_height(make_project: ProjectFactory, theme: str) -> None:
+def test_sticky_offset_is_derived_from_the_banner_height(theme: str) -> None:
     # sticky ヘッダの下に nav / TOC を置くための唯一の値。2 箇所に書くと必ずずれる。
-    css = _stylesheet(make_project, theme)
+    css = theme_stylesheet(theme)
     root = _css_rule(css, ":root")
 
     assert "--maatlog-sticky-top:" in root
     assert _compact("calc(var(--maatlog-banner-height) + var(--maatlog-space-md))") in _compact(root)
 
 
-def test_default_sidebars_declare_no_background(make_project: ProjectFactory) -> None:
+def test_default_sidebars_declare_no_background() -> None:
     # Issue #95: Sidebar / TOC は Main content より目立たせない。巨大な Card にしない。
-    css = _stylesheet(make_project, "maatlog-default")
+    css = theme_stylesheet("maatlog-default")
 
     assert "background: none" in _css_rule(css, ".maatlog-nav")
     assert "background: none" in _css_rule(css, ".maatlog-toc")
 
 
-def test_default_banner_is_a_sticky_bar_of_a_fixed_height(make_project: ProjectFactory) -> None:
+def test_default_banner_is_a_sticky_bar_of_a_fixed_height() -> None:
     # Issue #95: 高さ 64px 前後、上下余白なし、垂直中央揃え、Main より前面。
-    css = _stylesheet(make_project, "maatlog-default")
+    css = theme_stylesheet("maatlog-default")
     rule = _css_rule(css, ".maatlog-banner")
 
     assert "position: sticky" in rule
@@ -563,29 +565,29 @@ def test_default_banner_is_a_sticky_bar_of_a_fixed_height(make_project: ProjectF
     assert "background: var(--maatlog-banner-background)" in rule
 
 
-def test_default_search_input_uses_at_least_16px_font_to_avoid_ios_zoom(make_project: ProjectFactory) -> None:
+def test_default_search_input_uses_at_least_16px_font_to_avoid_ios_zoom() -> None:
     # iOS Safari zooms the viewport when a focused input is below 16px.
-    rule = _css_rule(_stylesheet(make_project, "maatlog-default"), ".maatlog-search-input")
+    rule = _css_rule(theme_stylesheet("maatlog-default"), ".maatlog-search-input")
 
     assert "font-size: 1rem" in rule
 
 
-def test_default_sticky_sidebars_clear_the_banner(make_project: ProjectFactory) -> None:
-    css = _stylesheet(make_project, "maatlog-default")
+def test_default_sticky_sidebars_clear_the_banner() -> None:
+    css = theme_stylesheet("maatlog-default")
     rule = _css_rule(css, ".maatlog-right-rail")
 
     assert "top: var(--maatlog-sticky-top)" in rule
     assert _compact("calc(100vh - var(--maatlog-sticky-top) - var(--maatlog-space-md))") in _compact(rule)
 
 
-def test_default_skip_link_stays_above_the_sticky_banner(make_project: ProjectFactory) -> None:
-    css = _stylesheet(make_project, "maatlog-default")
+def test_default_skip_link_stays_above_the_sticky_banner() -> None:
+    css = theme_stylesheet("maatlog-default")
 
     assert "z-index: 11" in _css_rule(css, ".maatlog-skip-link:focus")
 
 
-def test_narrow_banner_wraps_and_restores_vertical_padding(make_project: ProjectFactory) -> None:
-    css = _stylesheet(make_project, "maatlog-default")
+def test_narrow_banner_wraps_and_restores_vertical_padding() -> None:
+    css = theme_stylesheet("maatlog-default")
     block = _media_block_containing(css, "width <= 48rem", ".maatlog-banner")
 
     assert "flex-wrap: wrap" in block
@@ -593,13 +595,13 @@ def test_narrow_banner_wraps_and_restores_vertical_padding(make_project: Project
 
 
 @pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
-def test_taxonomy_lists_have_no_bullets(make_project: ProjectFactory, theme: str) -> None:
-    assert "list-style: none" in _css_rule(_stylesheet(make_project, theme), ".maatlog-taxonomy-list")
+def test_taxonomy_lists_have_no_bullets(theme: str) -> None:
+    assert "list-style: none" in _css_rule(theme_stylesheet(theme), ".maatlog-taxonomy-list")
 
 
-def test_default_taxonomy_items_are_navigation_rows(make_project: ProjectFactory) -> None:
+def test_default_taxonomy_items_are_navigation_rows() -> None:
     # Issue #95: bullet と下線をやめ、ラベル左・カウント右の 1 行にする。
-    css = _stylesheet(make_project, "maatlog-default")
+    css = theme_stylesheet("maatlog-default")
     rule = _css_rule(css, ".maatlog-taxonomy-item")
 
     assert "display: flex" in rule
@@ -608,10 +610,10 @@ def test_default_taxonomy_items_are_navigation_rows(make_project: ProjectFactory
     assert "border-radius: var(--maatlog-radius-sm)" in rule
 
 
-def test_default_taxonomy_hover_and_focus_share_one_surface(make_project: ProjectFactory) -> None:
+def test_default_taxonomy_hover_and_focus_share_one_surface() -> None:
     # hover だけで状態を示さない。focus-visible でも同じ手掛かりを出す。
     # グループセレクタなので _css_rule では引けない。整形後の 1 行として突き合わせる。
-    css = _normalise(_stylesheet(make_project, "maatlog-default"))
+    css = _normalise(theme_stylesheet("maatlog-default"))
 
     assert (
         ".maatlog-taxonomy-item:hover, .maatlog-taxonomy-item:focus-visible "
@@ -619,8 +621,8 @@ def test_default_taxonomy_hover_and_focus_share_one_surface(make_project: Projec
     ) in css
 
 
-def test_default_taxonomy_active_item_uses_the_primary_colour(make_project: ProjectFactory) -> None:
-    css = _stylesheet(make_project, "maatlog-default")
+def test_default_taxonomy_active_item_uses_the_primary_colour() -> None:
+    css = theme_stylesheet("maatlog-default")
     rule = _css_rule(css, '.maatlog-taxonomy-item[aria-current="page"]')
 
     assert "color: var(--maatlog-color-primary)" in rule
@@ -628,14 +630,14 @@ def test_default_taxonomy_active_item_uses_the_primary_colour(make_project: Proj
     assert "font-weight: 600" in rule
 
 
-def test_default_taxonomy_count_is_muted(make_project: ProjectFactory) -> None:
+def test_default_taxonomy_count_is_muted() -> None:
     assert "color: var(--maatlog-color-muted)" in _css_rule(
-        _stylesheet(make_project, "maatlog-default"), ".maatlog-taxonomy-count"
+        theme_stylesheet("maatlog-default"), ".maatlog-taxonomy-count"
     )
 
 
-def test_default_taxonomy_heading_is_weaker_than_body_headings(make_project: ProjectFactory) -> None:
-    css = _stylesheet(make_project, "maatlog-default")
+def test_default_taxonomy_heading_is_weaker_than_body_headings() -> None:
+    css = theme_stylesheet("maatlog-default")
     rule = _css_rule(css, ".maatlog-taxonomy h2")
 
     assert "font-size: 0.75rem" in rule
@@ -643,22 +645,22 @@ def test_default_taxonomy_heading_is_weaker_than_body_headings(make_project: Pro
     assert "color: var(--maatlog-color-muted)" in rule
 
 
-def test_default_nav_toctree_has_no_bullets(make_project: ProjectFactory) -> None:
+def test_default_nav_toctree_has_no_bullets() -> None:
     # 左 nav の site toctree も Sphinx 素の箇条書きにしない。
-    css = _stylesheet(make_project, "maatlog-default")
+    css = theme_stylesheet("maatlog-default")
 
     assert "list-style: none" in _css_rule(css, ".maatlog-nav-toctree ul")
 
 
 @pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
-def test_toc_headings_have_no_bullets(make_project: ProjectFactory, theme: str) -> None:
-    assert "list-style: none" in _css_rule(_stylesheet(make_project, theme), ".maatlog-toc-headings ul")
+def test_toc_headings_have_no_bullets(theme: str) -> None:
+    assert "list-style: none" in _css_rule(theme_stylesheet(theme), ".maatlog-toc-headings ul")
 
 
-def test_default_toc_links_are_quiet_and_undecorated(make_project: ProjectFactory) -> None:
+def test_default_toc_links_are_quiet_and_undecorated() -> None:
     # Issue #95: 本文より小さく、既定は muted、下線は出さない。
     # ``.maatlog-toc-headings a`` とのグループなので、後ろ側のセレクタで引く。
-    css = _stylesheet(make_project, "maatlog-default")
+    css = theme_stylesheet("maatlog-default")
     rule = _css_rule(css, ".maatlog-toc-posts a")
 
     assert "text-decoration: none" in rule
@@ -667,14 +669,14 @@ def test_default_toc_links_are_quiet_and_undecorated(make_project: ProjectFactor
     assert "border-left: 2px solid transparent" in rule
 
 
-def test_default_toc_depth_is_one_indent_step(make_project: ProjectFactory) -> None:
-    css = _stylesheet(make_project, "maatlog-default")
+def test_default_toc_depth_is_one_indent_step() -> None:
+    css = theme_stylesheet("maatlog-default")
 
     assert "padding-inline-start: var(--maatlog-space-md)" in _css_rule(css, ".maatlog-toc-headings ul ul")
 
 
-def test_default_toc_active_heading_is_marked_with_a_rule(make_project: ProjectFactory) -> None:
-    css = _stylesheet(make_project, "maatlog-default")
+def test_default_toc_active_heading_is_marked_with_a_rule() -> None:
+    css = theme_stylesheet("maatlog-default")
     rule = _css_rule(css, '.maatlog-toc-headings a[aria-current="true"]')
 
     assert "color: var(--maatlog-color-primary)" in rule
@@ -682,9 +684,9 @@ def test_default_toc_active_heading_is_marked_with_a_rule(make_project: ProjectF
     assert "font-weight: 600" in rule
 
 
-def test_default_banner_ground_is_translucent_where_blur_works(make_project: ProjectFactory) -> None:
+def test_default_banner_ground_is_translucent_where_blur_works() -> None:
     # 地を透かすのは blur が効くときだけ。片方だけでは背後の文字が透けて読めなくなる。
-    css = _stylesheet(make_project, "maatlog-default")
+    css = theme_stylesheet("maatlog-default")
     block = _supports_block(css, "backdrop-filter")
 
     assert "backdrop-filter: blur(" in block
@@ -692,18 +694,18 @@ def test_default_banner_ground_is_translucent_where_blur_works(make_project: Pro
     assert "var(--maatlog-banner-background)" in block
 
 
-def test_default_banner_keeps_an_opaque_fallback_ground(make_project: ProjectFactory) -> None:
+def test_default_banner_keeps_an_opaque_fallback_ground() -> None:
     # @supports が通らない環境では今日と同じ不透明バナーへ落ちる。
     # スキップリンクも同じトークンを地に使うので、トークン自体は透かさない。
-    css = _stylesheet(make_project, "maatlog-default")
+    css = theme_stylesheet("maatlog-default")
 
     assert "background: var(--maatlog-banner-background)" in _css_rule(css, ".maatlog-banner")
     assert "background: var(--maatlog-banner-background" in _css_rule(css, ".maatlog-skip-link:focus")
 
 
-def test_default_post_card_is_a_surface_card(make_project: ProjectFactory) -> None:
+def test_default_post_card_is_a_surface_card() -> None:
     # Sphinx 素の枠付きブロックではなく、浮いた surface として見せる。
-    css = _stylesheet(make_project, "maatlog-default")
+    css = theme_stylesheet("maatlog-default")
     rule = _css_rule(css, ".maatlog-post-card")
 
     assert "background: var(--maatlog-card-background" in rule
@@ -712,10 +714,10 @@ def test_default_post_card_is_a_surface_card(make_project: ProjectFactory) -> No
     assert "var(--maatlog-motion-fast" in rule
 
 
-def test_default_post_card_lifts_on_hover_and_focus(make_project: ProjectFactory) -> None:
+def test_default_post_card_lifts_on_hover_and_focus() -> None:
     # キーボード操作でも同じ状態が見えるよう hover と focus-within を揃える。
     # グループセレクタなので _css_rule では引けない。整形後の 1 行として突き合わせる。
-    css = _normalise(_stylesheet(make_project, "maatlog-default"))
+    css = _normalise(theme_stylesheet("maatlog-default"))
 
     assert ".maatlog-post-card:hover, .maatlog-post-card:focus-within {" in css
     start = css.index(".maatlog-post-card:hover, .maatlog-post-card:focus-within {")
@@ -726,9 +728,9 @@ def test_default_post_card_lifts_on_hover_and_focus(make_project: ProjectFactory
     assert "border-color: var(--maatlog-color-link)" in rule
 
 
-def test_default_post_card_meta_sinks_to_the_bottom(make_project: ProjectFactory) -> None:
+def test_default_post_card_meta_sinks_to_the_bottom() -> None:
     # 本文の長さが違うカード同士でも meta 行が下端で揃うようにする。
-    css = _stylesheet(make_project, "maatlog-default")
+    css = theme_stylesheet("maatlog-default")
     rule = _css_rule(css, ".maatlog-post-card-meta")
 
     assert "display: flex" in rule
@@ -737,9 +739,9 @@ def test_default_post_card_meta_sinks_to_the_bottom(make_project: ProjectFactory
     assert "margin: auto 0 0" in rule
 
 
-def test_default_post_card_image_has_a_fixed_aspect_ratio(make_project: ProjectFactory) -> None:
+def test_default_post_card_image_has_a_fixed_aspect_ratio() -> None:
     # contain だとカードごとに画像の高さが変わり、グリッドの行が揃わない。
-    css = _stylesheet(make_project, "maatlog-default")
+    css = theme_stylesheet("maatlog-default")
     rule = _css_rule(css, ".maatlog-post-card-image")
 
     assert "aspect-ratio: 16 / 9" in rule
@@ -747,10 +749,8 @@ def test_default_post_card_image_has_a_fixed_aspect_ratio(make_project: ProjectF
     assert "object-fit: contain" not in rule
 
 
-def test_default_lead_card_uses_magazine_type_and_image_ratio(
-    make_project: ProjectFactory,
-) -> None:
-    css = _stylesheet(make_project, "maatlog-default")
+def test_default_lead_card_uses_magazine_type_and_image_ratio() -> None:
+    css = theme_stylesheet("maatlog-default")
     title = _css_rule(css, ".maatlog-post-card-lead .maatlog-post-card-title")
     image = _css_rule(css, ".maatlog-post-card-lead .maatlog-post-card-image")
     lead = _css_rule(css, ".maatlog-post-card-lead")
@@ -762,8 +762,8 @@ def test_default_lead_card_uses_magazine_type_and_image_ratio(
     assert "min-height: 16rem" in lead
 
 
-def test_default_secondary_card_stays_compact(make_project: ProjectFactory) -> None:
-    css = _stylesheet(make_project, "maatlog-default")
+def test_default_secondary_card_stays_compact() -> None:
+    css = theme_stylesheet("maatlog-default")
     title = _css_rule(css, ".maatlog-post-card-secondary .maatlog-post-card-title")
     excerpt = _css_rule(css, ".maatlog-post-card-secondary .maatlog-post-card-excerpt")
 
@@ -771,10 +771,8 @@ def test_default_secondary_card_stays_compact(make_project: ProjectFactory) -> N
     assert "-webkit-line-clamp: 2" in excerpt
 
 
-def test_default_latest_excerpt_clamps_to_three_lines(
-    make_project: ProjectFactory,
-) -> None:
-    css = _stylesheet(make_project, "maatlog-default")
+def test_default_latest_excerpt_clamps_to_three_lines() -> None:
+    css = theme_stylesheet("maatlog-default")
     excerpt = _css_rule(css, '[data-maatlog-card-variant="latest"] .maatlog-post-card-excerpt')
     lead_excerpt = _css_rule(css, ".maatlog-post-card-lead .maatlog-post-card-excerpt")
 
@@ -782,19 +780,17 @@ def test_default_latest_excerpt_clamps_to_three_lines(
     assert "-webkit-line-clamp: 4" in lead_excerpt
 
 
-def test_default_generic_card_image_stays_sixteen_by_nine(
-    make_project: ProjectFactory,
-) -> None:
-    css = _stylesheet(make_project, "maatlog-default")
+def test_default_generic_card_image_stays_sixteen_by_nine() -> None:
+    css = theme_stylesheet("maatlog-default")
     rule = _css_rule(css, ".maatlog-post-card-image")
 
     assert "aspect-ratio: 16 / 9" in rule
 
 
 @pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
-def test_card_taxonomy_groups_use_flex_gap(make_project: ProjectFactory, theme: str) -> None:
+def test_card_taxonomy_groups_use_flex_gap(theme: str) -> None:
     # 区切りが読み上げ専用になった分、視覚的な間隔は gap が担う。
-    css = _stylesheet(make_project, theme)
+    css = theme_stylesheet(theme)
     rules = _css_rules(css, ".maatlog-post-card-authors")
 
     assert rules
@@ -802,18 +798,18 @@ def test_card_taxonomy_groups_use_flex_gap(make_project: ProjectFactory, theme: 
 
 
 @pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
-def test_post_card_is_the_positioning_context(make_project: ProjectFactory, theme: str) -> None:
+def test_post_card_is_the_positioning_context(theme: str) -> None:
     # overlay の inset: 0 はカードを基準に解決させる。
-    css = _stylesheet(make_project, theme)
+    css = theme_stylesheet(theme)
     rule = _css_rule(css, ".maatlog-post-card")
 
     assert "position: relative" in rule
 
 
 @pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
-def test_post_card_title_link_stretches_across_the_card(make_project: ProjectFactory, theme: str) -> None:
+def test_post_card_title_link_stretches_across_the_card(theme: str) -> None:
     # 記事リンクを増やさずにクリック領域だけを広げる（stretched link）。
-    css = _stylesheet(make_project, theme)
+    css = theme_stylesheet(theme)
     rule = _css_rule(css, ".maatlog-post-card-title a::after")
 
     assert 'content: ""' in rule
@@ -822,9 +818,9 @@ def test_post_card_title_link_stretches_across_the_card(make_project: ProjectFac
 
 
 @pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
-def test_post_card_meta_links_stay_above_the_stretched_link(make_project: ProjectFactory, theme: str) -> None:
+def test_post_card_meta_links_stay_above_the_stretched_link(theme: str) -> None:
     # taxonomy リンクが overlay に飲まれると記事ページへ吸い込まれる。
-    css = _stylesheet(make_project, theme)
+    css = theme_stylesheet(theme)
     rule = _css_rule(css, ".maatlog-post-card-meta a")
 
     assert "position: relative" in rule
@@ -832,19 +828,19 @@ def test_post_card_meta_links_stay_above_the_stretched_link(make_project: Projec
 
 
 @pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
-def test_post_card_title_link_itself_stays_unpositioned(make_project: ProjectFactory, theme: str) -> None:
+def test_post_card_title_link_itself_stays_unpositioned(theme: str) -> None:
     # アンカー自身（:hover 等の pseudo-class を含む）を配置すると overlay の基準が
     # タイトル文字幅に縮む。overlay 本体の ::after は別契約なので対象外とする。
     # maatlog-base は現時点でこのセレクタ配下に pseudo-class ルールを持たないため、
     # 空リストも許容する。
-    css = _stylesheet(make_project, theme)
+    css = theme_stylesheet(theme)
     rules = _css_rules_by_selector_prefix(css, ".maatlog-post-card-title a")
 
     assert all("position:" not in rule for rule in rules)
 
 
-def test_default_taxonomy_links_are_pills(make_project: ProjectFactory) -> None:
-    css = _stylesheet(make_project, "maatlog-default")
+def test_default_taxonomy_links_are_pills() -> None:
+    css = theme_stylesheet("maatlog-default")
     rule = _css_rule(css, ".maatlog-taxonomy-link")
 
     assert "display: inline-flex" in rule
@@ -854,9 +850,9 @@ def test_default_taxonomy_links_are_pills(make_project: ProjectFactory) -> None:
     assert "var(--maatlog-motion-fast" in rule
 
 
-def test_default_category_badge_shares_the_pill_surface(make_project: ProjectFactory) -> None:
+def test_default_category_badge_shares_the_pill_surface() -> None:
     # category と tag は同じ地を共有する。区別は tag の "#" 接頭辞が担う。
-    css = _stylesheet(make_project, "maatlog-default")
+    css = theme_stylesheet("maatlog-default")
     rule = _css_rule(css, ".maatlog-category-badge")
 
     assert "border-radius: var(--maatlog-radius-pill)" in rule
@@ -865,9 +861,9 @@ def test_default_category_badge_shares_the_pill_surface(make_project: ProjectFac
 
 
 @pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
-def test_category_badge_drops_the_bracket_decoration(make_project: ProjectFactory, theme: str) -> None:
+def test_category_badge_drops_the_bracket_decoration(theme: str) -> None:
     # pill になった以上、生成内容の [ ] は二重の装飾になる。
-    css = _stylesheet(make_project, theme)
+    css = theme_stylesheet(theme)
 
     assert ".maatlog-category-badge::before" not in css
     assert ".maatlog-category-badge::after" not in css
@@ -875,9 +871,9 @@ def test_category_badge_drops_the_bracket_decoration(make_project: ProjectFactor
     assert ".maatlog-category-badge {" in css
 
 
-def test_default_author_links_are_not_badges(make_project: ProjectFactory) -> None:
+def test_default_author_links_are_not_badges() -> None:
     # 著者は人であって分類の入れ物ではない。category / tag と区別が付かなくなる。
-    css = _stylesheet(make_project, "maatlog-default")
+    css = theme_stylesheet("maatlog-default")
 
     post_rule = _css_rule(css, ".maatlog-post-info .maatlog-post-author-link")
     assert "background: none" in post_rule
@@ -890,10 +886,8 @@ def test_default_author_links_are_not_badges(make_project: ProjectFactory) -> No
     assert "text-decoration: underline" in card_rule
 
 
-def test_home_card_tags_are_quieter_than_categories(
-    make_project: ProjectFactory,
-) -> None:
-    css = _stylesheet(make_project, "maatlog-default")
+def test_home_card_tags_are_quieter_than_categories() -> None:
+    css = theme_stylesheet("maatlog-default")
     tag = _css_rule(
         css,
         ".maatlog-post-featured .maatlog-post-card-tags .maatlog-taxonomy-link",
@@ -906,11 +900,9 @@ def test_home_card_tags_are_quieter_than_categories(
     assert "color: var(--maatlog-color-muted" in author
 
 
-def test_medium_breakpoint_collapses_featured_data_component(
-    make_project: ProjectFactory,
-) -> None:
+def test_medium_breakpoint_collapses_featured_data_component() -> None:
     block = _media_block_containing(
-        _stylesheet(make_project, "maatlog-default"),
+        theme_stylesheet("maatlog-default"),
         "width <= 64rem",
         '[data-maatlog-component="featured"]',
     )
@@ -918,11 +910,9 @@ def test_medium_breakpoint_collapses_featured_data_component(
     assert "grid-template-columns: minmax(0, 1fr);" in _normalise(rule)
 
 
-def test_narrow_breakpoint_collapses_featured_data_component(
-    make_project: ProjectFactory,
-) -> None:
+def test_narrow_breakpoint_collapses_featured_data_component() -> None:
     block = _media_block_containing(
-        _stylesheet(make_project, "maatlog-default"),
+        theme_stylesheet("maatlog-default"),
         "width <= 48rem",
         '[data-maatlog-component="featured"]',
     )
@@ -930,16 +920,16 @@ def test_narrow_breakpoint_collapses_featured_data_component(
     assert "grid-template-columns: minmax(0, 1fr);" in _normalise(rule)
 
 
-def test_home_card_eyebrow_is_a_quiet_kicker(make_project: ProjectFactory) -> None:
-    css = _stylesheet(make_project, "maatlog-default")
+def test_home_card_eyebrow_is_a_quiet_kicker() -> None:
+    css = theme_stylesheet("maatlog-default")
     rule = _css_rule(css, ".maatlog-post-card-eyebrow")
     assert "text-transform: uppercase" in rule
     assert "font-size: 0.78rem" in rule
     assert "color: var(--maatlog-color-muted" in rule
 
 
-def test_home_card_author_links_are_muted(make_project: ProjectFactory) -> None:
-    css = _stylesheet(make_project, "maatlog-default")
+def test_home_card_author_links_are_muted() -> None:
+    css = theme_stylesheet("maatlog-default")
     rule = _css_rule(
         css,
         ".maatlog-post-featured .maatlog-post-card-authors .maatlog-taxonomy-link",
@@ -947,19 +937,17 @@ def test_home_card_author_links_are_muted(make_project: ProjectFactory) -> None:
     assert "color: var(--maatlog-color-muted" in rule
 
 
-def test_archive_taxonomy_pills_keep_badge_fill(
-    make_project: ProjectFactory,
-) -> None:
-    css = _stylesheet(make_project, "maatlog-default")
+def test_archive_taxonomy_pills_keep_badge_fill() -> None:
+    css = theme_stylesheet("maatlog-default")
     rule = _css_rule(css, ".maatlog-taxonomy-link")
 
     assert "background: var(--maatlog-badge-background)" in rule
     assert "color: var(--maatlog-badge-text)" in rule
 
 
-def test_default_focus_outline_reaches_pill_badges(make_project: ProjectFactory) -> None:
+def test_default_focus_outline_reaches_pill_badges() -> None:
     # pill は角丸なので、outline も同じ半径で回らないと角が欠けて見える。
-    css = _stylesheet(make_project, "maatlog-default")
+    css = theme_stylesheet("maatlog-default")
     rules = _css_rules(css, ".maatlog-taxonomy-link:focus-visible")
 
     assert len(rules) == 1
@@ -971,9 +959,9 @@ def test_default_focus_outline_reaches_pill_badges(make_project: ProjectFactory)
     assert "outline-offset: 2px" in normalised
 
 
-def test_default_featured_block_is_a_bento(make_project: ProjectFactory) -> None:
+def test_default_featured_block_is_a_bento() -> None:
     # 大 1 + 小 2 の非対称レイアウト。3 枚ちょうどのときだけ大カードを 2 行ぶちぬく。
-    css = _stylesheet(make_project, "maatlog-default")
+    css = theme_stylesheet("maatlog-default")
     container = _css_rule(css, ".maatlog-post-featured")
     lead = _css_rule(css, ".maatlog-post-featured .maatlog-post-card:first-child:nth-last-child(3)")
     solo = _css_rule(css, ".maatlog-post-featured .maatlog-post-card:only-child")
@@ -984,10 +972,8 @@ def test_default_featured_block_is_a_bento(make_project: ProjectFactory) -> None
     assert "grid-column: 1 / -1" in solo
 
 
-def test_default_featured_accepts_theme_api_lead_selectors(
-    make_project: ProjectFactory,
-) -> None:
-    css = _stylesheet(make_project, "maatlog-default")
+def test_default_featured_accepts_theme_api_lead_selectors() -> None:
+    css = theme_stylesheet("maatlog-default")
 
     assert '[data-maatlog-component="featured"]' in css
     assert ".maatlog-post-card-lead:only-child" in css
@@ -1006,18 +992,16 @@ def test_default_featured_accepts_theme_api_lead_selectors(
     assert "grid-column" not in bare_lead
 
 
-def test_default_latest_cards_use_an_auto_fill_grid(make_project: ProjectFactory) -> None:
-    css = _stylesheet(make_project, "maatlog-default")
+def test_default_latest_cards_use_an_auto_fill_grid() -> None:
+    css = theme_stylesheet("maatlog-default")
     rule = _css_rule(css, ".maatlog-post-grid")
 
     assert "display: grid" in rule
     assert "repeat(auto-fill,minmax(17rem,1fr))" in _compact(rule)
 
 
-def test_home_latest_grid_uses_wider_tracks_than_archive(
-    make_project: ProjectFactory,
-) -> None:
-    css = _stylesheet(make_project, "maatlog-default")
+def test_home_latest_grid_uses_wider_tracks_than_archive() -> None:
+    css = theme_stylesheet("maatlog-default")
     home = _css_rule(css, '[data-maatlog-component="latest"]')
 
     assert "repeat(auto-fill,minmax(max(20rem,calc((100%-2*var(--maatlog-space-md,1rem))/3)),1fr))" in _compact(home)
@@ -1025,18 +1009,18 @@ def test_home_latest_grid_uses_wider_tracks_than_archive(
     assert "repeat(auto-fill,minmax(17rem,1fr))" in _compact(archive)
 
 
-def test_default_grid_cards_drop_their_stacking_margin(make_project: ProjectFactory) -> None:
+def test_default_grid_cards_drop_their_stacking_margin() -> None:
     # グリッドの gap とカードの margin-bottom が二重にかかると行間が広がる。
-    css = _stylesheet(make_project, "maatlog-default")
+    css = theme_stylesheet("maatlog-default")
     rule = _css_rule(css, ".maatlog-post-grid .maatlog-post-card")
 
     assert ".maatlog-post-featured .maatlog-post-card," in _normalise(css)
     assert "margin-bottom: 0;" in rule
 
 
-def test_default_post_list_heading_is_a_quiet_label(make_project: ProjectFactory) -> None:
+def test_default_post_list_heading_is_a_quiet_label() -> None:
     # featured と Latest の境目。本文の h2 と同じ強さで出すとカードより目立つ。
-    css = _stylesheet(make_project, "maatlog-default")
+    css = theme_stylesheet("maatlog-default")
     rule = _css_rule(css, ".maatlog-post-list-heading")
 
     assert "text-transform: uppercase" in rule
@@ -1045,9 +1029,9 @@ def test_default_post_list_heading_is_a_quiet_label(make_project: ProjectFactory
     assert "grid-area: auto" not in rule
 
 
-def test_medium_breakpoint_collapses_the_bento(make_project: ProjectFactory) -> None:
+def test_medium_breakpoint_collapses_the_bento() -> None:
     block = _media_block_containing(
-        _stylesheet(make_project, "maatlog-default"),
+        theme_stylesheet("maatlog-default"),
         "width <= 64rem",
         ".maatlog-post-featured",
     )
@@ -1059,11 +1043,9 @@ def test_medium_breakpoint_collapses_the_bento(make_project: ProjectFactory) -> 
     assert "repeat(auto-fill,minmax(15rem,1fr))" in _compact(_css_rule(block, ".maatlog-post-grid"))
 
 
-def test_medium_breakpoint_puts_home_latest_on_two_columns(
-    make_project: ProjectFactory,
-) -> None:
+def test_medium_breakpoint_puts_home_latest_on_two_columns() -> None:
     block = _media_block_containing(
-        _stylesheet(make_project, "maatlog-default"),
+        theme_stylesheet("maatlog-default"),
         "width <= 64rem",
         '[data-maatlog-component="latest"]',
     )
@@ -1074,10 +1056,8 @@ def test_medium_breakpoint_puts_home_latest_on_two_columns(
     assert "repeat(auto-fill,minmax(15rem,1fr))" in _compact(archive)
 
 
-def test_narrow_breakpoint_collapses_home_latest_to_one_column(
-    make_project: ProjectFactory,
-) -> None:
-    css = _stylesheet(make_project, "maatlog-default")
+def test_narrow_breakpoint_collapses_home_latest_to_one_column() -> None:
+    css = theme_stylesheet("maatlog-default")
     block = _media_block_containing(
         css,
         "width <= 48rem",
@@ -1092,9 +1072,9 @@ def test_narrow_breakpoint_collapses_home_latest_to_one_column(
     assert "repeat(2,minmax(0,1fr))" in _compact(home_rules[-2])
 
 
-def test_narrow_breakpoint_collapses_featured_and_grid(make_project: ProjectFactory) -> None:
+def test_narrow_breakpoint_collapses_featured_and_grid() -> None:
     block = _media_block_containing(
-        _stylesheet(make_project, "maatlog-default"),
+        theme_stylesheet("maatlog-default"),
         "width <= 48rem",
         ".maatlog-post-grid",
     )
@@ -1105,9 +1085,9 @@ def test_narrow_breakpoint_collapses_featured_and_grid(make_project: ProjectFact
     assert "grid-template-columns: minmax(0, 1fr);" in rule
 
 
-def test_default_post_header_is_a_stacked_editorial_block(make_project: ProjectFactory) -> None:
+def test_default_post_header_is_a_stacked_editorial_block() -> None:
     # meta が header の中に入ったので、header 自身が縦フローの組版単位になる。
-    css = _stylesheet(make_project, "maatlog-default")
+    css = theme_stylesheet("maatlog-default")
     rule = _css_rule(css, ".maatlog-post-header")
 
     assert "display: flex" in rule
@@ -1115,24 +1095,24 @@ def test_default_post_header_is_a_stacked_editorial_block(make_project: ProjectF
     assert "gap:" in rule
 
 
-def test_default_drops_the_meta_grid_area(make_project: ProjectFactory) -> None:
+def test_default_drops_the_meta_grid_area() -> None:
     # meta は header の子になった。named area が残ると誰も使わない行が空く。
-    css = _stylesheet(make_project, "maatlog-default")
+    css = theme_stylesheet("maatlog-default")
 
     assert '"meta"' not in css
     assert "grid-area: meta" not in css
 
 
-def test_default_post_meta_is_a_single_wrapping_row(make_project: ProjectFactory) -> None:
-    css = _stylesheet(make_project, "maatlog-default")
+def test_default_post_meta_is_a_single_wrapping_row() -> None:
+    css = theme_stylesheet("maatlog-default")
     rule = _css_rule(css, ".maatlog-post-meta")
 
     assert "flex-wrap: wrap" in rule
     assert "flex-direction: column" not in rule
 
 
-def test_default_post_title_dominates_the_body(make_project: ProjectFactory) -> None:
-    css = _stylesheet(make_project, "maatlog-default")
+def test_default_post_title_dominates_the_body() -> None:
+    css = theme_stylesheet("maatlog-default")
     rule = _normalise(_css_rule(css, ".maatlog-post-header h1"))
 
     assert "clamp(2.2rem, 5vw, 4rem)" in rule
@@ -1140,8 +1120,8 @@ def test_default_post_title_dominates_the_body(make_project: ProjectFactory) -> 
     assert "letter-spacing: -0.035em" in rule
 
 
-def test_default_styles_the_editorial_header_parts(make_project: ProjectFactory) -> None:
-    css = _stylesheet(make_project, "maatlog-default")
+def test_default_styles_the_editorial_header_parts() -> None:
+    css = theme_stylesheet("maatlog-default")
 
     assert "text-transform: uppercase" in _css_rule(css, ".maatlog-post-eyebrow")
     assert "color: var(--maatlog-color-muted" in _css_rule(css, ".maatlog-post-tagline")
@@ -1152,9 +1132,9 @@ def test_default_styles_the_editorial_header_parts(make_project: ProjectFactory)
     assert "border-radius: var(--maatlog-radius-lg" in hero
 
 
-def test_default_declares_an_explicit_heading_scale(make_project: ProjectFactory) -> None:
+def test_default_declares_an_explicit_heading_scale() -> None:
     # basic.css 由来の見出しサイズだと h2 と h3 の差がほとんど無い。
-    css = _stylesheet(make_project, "maatlog-default")
+    css = theme_stylesheet("maatlog-default")
 
     for selector, size in (
         (".maatlog-post-body h2", "1.75rem"),
@@ -1168,26 +1148,26 @@ def test_default_declares_an_explicit_heading_scale(make_project: ProjectFactory
 
 
 @pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
-def test_editorial_header_classes_exist_in_both_themes(make_project: ProjectFactory, theme: str) -> None:
+def test_editorial_header_classes_exist_in_both_themes(theme: str) -> None:
     # base は見た目を作らないが、新しいセマンティッククラスの最小スタイルは持つ。
-    css = _stylesheet(make_project, theme)
+    css = theme_stylesheet(theme)
 
     for selector in (".maatlog-post-eyebrow", ".maatlog-post-tagline", ".maatlog-post-hero-image"):
         assert f"{selector} {{" in css, selector
 
 
 @pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
-def test_article_container_rules_are_scoped_by_element(make_project: ProjectFactory, theme: str) -> None:
+def test_article_container_rules_are_scoped_by_element(theme: str) -> None:
     # ``{maatlog:post}`` ロールは <code class="xref maatlog maatlog-post"> を出す。
     # 記事コンテナのルールを裸のクラスで書くと、インライン参照が grid の箱になる。
-    css = _stylesheet(make_project, theme)
+    css = theme_stylesheet(theme)
 
     assert "article.maatlog-post,\nsection.maatlog-archive {" in css
     assert "\n.maatlog-post,\n.maatlog-archive {" not in css
 
 
-def test_default_tables_scroll_inside_the_wrapper(make_project: ProjectFactory) -> None:
-    css = _stylesheet(make_project, "maatlog-default")
+def test_default_tables_scroll_inside_the_wrapper() -> None:
+    css = theme_stylesheet("maatlog-default")
     wrapped_selector = ".maatlog-layout-main .maatlog-table-wrapper > table.docutils {"
     assert wrapped_selector in css
     table = _css_rule(css, ".maatlog-layout-main table.docutils")
@@ -1205,32 +1185,32 @@ def test_default_tables_scroll_inside_the_wrapper(make_project: ProjectFactory) 
     assert "overflow-x: auto" in wrapper
 
 
-def test_default_table_header_sits_on_a_quiet_surface(make_project: ProjectFactory) -> None:
-    css = _stylesheet(make_project, "maatlog-default")
+def test_default_table_header_sits_on_a_quiet_surface() -> None:
+    css = theme_stylesheet("maatlog-default")
     rule = _css_rule(css, ".maatlog-layout-main table.docutils th")
 
     assert "background: var(--maatlog-color-surface-hover" in rule
     assert "text-align: left" in rule
 
 
-def test_default_blockquote_uses_an_accent_rule(make_project: ProjectFactory) -> None:
-    css = _stylesheet(make_project, "maatlog-default")
+def test_default_blockquote_uses_an_accent_rule() -> None:
+    css = theme_stylesheet("maatlog-default")
     rule = _css_rule(css, ".maatlog-layout-main blockquote")
 
     assert "border-left: 3px solid var(--maatlog-color-accent" in rule
     assert "background: var(--maatlog-color-surface" in rule
 
 
-def test_default_blockquote_reaches_through_the_docutils_div(make_project: ProjectFactory) -> None:
+def test_default_blockquote_reaches_through_the_docutils_div() -> None:
     # docutils は blockquote の中に <div> を挟む。最終要素は 2 段下にいる。
-    css = _stylesheet(make_project, "maatlog-default")
+    css = theme_stylesheet("maatlog-default")
 
     assert ".maatlog-layout-main blockquote > div > :last-child" in css
 
 
-def test_default_admonitions_use_two_accents_only(make_project: ProjectFactory) -> None:
+def test_default_admonitions_use_two_accents_only() -> None:
     # 種別ごとに色を増やすと、技術記事の中で admonition だけが騒がしくなる。
-    css = _stylesheet(make_project, "maatlog-default")
+    css = theme_stylesheet("maatlog-default")
     base = _css_rule(css, ".maatlog-layout-main .admonition")
     caution = _css_rule(css, ".maatlog-layout-main .admonition.attention")
 
@@ -1239,28 +1219,28 @@ def test_default_admonitions_use_two_accents_only(make_project: ProjectFactory) 
     assert "border-left-color: var(--maatlog-color-accent" in caution
 
 
-def test_default_admonition_title_reads_as_a_label(make_project: ProjectFactory) -> None:
+def test_default_admonition_title_reads_as_a_label() -> None:
     # Sphinx の admonition-title は <p> なので、見出しに見える指定を自前で当てる。
-    css = _stylesheet(make_project, "maatlog-default")
+    css = theme_stylesheet("maatlog-default")
     rule = _css_rule(css, ".maatlog-layout-main .admonition > .admonition-title")
 
     assert "text-transform: uppercase" in rule
     assert "font-weight: 700" in rule
 
 
-def test_default_headerlink_is_hidden_until_wanted(make_project: ProjectFactory) -> None:
+def test_default_headerlink_is_hidden_until_wanted() -> None:
     # ¶ を常時出すとドキュメントテーマの顔になる。display: none にはしない
     # ——キーボードから到達できなくなるため、opacity で退かせる。
-    css = _stylesheet(make_project, "maatlog-default")
+    css = theme_stylesheet("maatlog-default")
     rule = _css_rule(css, ".maatlog-layout-main a.headerlink")
 
     assert "opacity: 0" in rule
     assert "display: none" not in rule
 
 
-def test_default_headerlink_returns_on_hover_and_focus(make_project: ProjectFactory) -> None:
+def test_default_headerlink_returns_on_hover_and_focus() -> None:
     # hover だけにするとキーボード利用者に見えない。
-    css = _stylesheet(make_project, "maatlog-default")
+    css = theme_stylesheet("maatlog-default")
     rule = _css_rule(css, ".maatlog-layout-main a.headerlink:focus-visible")
 
     assert "opacity: 1" in rule
@@ -1268,9 +1248,9 @@ def test_default_headerlink_returns_on_hover_and_focus(make_project: ProjectFact
     assert ":is(h1, h2, h3, h4, h5, h6, dt, caption, figcaption):hover > a.headerlink" in css
 
 
-def test_default_nav_links_are_as_quiet_as_the_toc(make_project: ProjectFactory) -> None:
+def test_default_nav_links_are_as_quiet_as_the_toc() -> None:
     # 左 nav だけ本文と同色だと、両サイドバーの強さが揃わない。
-    css = _stylesheet(make_project, "maatlog-default")
+    css = theme_stylesheet("maatlog-default")
     toctree = _css_rule(css, ".maatlog-nav-toctree a")
     taxonomy = _css_rule(css, ".maatlog-taxonomy-item")
 
@@ -1278,9 +1258,9 @@ def test_default_nav_links_are_as_quiet_as_the_toc(make_project: ProjectFactory)
     assert "color: var(--maatlog-color-muted)" in taxonomy
 
 
-def test_default_nav_links_recover_on_hover(make_project: ProjectFactory) -> None:
+def test_default_nav_links_recover_on_hover() -> None:
     # 平常時を muted に落としたぶん、hover / focus では本文色まで戻す。
-    css = _stylesheet(make_project, "maatlog-default")
+    css = theme_stylesheet("maatlog-default")
     toctree = _css_rule(css, ".maatlog-nav-toctree a:focus-visible")
     taxonomy = _css_rule(css, ".maatlog-taxonomy-item:focus-visible")
 
@@ -1288,31 +1268,29 @@ def test_default_nav_links_recover_on_hover(make_project: ProjectFactory) -> Non
     assert "color: var(--maatlog-color-text)" in taxonomy
 
 
-def test_default_sidebars_use_a_thin_scrollbar(make_project: ProjectFactory) -> None:
-    css = _stylesheet(make_project, "maatlog-default")
+def test_default_sidebars_use_a_thin_scrollbar() -> None:
+    css = theme_stylesheet("maatlog-default")
 
     assert "scrollbar-width: thin" in _css_rule(css, ".maatlog-nav")
     assert "scrollbar-width: thin" in _css_rule(css, ".maatlog-toc")
 
 
-def test_default_sidebar_feed_links_have_no_bullets(make_project: ProjectFactory) -> None:
-    css = _stylesheet(make_project, "maatlog-default")
+def test_default_sidebar_feed_links_have_no_bullets() -> None:
+    css = theme_stylesheet("maatlog-default")
 
     assert "list-style: none" in _css_rule(css, ".maatlog-sidebar .maatlog-feed-links")
 
 
-def test_default_normal_page_prose_is_capped(make_project: ProjectFactory) -> None:
-    css = _stylesheet(make_project, "maatlog-default")
+def test_default_normal_page_prose_is_capped() -> None:
+    css = theme_stylesheet("maatlog-default")
     block = _reading_width_block(css)
     assert ".maatlog-layout-page-normal .body" in block
     assert "min(100%, var(--maatlog-content-width" in block
 
 
-def test_default_normal_page_headings_use_content_width(
-    make_project: ProjectFactory,
-) -> None:
+def test_default_normal_page_headings_use_content_width() -> None:
     # 通常ページの本文見出し h2–h6 は content width 対象。h1 はページタイトルとして対象外。
-    css = _stylesheet(make_project, "maatlog-default")
+    css = theme_stylesheet("maatlog-default")
     block = _reading_width_block(css)
     assert "h2" in block
     assert "h6" in block
@@ -1326,11 +1304,9 @@ def _top_level_css_before_reduced_motion(css: str) -> str:
     return css.split(marker, 1)[0]
 
 
-def test_default_enables_cross_document_view_transition(
-    make_project: ProjectFactory,
-) -> None:
+def test_default_enables_cross_document_view_transition() -> None:
     # Issue #67: same-origin MPA navigations get a short root transition.
-    css = _stylesheet(make_project, "maatlog-default")
+    css = theme_stylesheet("maatlog-default")
     head = _top_level_css_before_reduced_motion(css)
 
     assert "@view-transition" in head
@@ -1341,11 +1317,9 @@ def test_default_enables_cross_document_view_transition(
     assert "animation-timing-function: ease-out" in head
 
 
-def test_default_disables_view_transition_under_reduced_motion(
-    make_project: ProjectFactory,
-) -> None:
+def test_default_disables_view_transition_under_reduced_motion() -> None:
     # Prefer turning navigation off over relying only on animation: none.
-    css = _stylesheet(make_project, "maatlog-default")
+    css = theme_stylesheet("maatlog-default")
     block = _media_block_containing(
         css,
         "prefers-reduced-motion: reduce",
@@ -1359,11 +1333,9 @@ def test_default_disables_view_transition_under_reduced_motion(
     assert "transform: none" in block
 
 
-def test_base_does_not_declare_view_transition(
-    make_project: ProjectFactory,
-) -> None:
+def test_base_does_not_declare_view_transition() -> None:
     # Page transition is visual chrome, not Theme API contract CSS.
-    css = _stylesheet(make_project, "maatlog-base")
+    css = theme_stylesheet("maatlog-base")
 
     assert "@view-transition" not in css
     assert "::view-transition-old" not in css
@@ -1388,9 +1360,9 @@ def test_default_view_transition_does_not_require_extra_scripts(
     assert "maatlog-view" not in html.lower()
 
 
-def test_base_gives_the_infinite_scroll_sentinel_a_measurable_box(make_project: ProjectFactory) -> None:
+def test_base_gives_the_infinite_scroll_sentinel_a_measurable_box() -> None:
     # 高さ 0 の要素は IntersectionObserver から見えないことがある。
-    css = _stylesheet(make_project, "maatlog-base")
+    css = theme_stylesheet("maatlog-base")
     rule = _css_rule(css, ".maatlog-infinite-sentinel")
 
     assert "block-size: 1px" in rule
@@ -1420,24 +1392,24 @@ def _class_selectors(css: str) -> set[str]:
     return set(re.findall(r"\.(maatlog[A-Za-z0-9_-]*)", without_comments))
 
 
-def test_default_stylesheet_mirrors_every_base_class(make_project: ProjectFactory) -> None:
+def test_default_stylesheet_mirrors_every_base_class() -> None:
     """The default theme replaces base's stylesheet, so it must cover its classes."""
-    base = _class_selectors(_stylesheet(make_project, "maatlog-base"))
-    default = _class_selectors(_stylesheet(make_project, "maatlog-default"))
+    base = _class_selectors(theme_stylesheet("maatlog-base"))
+    default = _class_selectors(theme_stylesheet("maatlog-default"))
 
     assert sorted(base - BASE_ONLY_CLASSES - default) == []
 
 
 @pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
 @pytest.mark.parametrize("selector", HERO_CLASSES)
-def test_hero_styles_are_declared(make_project: ProjectFactory, theme: str, selector: str) -> None:
-    assert f".{selector} {{" in _stylesheet(make_project, theme)
+def test_hero_styles_are_declared(theme: str, selector: str) -> None:
+    assert f".{selector} {{" in theme_stylesheet(theme)
 
 
 @pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
-def test_hero_title_overlaps_the_image(make_project: ProjectFactory, theme: str) -> None:
+def test_hero_title_overlaps_the_image(theme: str) -> None:
     """The acceptance criterion is an overlay, which needs a positioned ancestor."""
-    css = _stylesheet(make_project, theme)
+    css = theme_stylesheet(theme)
 
     container = _css_rule(css, ".maatlog-post-top-image")
     assert "position: relative" in container
@@ -1446,37 +1418,37 @@ def test_hero_title_overlaps_the_image(make_project: ProjectFactory, theme: str)
     assert "--maatlog-top-image-title-color" in css
 
 
-def test_base_theme_defines_profile_width_tokens(make_project: ProjectFactory) -> None:
-    css = _stylesheet(make_project, "maatlog-base")
+def test_base_theme_defines_profile_width_tokens() -> None:
+    css = theme_stylesheet("maatlog-base")
 
     assert "--maatlog-profile-main-width:" in css
     assert "--maatlog-profile-content-width:" in css
 
 
-def test_base_theme_lets_profile_main_use_the_full_grid_track(make_project: ProjectFactory) -> None:
+def test_base_theme_lets_profile_main_use_the_full_grid_track() -> None:
     """Profile pages skip the page TOC column, so main should not be capped below the grid track."""
-    css = _stylesheet(make_project, "maatlog-base")
+    css = theme_stylesheet("maatlog-base")
 
     assert "--maatlog-profile-main-width:" in css
     assert ".maatlog-layout-page-profile .maatlog-layout-main" not in css
 
 
-def test_base_theme_does_not_touch_the_shared_content_width(make_project: ProjectFactory) -> None:
+def test_base_theme_does_not_touch_the_shared_content_width() -> None:
     """通常ページの行長ポリシー（Issue #71 / #110）を退行させない。"""
-    css = _stylesheet(make_project, "maatlog-base")
+    css = theme_stylesheet("maatlog-base")
 
     assert "--maatlog-content-width: clamp(42rem, 24rem + 16vw, 60rem);" in css
 
 
 @pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
-def test_author_summary_card_is_styled(make_project: ProjectFactory, theme: str) -> None:
-    css = _stylesheet(make_project, theme)
+def test_author_summary_card_is_styled(theme: str) -> None:
+    css = theme_stylesheet(theme)
 
     assert ".maatlog-author-summary-card {" in css
 
 
-def test_base_sizes_the_author_avatar(make_project: ProjectFactory) -> None:
-    css = _stylesheet(make_project, "maatlog-base")
+def test_base_sizes_the_author_avatar() -> None:
+    css = theme_stylesheet("maatlog-base")
     avatar = _css_rule(css, ".maatlog-author-summary-avatar")
 
     assert "width: var(--maatlog-author-avatar-size, 3.5rem);" in avatar

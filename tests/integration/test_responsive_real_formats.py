@@ -19,6 +19,7 @@ from urllib.parse import unquote, urljoin, urlsplit
 
 import pytest
 from conftest import HtmlPage, ProjectFactory, SphinxFactory
+from fixtures.integration_builds import BuiltProject, BuiltProjects
 from fixtures.responsive_build_fixtures import record_page_context
 from fixtures.responsive_image_html import img_attrs
 from fixtures.responsive_images.pillow_guard import restored_pillow_modules as restored_pillow_modules
@@ -41,17 +42,17 @@ def _expected_widths(case: ImageCase) -> list[int]:
     return sorted({480, 768, 960, 1200, 1600}.intersection(range(1, case.width)) | {case.width})
 
 
-def _variant_path(app: Sphinx, basename: str) -> Path:
-    return Path(app.outdir) / _OUTPUT_DIR / basename
+def _variant_path(built: BuiltProject, basename: str) -> Path:
+    return built.path(f"{_OUTPUT_DIR}/{basename}")
 
 
-def assert_real_entry(app: Sphinx, case: ImageCase, source_key: str) -> None:
+def assert_real_entry(built: BuiltProject, case: ImageCase, source_key: str) -> None:
     """Decode every published candidate of *source_key* with Pillow."""
-    entry = responsive_manifest(app.env)[source_key]
+    entry = built.manifest[source_key]
     assert case.width is not None and case.height is not None
     assert [variant.width for variant in entry.variants] == _expected_widths(case)
     for variant in entry.variants:
-        path = _variant_path(app, variant.public_basename)
+        path = _variant_path(built, variant.public_basename)
         assert path.is_file()
         assert path.stat().st_size > 0
         with Image.open(path) as image:
@@ -62,12 +63,12 @@ def assert_real_entry(app: Sphinx, case: ImageCase, source_key: str) -> None:
             assert not image.getexif()
 
 
-def _build(make_sphinx: SphinxFactory, name: str, *, builder: str = "html", **config: object) -> Sphinx:
-    merged = project_config()
-    merged.update(config)
-    app = make_sphinx(files=project_files(source_name=name, post_count=3), config=merged, builder=builder)
-    app.build()
-    return app
+def _build(built_projects: BuiltProjects, name: str, *, builder: str = "html", **config: object) -> BuiltProject:
+    return built_projects.project(
+        files=project_files(source_name=name, post_count=3),
+        config=project_config() | config,
+        builder=builder,
+    )
 
 
 def _png_chunk_types(data: bytes) -> list[bytes]:
@@ -148,53 +149,55 @@ def test_project_files_layout() -> None:
 
 
 _RESPONSIVE_NAMES = [
-    "photo.jpg",
-    "rgba.png",
-    "still.webp",
-    "small.jpg",
+    pytest.param("photo.jpg", marks=pytest.mark.xdist_group("integration-real-photo")),
+    pytest.param("rgba.png", marks=pytest.mark.xdist_group("integration-real-rgba")),
+    pytest.param("still.webp", marks=pytest.mark.xdist_group("integration-real-still")),
+    pytest.param("small.jpg", marks=pytest.mark.xdist_group("integration-real-small")),
     "portrait.jpg",
-    "orientation-6.jpg",
+    pytest.param("orientation-6.jpg", marks=pytest.mark.xdist_group("integration-real-orientation")),
 ]
 
 
 @pytest.mark.parametrize("builder", ["html", "dirhtml"])
 @pytest.mark.parametrize("name", _RESPONSIVE_NAMES)
-def test_real_candidates_decode(make_sphinx: SphinxFactory, builder: str, name: str) -> None:
+def test_real_candidates_decode(built_projects: BuiltProjects, builder: str, name: str) -> None:
     case = image_cases()[name]
-    app = _build(make_sphinx, name, builder=builder)
-    assert_real_entry(app, case, f"images/{name}")
+    built = _build(built_projects, name, builder=builder)
+    assert_real_entry(built, case, f"images/{name}")
 
 
-def test_small_image_only_240w(make_sphinx: SphinxFactory) -> None:
-    app = _build(make_sphinx, "small.jpg")
-    entry = responsive_manifest(app.env)["images/small.jpg"]
+@pytest.mark.xdist_group("integration-real-small")
+def test_small_image_only_240w(built_projects: BuiltProjects) -> None:
+    built = _build(built_projects, "small.jpg")
+    entry = built.manifest["images/small.jpg"]
     assert [variant.width for variant in entry.variants] == [240]
 
 
-def test_unsorted_duplicate_widths_normalize(make_sphinx: SphinxFactory) -> None:
-    app = _build(make_sphinx, "photo.jpg", maatlog_responsive_image_widths=(768, 480, 480))
-    entry = responsive_manifest(app.env)["images/photo.jpg"]
+def test_unsorted_duplicate_widths_normalize(built_projects: BuiltProjects) -> None:
+    built = _build(built_projects, "photo.jpg", maatlog_responsive_image_widths=(768, 480, 480))
+    entry = built.manifest["images/photo.jpg"]
     assert [variant.width for variant in entry.variants] == [480, 768, 2400]
 
 
-def test_content_sniff_overrides_extension(make_sphinx: SphinxFactory) -> None:
+def test_content_sniff_overrides_extension(built_projects: BuiltProjects) -> None:
     """JPEG bytes behind a ``.png`` name produce JPEG candidates named ``.jpg``."""
     case = image_cases()["mislabeled.png"]
-    app = _build(make_sphinx, "mislabeled.png")
-    entry = responsive_manifest(app.env)["images/mislabeled.png"]
+    built = _build(built_projects, "mislabeled.png")
+    entry = built.manifest["images/mislabeled.png"]
     assert entry.image_format is ImageFormat.JPEG
-    assert_real_entry(app, case, "images/mislabeled.png")
+    assert_real_entry(built, case, "images/mislabeled.png")
     for variant in entry.variants:
         assert variant.public_basename.endswith(".jpg")
 
 
-def test_rgba_alpha_matches_independent_lanczos(make_sphinx: SphinxFactory) -> None:
+@pytest.mark.xdist_group("integration-real-rgba")
+def test_rgba_alpha_matches_independent_lanczos(built_projects: BuiltProjects) -> None:
     """The half-size RGBA candidate matches a fresh LANCZOS oracle within ±1."""
     case = image_cases()["rgba.png"]
-    app = _build(make_sphinx, "rgba.png")
-    entry = responsive_manifest(app.env)["images/rgba.png"]
+    built = _build(built_projects, "rgba.png")
+    entry = built.manifest["images/rgba.png"]
     variant = next(item for item in entry.variants if item.width == 480)
-    path = _variant_path(app, variant.public_basename)
+    path = _variant_path(built, variant.public_basename)
     with Image.open(path) as actual:
         actual.load()
         assert actual.mode == "RGBA"
@@ -212,31 +215,31 @@ def test_rgba_alpha_matches_independent_lanczos(make_sphinx: SphinxFactory) -> N
         assert all(abs(int(a) - int(o)) <= 1 for a, o in zip(actual_pixel, oracle_pixel, strict=True))  # type: ignore[misc]
 
 
-def test_icc_png_keeps_srgb_profile(make_sphinx: SphinxFactory) -> None:
-    app = _build(make_sphinx, "icc.png")
-    entry = responsive_manifest(app.env)["images/icc.png"]
+def test_icc_png_keeps_srgb_profile(built_projects: BuiltProjects) -> None:
+    built = _build(built_projects, "icc.png")
+    entry = built.manifest["images/icc.png"]
     for variant in entry.variants:
-        with Image.open(_variant_path(app, variant.public_basename)) as image:
+        with Image.open(_variant_path(built, variant.public_basename)) as image:
             image.load()
             assert image.info.get("icc_profile") == _srgb_profile_bytes()
 
 
-def test_cmyk_jpeg_keeps_mode(make_sphinx: SphinxFactory) -> None:
-    app = _build(make_sphinx, "cmyk.jpg")
-    entry = responsive_manifest(app.env)["images/cmyk.jpg"]
-    assert_real_entry(app, image_cases()["cmyk.jpg"], "images/cmyk.jpg")
+def test_cmyk_jpeg_keeps_mode(built_projects: BuiltProjects) -> None:
+    built = _build(built_projects, "cmyk.jpg")
+    entry = built.manifest["images/cmyk.jpg"]
+    assert_real_entry(built, image_cases()["cmyk.jpg"], "images/cmyk.jpg")
     for variant in entry.variants:
-        with Image.open(_variant_path(app, variant.public_basename)) as image:
+        with Image.open(_variant_path(built, variant.public_basename)) as image:
             image.load()
             assert image.mode == "CMYK"
 
 
-def test_palette_trns_becomes_rgba(make_sphinx: SphinxFactory) -> None:
-    app = _build(make_sphinx, "palette.png")
-    entry = responsive_manifest(app.env)["images/palette.png"]
-    assert_real_entry(app, image_cases()["palette.png"], "images/palette.png")
+def test_palette_trns_becomes_rgba(built_projects: BuiltProjects) -> None:
+    built = _build(built_projects, "palette.png")
+    entry = built.manifest["images/palette.png"]
+    assert_real_entry(built, image_cases()["palette.png"], "images/palette.png")
     variant = next(item for item in entry.variants if item.width == 480)
-    with Image.open(_variant_path(app, variant.public_basename)) as image:
+    with Image.open(_variant_path(built, variant.public_basename)) as image:
         image.load()
         assert image.mode == "RGBA"
         # Palette index 0 (tRNS transparent) covers the left half.
@@ -244,14 +247,15 @@ def test_palette_trns_becomes_rgba(make_sphinx: SphinxFactory) -> None:
         assert image.getpixel((image.width - 5, image.height // 2))[3] >= 254  # type: ignore[index]
 
 
-def test_orientation_bakes_block_positions(make_sphinx: SphinxFactory) -> None:
+@pytest.mark.xdist_group("integration-real-orientation")
+def test_orientation_bakes_block_positions(built_projects: BuiltProjects) -> None:
     """EXIF orientation 6 turns the stored left/right halves into top/bottom."""
-    app = _build(make_sphinx, "orientation-6.jpg")
-    entry = responsive_manifest(app.env)["images/orientation-6.jpg"]
+    built = _build(built_projects, "orientation-6.jpg")
+    entry = built.manifest["images/orientation-6.jpg"]
     assert entry.natural_width == 800
     assert entry.natural_height == 1200
     variant = next(item for item in entry.variants if item.width == 800)
-    with Image.open(_variant_path(app, variant.public_basename)) as image:
+    with Image.open(_variant_path(built, variant.public_basename)) as image:
         rgb = image.convert("RGB")
         top = rgb.getpixel((rgb.width // 2, rgb.height // 4))
         bottom = rgb.getpixel((rgb.width // 2, rgb.height * 3 // 4))
@@ -259,12 +263,13 @@ def test_orientation_bakes_block_positions(make_sphinx: SphinxFactory) -> None:
     assert bottom[2] > 150 and bottom[0] < 100, f"bottom block should be blue, got {bottom}"  # type: ignore[index]
 
 
-def test_lossy_block_centers_within_tolerance(make_sphinx: SphinxFactory) -> None:
+@pytest.mark.xdist_group("integration-real-still")
+def test_lossy_block_centers_within_tolerance(built_projects: BuiltProjects) -> None:
     """Lossy candidates stay within 16 per channel of the flat block colours."""
-    app = _build(make_sphinx, "still.webp")
-    entry = responsive_manifest(app.env)["images/still.webp"]
+    built = _build(built_projects, "still.webp")
+    entry = built.manifest["images/still.webp"]
     variant = next(item for item in entry.variants if item.width == 480)
-    with Image.open(_variant_path(app, variant.public_basename)) as image:
+    with Image.open(_variant_path(built, variant.public_basename)) as image:
         left = _rgb_at(image, (image.width // 4, image.height // 2))
         right = _rgb_at(image, (image.width * 3 // 4, image.height // 2))
     assert all(abs(channel - expected) <= 16 for channel, expected in zip(left, (200, 30, 30), strict=True))
@@ -272,11 +277,11 @@ def test_lossy_block_centers_within_tolerance(make_sphinx: SphinxFactory) -> Non
 
 
 @pytest.mark.parametrize("name", ["meta.jpg", "meta.png"])
-def test_variants_strip_all_metadata(make_sphinx: SphinxFactory, name: str) -> None:
-    app = _build(make_sphinx, name)
-    entry = responsive_manifest(app.env)[f"images/{name}"]
+def test_variants_strip_all_metadata(built_projects: BuiltProjects, name: str) -> None:
+    built = _build(built_projects, name)
+    entry = built.manifest[f"images/{name}"]
     for variant in entry.variants:
-        path = _variant_path(app, variant.public_basename)
+        path = _variant_path(built, variant.public_basename)
         raw = path.read_bytes()
         with Image.open(path) as image:
             image.load()
@@ -298,13 +303,13 @@ def test_variants_strip_all_metadata(make_sphinx: SphinxFactory, name: str) -> N
 
 
 @pytest.mark.parametrize("name", ["my photo.png", "a,b.png", "日本語.png", "100%.png"])
-def test_special_names_get_safe_published_basenames(make_sphinx: SphinxFactory, name: str) -> None:
-    app = _build(make_sphinx, name)
-    entry = responsive_manifest(app.env)[f"images/{name}"]
+def test_special_names_get_safe_published_basenames(built_projects: BuiltProjects, name: str) -> None:
+    built = _build(built_projects, name)
+    entry = built.manifest[f"images/{name}"]
     assert entry.variants
     for variant in entry.variants:
         assert re.fullmatch(r"[A-Za-z0-9._-]+", variant.public_basename)
-        assert _variant_path(app, variant.public_basename).is_file()
+        assert _variant_path(built, variant.public_basename).is_file()
 
 
 def test_same_basename_different_directories_stay_distinct(make_sphinx: SphinxFactory) -> None:
@@ -330,14 +335,15 @@ def test_same_basename_different_directories_stay_distinct(make_sphinx: SphinxFa
     assert all(name.startswith("dup-") for name in names)
     assert len(set(names)) == len(names)
     for name in names:
-        assert _variant_path(app, name).is_file()
+        assert (Path(app.outdir) / _OUTPUT_DIR / name).is_file()
 
 
-def test_source_bytes_stay_untouched_and_original_published(make_sphinx: SphinxFactory) -> None:
+@pytest.mark.xdist_group("integration-real-photo")
+def test_source_bytes_stay_untouched_and_original_published(built_projects: BuiltProjects) -> None:
     case = image_cases()["photo.jpg"]
-    app = _build(make_sphinx, "photo.jpg")
-    assert (Path(app.srcdir) / "images" / "photo.jpg").read_bytes() == case.payload
-    published = Path(app.outdir) / "_images" / app.builder.images["images/photo.jpg"]
+    built = _build(built_projects, "photo.jpg")
+    assert (built.srcdir / "images" / "photo.jpg").read_bytes() == case.payload
+    published = built.outdir / "_images" / built.images["images/photo.jpg"]
     assert published.read_bytes() == case.payload
 
 
@@ -356,14 +362,13 @@ _FALLBACK_NAMES = [
 
 
 @pytest.mark.parametrize("name", _FALLBACK_NAMES)
-def test_fallback_source_publishes_original_verbatim(make_sphinx: SphinxFactory, name: str) -> None:
+def test_fallback_source_publishes_original_verbatim(built_projects: BuiltProjects, name: str) -> None:
     case = image_cases()[name]
-    app = _build(make_sphinx, name)
-    manifest = responsive_manifest(app.env)
-    assert f"images/{name}" not in manifest
-    published = Path(app.outdir) / "_images" / app.builder.images[f"images/{name}"]
+    built = _build(built_projects, name)
+    assert f"images/{name}" not in built.manifest
+    published = built.outdir / "_images" / built.images[f"images/{name}"]
     assert published.read_bytes() == case.payload
-    html = (Path(app.outdir) / "posts" / "p01.html").read_text(encoding="utf-8")
+    html = (built.outdir / "posts" / "p01.html").read_text(encoding="utf-8")
     managed = [attrs for attrs in img_attrs(html) if "maatlog" in attrs.get("class", "")]
     assert managed, "expected representative/top images on p01"
     for attrs in managed:
@@ -538,11 +543,10 @@ def _assert_responsive_img(attrs: dict[str, str] | None, label: str) -> dict[str
     return attrs
 
 
-def test_consumer_html_marks_every_site(tmp_path: Path) -> None:
+def test_consumer_html_marks_every_site(built_projects: BuiltProjects) -> None:
     """A real CLI build: every consumer template emits the managed marker."""
-    project = create_project(tmp_path / "consumers", source_name="photo.jpg")
-    result = project.build()
-    assert result.returncode == 0, result.stderr + result.stdout
+    project = built_projects.real(source_name="photo.jpg")
+    assert project.returncode == 0, project.stderr + project.stdout
 
     def page(docname: str) -> HtmlPage:
         return HtmlPage((project.outdir / _page_path("html", docname)).read_text(encoding="utf-8"))
@@ -594,10 +598,9 @@ def test_consumer_html_marks_every_site(tmp_path: Path) -> None:
     assert local and all("srcset" not in attrs for attrs in local)
 
 
-def test_scroll_pages_share_the_same_source(tmp_path: Path) -> None:
-    project = create_project(tmp_path / "scroll", source_name="photo.jpg", page_size=4)
-    result = project.build()
-    assert result.returncode == 0, result.stderr + result.stdout
+def test_scroll_pages_share_the_same_source(built_projects: BuiltProjects) -> None:
+    project = built_projects.real(source_name="photo.jpg", page_size=4)
+    assert project.returncode == 0, project.stderr + project.stdout
     for docname in ("nested/blog", "nested/blog/page/2", "nested/blog/page/5"):
         page = HtmlPage((project.outdir / _page_path("html", docname)).read_text(encoding="utf-8"))
         cards = page.select(".maatlog-post-card .maatlog-post-card-image")
@@ -611,10 +614,9 @@ def test_scroll_pages_share_the_same_source(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("builder", ["html", "dirhtml"])
-def test_subprocess_build_produces_real_candidates(tmp_path: Path, builder: str) -> None:
-    project = create_project(tmp_path / f"cli-{builder}", builder=builder, source_name="photo.jpg", post_count=3)
-    result = project.build()
-    assert result.returncode == 0, result.stderr + result.stdout
+def test_subprocess_build_produces_real_candidates(built_projects: BuiltProjects, builder: str) -> None:
+    project = built_projects.real(builder=builder, source_name="photo.jpg", post_count=3)
+    assert project.returncode == 0, project.stderr + project.stdout
     output = project.outdir / _OUTPUT_DIR
     published = sorted(output.glob("*.jpg"))
     assert len(published) == 6
