@@ -17,3 +17,5 @@ docs/_build/
 .DS_Store
 .idea/
 .vscode/
+reviews/
+docs_draft/
