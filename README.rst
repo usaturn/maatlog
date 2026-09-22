@@ -106,10 +106,10 @@ only; other builders keep post body and role resolution where applicable.
 Documentation
 -------------
 
-* `docs/authoring.rst` — post metadata schema and examples
-* `docs/configuration.rst` — conf.py settings and defaults
-* `docs/theme-api.rst` — Theme API 1.0 contract and official themes
-* `docs/builders.rst` — builder matrix and static-site constraints
+* `docs/authoring.rst <docs/authoring.rst>`_ — post metadata schema and examples
+* `docs/configuration.rst <docs/configuration.rst>`_ — conf.py settings and defaults
+* `docs/theme-api.rst <docs/theme-api.rst>`_ — Theme API 1.0 contract and official themes
+* `docs/builders.rst <docs/builders.rst>`_ — builder matrix and static-site constraints
 
 Development
 -----------

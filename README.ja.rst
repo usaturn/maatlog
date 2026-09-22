@@ -105,10 +105,10 @@ MaatLog HTML メタデータ）が保証されるのは ``html`` および ``dir
 ドキュメント
 ------------
 
-* `docs/authoring.rst` — 投稿メタデータスキーマと例
-* `docs/configuration.rst` — conf.py の設定とデフォルト
-* `docs/theme-api.rst` — Theme API 1.0 仕様と公式テーマ
-* `docs/builders.rst` — ビルダー行列と静的サイト制約
+* `docs/authoring.rst <docs/authoring.rst>`_ — 投稿メタデータスキーマと例
+* `docs/configuration.rst <docs/configuration.rst>`_ — conf.py の設定とデフォルト
+* `docs/theme-api.rst <docs/theme-api.rst>`_ — Theme API 1.0 仕様と公式テーマ
+* `docs/builders.rst <docs/builders.rst>`_ — ビルダー行列と静的サイト制約
 
 開発
 ----
