@@ -12,7 +12,7 @@ from sphinx.util import logging
 logger = logging.getLogger(__name__)
 
 #: 完全 HTML 機能面の builder 名。builder_capability と表 wrapper の
-#: 宣言的ゲート（table_layout.TableWrapperPostTransform）が共有する正本。
+#: 宣言的ゲート（table_layout.TableWrapperPostTransform）はどちらもこの定数だけを参照する。
 FULL_HTML_BUILDERS: Final[tuple[str, ...]] = ("html", "dirhtml")
 
 PARTIAL_SUPPORT_CODE = "maatlog.builder.partial-support"

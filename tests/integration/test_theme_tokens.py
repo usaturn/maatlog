@@ -1,4 +1,4 @@
-"""ライト／ダークの配色トークン契約。"""
+"""ライト／ダークの配色トークンの仕様。"""
 
 from __future__ import annotations
 
@@ -300,7 +300,7 @@ def test_default_theme_mirrors_the_profile_width_tokens() -> None:
 
 
 def test_profile_styles_hard_code_no_colour() -> None:
-    """同ファイルの色トークン契約をプロフィールのスタイルにも適用する。"""
+    """色はトークン経由で指定し直書きしないという規則を、プロフィールのスタイルにも適用する。"""
     css = theme_stylesheet("maatlog-default")
 
     assert _colour_literals_outside_tokens(_css_rule_body(css, ".maatlog-profile-interest")) == []

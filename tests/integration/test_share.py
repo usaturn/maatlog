@@ -1,4 +1,4 @@
-"""Issue #64: Share ボタンのマークアップ契約と HTML 出力。"""
+"""Issue #64: Share ボタンのマークアップ仕様と HTML 出力。"""
 
 from __future__ import annotations
 
@@ -50,7 +50,7 @@ def test_post_page_renders_exactly_one_share_control(make_project: ProjectFactor
     assert button.get("type") == "button"
     # WCAG 2.5.3 (Label in Name): 可視ラベルをそのままアクセシブル名にするため上書きしない。
     assert button.get("aria-label") is None
-    # runtime が読まないフックは契約に載せない（結合点はクラスである）。
+    # runtime が読まないフック属性は出力しない（runtime との結合点はクラスである）。
     assert button.get("data-maatlog-share") is None
     # 可視ラベルがそのままアクセシブル名になる（HtmlPage は属性しか返さないので生 HTML で見る）。
     assert ">Share</button>" in page
@@ -115,7 +115,7 @@ def test_runtime_registers_the_share_enhancer(make_project: ProjectFactory) -> N
 
 
 def test_runtime_resolves_canonical_url(make_project: ProjectFactory) -> None:
-    # 文字列契約ベース: 'link[rel="canonical"]' と 'location.href' の両参照を検証
+    # 配信 script に含まれる文字列で確認する: 'link[rel="canonical"]' と 'location.href' の両参照を検証
     script = _runtime(make_project)
 
     assert 'link[rel="canonical"]' in script

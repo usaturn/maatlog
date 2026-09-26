@@ -1,4 +1,4 @@
-"""Issue #61: Back to Top のマークアップ、CSS 契約、runtime 登録。"""
+"""Issue #61: Back to Top のマークアップ、CSS の仕様、runtime 登録。"""
 
 from __future__ import annotations
 
@@ -138,7 +138,7 @@ def test_runtime_respects_reduced_motion_on_click(make_project: ProjectFactory) 
 
 
 def test_theme_ships_a_single_runtime_file(make_project: ProjectFactory) -> None:
-    # 機能別 script を増やさない契約。
+    # 機能ごとに script を増やさず、maatlog.js の 1 本だけを配信する。
     static_dir = make_project(files=BACK_TO_TOP_PROJECT, theme="maatlog-default").build().asset("_static")
 
     assert sorted(path.name for path in static_dir.glob("maatlog*.js")) == ["maatlog.js"]

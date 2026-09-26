@@ -1,6 +1,6 @@
 """Issue #205: 内容幅（B/#203）× layout shell（C/#204）の結合回帰。
 
-B と C の単体契約を丸写しせず、両者が合成されて初めて現れる境界だけを検証する。
+B と C の単体テストが検証する仕様を丸写しせず、両者が合成されて初めて現れる境界だけを検証する。
 測定規則は Spec §4.6 C4（境界一致 2 CSS px、document 横 overflow 1 CSS px、
 border-box を getBoundingClientRect で測る）。fixture は読み取り専用（#202 凍結）。
 """
@@ -347,7 +347,7 @@ def test_table_rule_continuity_inside_centered_capped_shell(
 ) -> None:
     """T6（AC1/AC6）: 中央寄せ capped shell の中でも罫線が表の右端まで連続し、
     幅広表は wrapper 内スクロールの右端まで罫線が連続する。実画面の
-    スクリーンショットは補助証拠（合否は数値 assertion が正本）。
+    スクリーンショットは補助証拠（合否は数値 assertion だけで決める）。
     """
     result = width_contract_site.build("html", theme="maatlog-default")
     EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
@@ -468,7 +468,7 @@ def test_percent_settings_do_not_overflow_across_contract_viewports(
 def test_light_dark_and_js_disabled_width_regression(
     width_contract_site: AcceptanceSite,
 ) -> None:
-    """T8（AC7、C4「light/dark の回帰は D が両方で確認」）: 幅契約は
+    """T8（AC7、C4「light/dark の回帰は D が両方で確認」）: 内容幅と shell の幅は
     light/dark・JS 有無で変わらない。wrapper の tabindex（キーボード
     スクロール可能構造）は JS 無効でも存在し、dark は実際に適用される。
     """

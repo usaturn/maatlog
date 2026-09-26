@@ -43,7 +43,7 @@ def test_fallback_archive_becomes_the_home_page(magazine_site: AcceptanceSite) -
 
 
 def test_fallback_page_one_keeps_the_chronological_window(magazine_site: AcceptanceSite) -> None:
-    """Featured は投影であり、ページ窓（PAGE_SIZE 件）を縮めない（#177 契約）。"""
+    """Featured は投影であり、ページ窓（PAGE_SIZE 件）を縮めない（#177 の仕様）。"""
     result = magazine_site.build("html", theme="maatlog-default", config_overrides=FALLBACK_OVERRIDES)
     page_one = result.html(ARCHIVE_PAGE)
     slugs = [card["data-slug"] for card in page_one.select(".maatlog-post-card")]

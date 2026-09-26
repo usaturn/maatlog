@@ -1,5 +1,6 @@
-"""幅契約共有 fixture プロジェクト（Issue #202 で作成。以降の内容変更は Issue への記録と所有者間の調整を要する）。
+"""内容幅と layout shell の幅を検証する共有 fixture プロジェクト。
 
+Issue #202 で作成。以降の内容変更は Issue への記録と所有者間の調整を要する。
 B(#203) は content width、C(#204) は shell、D(#205) は全 AC の実測に使う。
 ``maatlog_content_width`` は意図的に設定しない。ビルドごとの config_overrides で
 None / "90%" / "100%" / "72rem" / "clamp(42rem, 70vw, 90rem)" を切り替えて検証する（AC3）。

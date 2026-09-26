@@ -141,7 +141,7 @@ def test_wide_shell_sends_surplus_viewport_to_outer_gutters(
     assert gutters_by_width[1920] > gutters_by_width[1280], gutters_by_width
     assert gutters_by_width[3840] > gutters_by_width[1920], gutters_by_width
     # 2560→3840 の main は clamp の preferred に従い 72rem 天井まで伸びる
-    # （Spec §1.6: 941px → 1152px）。天井超過の禁止が契約の意味。
+    # （Spec §1.6: 941px → 1152px）。ここで保証するのは天井を超えないこと。
     assert mains_by_width[3840] <= 1152 + 2, mains_by_width
     assert mains_by_width[3840] >= mains_by_width[2560], mains_by_width
 

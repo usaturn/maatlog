@@ -286,8 +286,9 @@ def test_older_theme_api_versions_stay_compatible() -> None:
 
 
 def test_required_contract_is_unchanged_by_one_five() -> None:
-    # 1.5 も任意契約だけを足す。必須テンプレートとブロックは 1.0 のまま。
-    # 1.12 でプロフィール契約が加わる。
+    # 1.5 も任意仕様だけを足す。必須テンプレートとブロックは 1.0 のまま。
+    # 1.12 でプロフィール用の必須テンプレートとブロックが加わり、
+    # 1.16 で right rail 用の必須テンプレートが加わる。
     assert REQUIRED_TEMPLATES == (
         "maatlog/post.html",
         "maatlog/archive.html",
@@ -316,7 +317,7 @@ def test_required_contract_is_unchanged_by_one_five() -> None:
 
 
 def test_config_style_block_is_optional() -> None:
-    """maatlog_config_style は任意契約。standalone テーマの検証を落とさない。"""
+    """maatlog_config_style は 1.14 の任意ブロック。定義しない standalone テーマも検証を通る。"""
     assert "maatlog_config_style" not in REQUIRED_BLOCKS
     assert len(REQUIRED_BLOCKS) == 11
 
@@ -520,27 +521,27 @@ def test_a_pygments_table_without_palettes_fails_the_manifest() -> None:
 
 
 def test_core_theme_api_is_bumped_for_the_profile_contract() -> None:
-    # プロフィール契約は 1.12 で入った。以降のマイナーでも維持される。
+    # プロフィール用の必須テンプレートとブロックは 1.12 で入った。以降のマイナーでも維持される。
     assert (CORE_THEME_API.major, CORE_THEME_API.minor) >= (1, 12)
 
 
 def test_core_theme_api_is_bumped_for_the_back_to_top_contract() -> None:
-    # Issue #61 の Back to Top は 1.13 の任意契約。以降のマイナーがそれを包含する。
+    # Issue #61 の Back to Top は 1.13 で入った任意仕様。以降のマイナーがそれを包含する。
     assert (CORE_THEME_API.major, CORE_THEME_API.minor) >= (1, 13)
 
 
 def test_core_theme_api_is_bumped_for_the_share_contract() -> None:
-    # Issue #64 の Share 契約は 1.15 の任意契約。以降のマイナーがそれを包含する。
+    # Issue #64 の Share は 1.15 で入った任意仕様。以降のマイナーがそれを包含する。
     assert (CORE_THEME_API.major, CORE_THEME_API.minor) >= (1, 15)
 
 
 def test_core_theme_api_is_bumped_for_the_right_rail_contract() -> None:
-    # Issue #102 の right rail は 1.16 の必須契約。以降のマイナーがそれを包含する。
+    # Issue #102 の right rail は 1.16 で入った必須テンプレート。以降のマイナーがそれを包含する。
     assert (CORE_THEME_API.major, CORE_THEME_API.minor) >= (1, 16)
 
 
 def test_core_theme_api_is_bumped_for_the_heading_copy_contract() -> None:
-    # Issue #59 の見出しコピーは 1.17 の任意契約。以降のマイナーがそれを包含する。
+    # Issue #59 の見出しコピーは 1.17 で入った任意仕様。以降のマイナーがそれを包含する。
     assert (CORE_THEME_API.major, CORE_THEME_API.minor) >= (1, 17)
 
 
@@ -569,7 +570,7 @@ def test_core_api_is_one_twenty_three() -> None:
 
 
 def test_core_theme_api_is_bumped_for_the_magazine_home_contract() -> None:
-    # Issue #177 の featured/latest キーは 1.18 の任意契約。
+    # Issue #177 の featured/latest キーは 1.18 で入った任意キー。
     assert (CORE_THEME_API.major, CORE_THEME_API.minor) >= (1, 18)
 
 

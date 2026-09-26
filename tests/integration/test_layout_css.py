@@ -80,8 +80,8 @@ def _css_rules(css: str, selector: str) -> list[str]:
 def _css_rules_by_selector_prefix(css: str, prefix: str) -> list[str]:
     """selector が ``prefix`` から始まるすべてのルール本体。
 
-    ``::after`` / ``::before`` などの pseudo-element は生成コンテンツの契約が
-    別にあるため対象外とし、``:hover`` 等の pseudo-class は対象に含める。
+    ``::after`` / ``::before`` などの pseudo-element が作る生成コンテンツは
+    別のテストで検証するため対象外とし、``:hover`` 等の pseudo-class は対象に含める。
     """
     rules: list[str] = []
     position = 0
@@ -439,7 +439,7 @@ def test_post_list_is_limited_to_the_content_width() -> None:
     assert any("width: 100%;" in rule for rule in rules)
     assert any("max-width: var(--maatlog-content-width, 42rem);" in rule for rule in rules)
     assert any("margin-inline: auto;" in rule for rule in rules)
-    # 既存のアーカイブ内グリッド配置と下マージン契約は維持する。
+    # アーカイブ内のグリッド配置（grid-area: body）と下マージン 0 は従来どおり維持する。
     assert any("grid-area: body;" in rule for rule in rules)
     assert any("margin-bottom: 0;" in rule for rule in rules)
 
@@ -830,7 +830,8 @@ def test_post_card_meta_links_stay_above_the_stretched_link(theme: str) -> None:
 @pytest.mark.parametrize("theme", ["maatlog-base", "maatlog-default"])
 def test_post_card_title_link_itself_stays_unpositioned(theme: str) -> None:
     # アンカー自身（:hover 等の pseudo-class を含む）を配置すると overlay の基準が
-    # タイトル文字幅に縮む。overlay 本体の ::after は別契約なので対象外とする。
+    # タイトル文字幅に縮む。overlay 本体の ::after は
+    # test_post_card_title_link_stretches_across_the_card で検証するので対象外とする。
     # maatlog-base は現時点でこのセレクタ配下に pseudo-class ルールを持たないため、
     # 空リストも許容する。
     css = theme_stylesheet(theme)
@@ -867,7 +868,8 @@ def test_category_badge_drops_the_bracket_decoration(theme: str) -> None:
 
     assert ".maatlog-category-badge::before" not in css
     assert ".maatlog-category-badge::after" not in css
-    # セレクタ自体は POST_TAXONOMY_SELECTORS の契約なので残す。
+    # セレクタ自体は test_post_taxonomy_styles_are_declared が
+    # POST_TAXONOMY_SELECTORS で宣言を求めているので残す。
     assert ".maatlog-category-badge {" in css
 
 

@@ -1,4 +1,4 @@
-"""Issue #200 系の幅契約共有ヘルパ（#202 で作成。以降 B/C/D は読み取り専用）。
+"""Issue #200 系で内容幅と layout shell の幅を検証する共有ヘルパ（#202 で作成。以降 B/C/D は読み取り専用）。
 
 測定規則は Spec §4.6 C4（境界一致 2 CSS px 以内、document 横 overflow 1 CSS px 以下、
 border-box の左右端を getBoundingClientRect で測る）に固定される。

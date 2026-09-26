@@ -1,6 +1,6 @@
 """パレット追従のシンタックスハイライト（Theme API 1.6）。
 
-パレット CSS そのものの契約は tests/integration/test_palettes.py が持つ。
+パレット CSS そのものの仕様は tests/integration/test_palettes.py で検証する。
 ここは Pygments スタイルの解決と、書き出される CSS の切り替わりだけを見る。
 """
 
