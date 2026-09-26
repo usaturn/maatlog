@@ -1,4 +1,4 @@
-"""Issue #202: 表 wrapper の DOM 契約（共有 fixture・JS 無効・キーボード・無害性）。"""
+"""Issue #202: 表 wrapper の DOM 構造の仕様（共有 fixture・JS 無効・キーボード・無害性）。"""
 
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ FIXTURE_PAGES = (
 
 
 def test_width_contract_fixture_builds_wrapped_and_clean(width_contract_site: AcceptanceSite) -> None:
-    # warningiserror=True の AcceptanceSite で警告なくビルドできること自体が fixture の契約。
+    # warningiserror=True の AcceptanceSite で警告なくビルドできること自体を、fixture の前提として検証する。
     result = width_contract_site.build("html", theme="maatlog-default")
 
     for page in FIXTURE_PAGES:

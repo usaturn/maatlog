@@ -171,7 +171,7 @@ WRAPPER_PROJECT: dict[str, str | bytes] = {
 
 
 def test_full_html_builders_constant_names_the_full_capability_tier() -> None:
-    # transform の宣言的ゲートと builder_capability が同じ正本を共有する。
+    # transform の宣言的ゲートと builder_capability は、どちらも FULL_HTML_BUILDERS だけを参照する。
     assert FULL_HTML_BUILDERS == ("html", "dirhtml")
 
     from maatlog.table_layout import TableWrapperPostTransform

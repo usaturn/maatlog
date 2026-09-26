@@ -146,5 +146,5 @@ def magazine_site(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Acceptance
 
 @pytest.fixture
 def width_contract_site(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AcceptanceSite:
-    """幅契約共有 fixture プロジェクトのビルドドライバ（Issue #202 で凍結）。"""
+    """内容幅と layout shell の幅を検証する共有 fixture プロジェクトのビルドドライバ（Issue #202 で凍結）。"""
     return AcceptanceSite(tmp_path / "width-contract", monkeypatch, project_root=WIDTH_CONTRACT_PROJECT_ROOT)

@@ -4,7 +4,7 @@
 :maatlog-slug: width-post
 :maatlog-published-at: 2026-08-01T09:00:00Z
 :maatlog-authors: alice
-:maatlog-excerpt: 幅契約 fixture の記事。
+:maatlog-excerpt: 幅検証 fixture の記事。
 
 Width contract post
 ===================

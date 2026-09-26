@@ -1,4 +1,4 @@
-"""バナーのテーマ切替ボタンの HTML 契約。"""
+"""バナーのテーマ切替ボタンが出力する HTML の仕様。"""
 
 from __future__ import annotations
 

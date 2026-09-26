@@ -1,4 +1,4 @@
-"""共有 enhancer registry の実ブラウザ契約（Issue #63 の基盤）。"""
+"""共有 enhancer registry の実ブラウザでの挙動（Issue #63 の基盤）。"""
 
 from __future__ import annotations
 

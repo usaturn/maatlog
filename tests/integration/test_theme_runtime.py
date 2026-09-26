@@ -1,4 +1,4 @@
-"""テーマ JavaScript の配信契約。"""
+"""テーマ JavaScript の配信仕様。"""
 
 from __future__ import annotations
 

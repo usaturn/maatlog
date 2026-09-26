@@ -29,7 +29,7 @@ VIEWPORTS: tuple[tuple[int, int], ...] = (
     (390, 844),
 )
 
-#: 契約上 Latest が並ぶ列数（``width -> columns``）。
+#: 仕様上 Latest が並ぶ列数（``width -> columns``）。
 LATEST_COLUMNS: dict[int, int] = {3840: 3, 2560: 3, 1920: 3, 1280: 2, 768: 1, 390: 1}
 
 #: ``maatlog_page_size``。専用 Home では Latest の上限を意味する。

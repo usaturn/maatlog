@@ -1,4 +1,4 @@
-"""パレットプリセットの契約（Theme API 1.5）。
+"""パレットプリセットの仕様（Theme API 1.5）。
 
 Issue #92 の各フェーズが tests/integration/test_layout_css.py を触るため、
 パレットの検証はこのファイルに閉じる。
@@ -217,7 +217,7 @@ def test_selected_palette_is_linked_after_the_theme_stylesheet(make_project: Pro
 
     assert result.asset("_static/palettes/neon.css").is_file()
     assert "_static/palettes/neon.css" in hrefs
-    # 後勝ちでトークンを上書きするため、順序が契約。
+    # パレット CSS は後勝ちでトークンを上書きするため、テーマ CSS より後にリンクされる必要がある。
     assert hrefs.index("_static/palettes/neon.css") > hrefs.index("_static/maatlog.css")
 
 
