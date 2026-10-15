@@ -31,6 +31,8 @@ NAME_COLUMN_RATIO = 0.3
 
 LONG_NAME = "FieldNameWithoutAnyBreakOpportunityThatMustWrapInsideItsColumn"
 LONG_URL = "https://example.test/" + "segment-without-any-break-opportunity/" * 6
+# A code block keeps its line and scrolls inside itself; it must not widen the content column.
+LONG_CODE_LINE = "long-code-line-" * 20
 
 PAGE_RST = f"""About
 =====
@@ -54,6 +56,10 @@ PAGE_RST = f"""About
 長い項目名と内容を持つフィールドリスト。
 
 :{LONG_NAME}: {LONG_URL}
+:コード例:
+   .. code-block:: text
+
+      {LONG_CODE_LINE}
 
 通常の定義リスト。
 
@@ -191,6 +197,7 @@ def test_body_field_lists_render_as_two_columns(
             assert len(summary["blocks"]) == 2 and "二段落目。" in summary["text"]
             assert "項目 A" in bullets["text"] and "項目 B" in bullets["text"]
             assert LONG_URL in long["rows"][0]["text"]
+            assert LONG_CODE_LINE in long["rows"][1]["text"]
 
             page.goto(result.path("post.html").resolve().as_uri(), wait_until="load")
             assert _horizontal_overflow(page) <= 0, (theme, width)
