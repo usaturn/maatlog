@@ -18,14 +18,15 @@ class AxeViolation(TypedDict):
     nodes: list[AxeNode]
 
 
-def axe_violations(page: Page, axe_path: Path) -> list[AxeViolation]:
+def axe_violations(page: Page, axe_path: Path, *, include: str | None = None) -> list[AxeViolation]:
+    """axe-core の違反を返す。``include`` は検査を CSS セレクタに当たる要素の下に限る。既定は文書全体。"""
     if not axe_path.is_file():
         raise AssertionError(f"axe-core script missing: {axe_path}; run `npm ci`")
     page.add_script_tag(path=str(axe_path))
     result = page.evaluate(
         """
-        async () => {
-          const { violations } = await axe.run(document, { resultTypes: ["violations"] });
+        async (include) => {
+          const { violations } = await axe.run(include ?? document, { resultTypes: ["violations"] });
           return violations.map(({ help, id, impact, nodes }) => ({
             help,
             id,
@@ -33,6 +34,7 @@ def axe_violations(page: Page, axe_path: Path) -> list[AxeViolation]:
             nodes: nodes.map(({ html, target }) => ({ html, target })),
           }));
         }
-        """
+        """,
+        include,
     )
     return cast(list[AxeViolation], result)
