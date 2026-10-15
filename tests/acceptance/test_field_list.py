@@ -28,9 +28,14 @@ MAX_COLUMN_GAP_PX = 24
 MAX_ROW_GAP_PX = 8
 # Same cap as basic.css: fit-content(30%).
 NAME_COLUMN_RATIO = 0.3
+# Blocks inside one value keep a visible gap (0.5rem) instead of touching.
+MIN_BLOCK_GAP_PX = 4
+# A list inside a value is indented 1.5em instead of the browser's 40px.
+MAX_LIST_INDENT_PX = 32
 
 LONG_NAME = "FieldNameWithoutAnyBreakOpportunityThatMustWrapInsideItsColumn"
-LONG_URL = "https://example.test/" + "segment-without-any-break-opportunity/" * 6
+# Percent-encoded Japanese offers no line-break opportunity; hyphens and slashes would.
+LONG_URL = "https://example.test/" + "%E3%83%95%E3%82%A3%E3%83%BC%E3%83%AB%E3%83%89" * 6
 # A code block keeps its line and scrolls inside itself; it must not widen the content column.
 LONG_CODE_LINE = "long-code-line-" * 20
 
@@ -98,7 +103,9 @@ class FieldRow(TypedDict):
     text: str
     dt: Box
     dd: Box | None
+    dd_natural_bottom: float | None
     blocks: list[Box]
+    list_indents: list[float]
 
 
 class ListMetrics(TypedDict):
@@ -118,15 +125,36 @@ _MEASURE_JS = """(dl) => {
       overflow: element.scrollWidth - element.clientWidth,
     };
   };
+  // Grid items stretch to the row height, so a trailing margin is only visible
+  // on the bottom the dd has when it is not stretched.
+  const naturalBottom = (element) => {
+    element.style.alignSelf = "start";
+    const bottom = element.getBoundingClientRect().bottom;
+    element.style.removeProperty("align-self");
+    return bottom;
+  };
   const rows = [];
   for (const element of dl.children) {
     if (element.tagName === "DT") {
-      rows.push({ name: element.innerText.trim(), text: "", dt: box(element), dd: null, blocks: [] });
+      rows.push({
+        name: element.innerText.trim(),
+        text: "",
+        dt: box(element),
+        dd: null,
+        dd_natural_bottom: null,
+        blocks: [],
+        list_indents: [],
+      });
     } else if (element.tagName === "DD" && rows.length > 0) {
       const row = rows[rows.length - 1];
+      const left = element.getBoundingClientRect().left;
       row.text = element.innerText;
       row.dd = box(element);
+      row.dd_natural_bottom = naturalBottom(element);
       row.blocks = [...element.children].map(box);
+      row.list_indents = [...element.querySelectorAll(":scope > :is(ul, ol) > li")].map(
+        (item) => item.getBoundingClientRect().left - left,
+      );
     }
   }
   return { dl: box(dl), rows };
@@ -149,9 +177,9 @@ def _assert_two_columns(metrics: ListMetrics, label: str) -> None:
     content_left = rows[0]["dd"]["left"] if rows[0]["dd"] is not None else None
     previous_bottom: float | None = None
     for row in rows:
-        dt, dd, blocks = row["dt"], row["dd"], row["blocks"]
+        dt, dd, natural_bottom, blocks = row["dt"], row["dd"], row["dd_natural_bottom"], row["blocks"]
         where = f"{label} / {row['name']}: {row}"
-        assert dd is not None and content_left is not None, where
+        assert dd is not None and natural_bottom is not None and content_left is not None and blocks, where
         # 項目名は dl の左端から、内容は同じ行の上端から始まる。
         assert abs(dt["left"] - dl["left"]) <= TOLERANCE_PX, where
         assert abs(dd["top"] - dt["top"]) <= TOLERANCE_PX, where
@@ -162,12 +190,13 @@ def _assert_two_columns(metrics: ListMetrics, label: str) -> None:
         assert dt["width"] <= dl["width"] * NAME_COLUMN_RATIO + TOLERANCE_PX, where
         assert dd["right"] <= dl["right"] + TOLERANCE_PX, where
         assert dt["overflow"] <= 0 and dd["overflow"] <= 0, where
-        # 内容の先頭・末尾に段落の余白が残らず、ブロック同士は重ならない。
-        assert blocks, where
+        # 内容の先頭・末尾に段落の余白が残らず、内容の中のブロックは間を空けて並ぶ。
         assert abs(blocks[0]["top"] - dd["top"]) <= TOLERANCE_PX, where
-        assert abs(dd["bottom"] - blocks[-1]["bottom"]) <= TOLERANCE_PX, where
+        assert abs(natural_bottom - blocks[-1]["bottom"]) <= TOLERANCE_PX, where
         for upper, lower in itertools.pairwise(blocks):
-            assert lower["top"] >= upper["bottom"] - TOLERANCE_PX, where
+            assert lower["top"] - upper["bottom"] >= MIN_BLOCK_GAP_PX, where
+        # 内容の中の箇条書きはブラウザ既定の 40px より浅く字下げし、行頭記号の幅は残す。
+        assert all(0 < indent <= MAX_LIST_INDENT_PX for indent in row["list_indents"]), where
         # 次の項目は前の内容の下から、間延びせずに始まる。
         if previous_bottom is not None:
             assert previous_bottom - TOLERANCE_PX <= dt["top"] <= previous_bottom + MAX_ROW_GAP_PX, where
@@ -196,6 +225,7 @@ def test_body_field_lists_render_as_two_columns(
             summary, bullets, _ = blocks["rows"]
             assert len(summary["blocks"]) == 2 and "二段落目。" in summary["text"]
             assert "項目 A" in bullets["text"] and "項目 B" in bullets["text"]
+            assert len(bullets["list_indents"]) == 2
             assert LONG_URL in long["rows"][0]["text"]
             assert LONG_CODE_LINE in long["rows"][1]["text"]
 
