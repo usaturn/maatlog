@@ -90,6 +90,17 @@ jobs:
             exit 1
           fi
 
+          # gitleaks git scans the output of `git log -p -U0`. Given
+          # --log-opts, it splits the value on whitespace, passes it to git log
+          # and adds nothing else; without it, it passes --full-history --all
+          # --diff-filter=tuxdb (Gitleaks 8.30.1 debug output). `git log -p`
+          # prints no diff for a merge commit, so content that first appears in
+          # a merge (a conflict resolution, or a change made while merging)
+          # would never be scanned. Every path therefore passes -m, which
+          # prints a merge commit as a diff in the log.diffMerges format: the
+          # runner's Git default, separate, is one diff against each parent.
+          # The full-history scan is Gitleaks's own default plus -m.
+          full_history="--full-history --all --diff-filter=tuxdb -m"
           log_opts=""
           case "$EVENT_NAME" in
             pull_request_target)
@@ -114,7 +125,7 @@ jobs:
                 exit 1
               fi
               merge_base="$(git merge-base "$BASE_SHA" "$HEAD_SHA")"
-              log_opts="$merge_base..$HEAD_SHA"
+              log_opts="-m $merge_base..$HEAD_SHA"
               ;;
             push)
               checked_out="$(git rev-parse HEAD)"
@@ -124,20 +135,17 @@ jobs:
               fi
               if [[ "$PUSH_BEFORE" =~ ^[0-9a-f]{40}$ ]] \
                 && git cat-file -e "$PUSH_BEFORE^{commit}" 2>/dev/null; then
-                log_opts="$PUSH_BEFORE..$PUSH_AFTER"
+                log_opts="-m $PUSH_BEFORE..$PUSH_AFTER"
               else
-                # New branch or missing history: scan everything rather than
-                # skipping.
-                log_opts=""
+                # New branch or missing history: scan everything (merge
+                # commits included) rather than skipping.
+                log_opts="$full_history"
               fi
               ;;
             *)
-              log_opts=""
+              # workflow_dispatch: the full history, merge commits included.
+              log_opts="$full_history"
               ;;
           esac
 
-          if [[ -n "$log_opts" ]]; then
-            gitleaks git --redact --no-banner --config "$GITHUB_WORKSPACE/.gitleaks.toml" --ignore-gitleaks-allow --log-opts="$log_opts" .
-          else
-            gitleaks git --redact --no-banner --config "$GITHUB_WORKSPACE/.gitleaks.toml" --ignore-gitleaks-allow .
-          fi
+          gitleaks git --redact --no-banner --config "$GITHUB_WORKSPACE/.gitleaks.toml" --ignore-gitleaks-allow --log-opts="$log_opts" .
