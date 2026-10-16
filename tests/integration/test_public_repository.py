@@ -18,7 +18,10 @@ import re
 import shutil
 import subprocess
 import sys
+import textwrap
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 import pytest
 
@@ -463,8 +466,11 @@ def test_secret_scan_compares_event_shas_before_scanning() -> None:
 def test_secret_scan_uses_base_config_and_redacts() -> None:
     body = _secret_scan_body()
     assert 'gitleaks git --redact --no-banner --config "$GITHUB_WORKSPACE/.gitleaks.toml"' in body
-    assert body.count("--ignore-gitleaks-allow") == 2
-    assert "--log-opts=" in body
+    invocations = [line for line in body.splitlines() if line.lstrip().startswith("gitleaks git ")]
+    assert invocations
+    for line in invocations:
+        assert "--ignore-gitleaks-allow" in line, line
+        assert "--log-opts=" in line, line
     # Environment config injection must not be able to replace the pinned rules.
     assert "unset GITLEAKS_CONFIG GITLEAKS_CONFIG_TOML" in body
     # Push events scan the pushed range, falling back to the full history when
@@ -491,6 +497,7 @@ _PERMISSIVE_CONFIG = (
     'title = "tree-supplied"\n\n[[rules]]\nid = "nothing"\ndescription = "matches nothing"\nregex = '
     "'''zzzzzzzznevermatchzzzzzzzz'''\n"
 )
+_IDENTITY = ("-c", "user.name=fixture", "-c", "user.email=fixture@example.test")
 
 
 def _git(root: Path, *args: str) -> str:
@@ -508,16 +515,7 @@ def _commit_file(root: Path, relative: str, content: str, message: str) -> str:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
     _git(root, "add", "--", relative)
-    _git(
-        root,
-        "-c",
-        "user.name=fixture",
-        "-c",
-        "user.email=fixture@example.test",
-        "commit",
-        "-qm",
-        message,
-    )
+    _git(root, *_IDENTITY, "commit", "-qm", message)
     return _git(root, "rev-parse", "HEAD")
 
 
@@ -565,7 +563,7 @@ def _run_range_scan(
             "--config",
             str(root / ".gitleaks.toml"),
             "--ignore-gitleaks-allow",
-            f"--log-opts={base}..{head}",
+            f"--log-opts=-m {base}..{head}",
             ".",
         ],
         cwd=root,
@@ -693,3 +691,164 @@ def test_unresolvable_range_is_a_silent_pass(tmp_path: Path) -> None:
         text=True,
     )
     assert merge.returncode != 0
+
+
+# ---- the workflow's own scan step against merge commits ---------------------
+
+_PR_NUMBER = "7"
+# The default ``bash`` shell a GitHub-hosted runner uses for a ``run:`` step.
+_RUNNER_BASH = ("bash", "--noprofile", "--norc", "-eo", "pipefail")
+_EVENT_VARIABLES = ("EVENT_NAME", "PR_NUMBER", "BASE_SHA", "HEAD_SHA", "PUSH_BEFORE", "PUSH_AFTER")
+_ZERO_SHA = "0" * 40
+
+type _Leak = Literal["merge", "commit"] | None
+type _Event = Literal["pull_request_target", "push", "push-new-branch", "workflow_dispatch"]
+
+
+def _scan_step_script() -> str:
+    """The ``run:`` body of the ``Scan for secrets`` step, dedented as the runner sees it."""
+    lines = _secret_scan_body().splitlines()
+    start = next((i for i, line in enumerate(lines) if line.strip() == "- name: Scan for secrets"), None)
+    assert start is not None, "secret-scan has no 'Scan for secrets' step"
+    run = next((i for i in range(start + 1, len(lines)) if lines[i].strip() == "run: |"), None)
+    assert run is not None, "'Scan for secrets' has no 'run: |' block"
+    run_indent = len(lines[run]) - len(lines[run].lstrip())
+    block: list[str] = []
+    for line in lines[run + 1 :]:
+        if line.strip() and len(line) - len(line.lstrip()) <= run_indent:
+            break
+        block.append(line)
+    assert any(line.strip() for line in block), "'Scan for secrets' has an empty run block"
+    return textwrap.dedent("\n".join(block)) + "\n"
+
+
+@dataclass(frozen=True)
+class _MergeHistory:
+    """A PR branch that merges ``main`` back in and resolves a conflict by hand."""
+
+    origin: Path
+    base: str  # main before the PR is merged
+    pr_head: str  # the PR's merge of main, with the conflict resolved
+    after: str  # main after merging the PR with --no-ff
+
+
+def _merge_history(tmp_path: Path, leak: _Leak) -> _MergeHistory:
+    """Build the history and publish it to a bare origin.
+
+    ``leak="merge"`` puts the key only into the conflict resolution, so no
+    ordinary commit ever adds it; ``leak="commit"`` adds it in an ordinary PR
+    commit instead. ``refs/pull/<N>/head`` points at the PR head the way GitHub
+    publishes it; :func:`_checkout` moves origin's ``main`` to suit the event.
+    """
+    author = tmp_path / "author"
+    author.mkdir()
+    _git(author, "init", "-q", "-b", "main")
+    _commit_file(author, "app.py", "VALUE = 1\n", "app")
+    _commit_file(author, ".gitleaks.toml", _BASE_CONFIG, "base config")
+    _git(author, "switch", "-q", "-c", "pr")
+    _commit_file(author, "app.py", "VALUE = 2\n", "pr change")
+    if leak == "commit":
+        _commit_file(author, "leak.py", f'AWS_KEY = "{FAKE_AWS_KEY}"\n', "add key")
+    _git(author, "switch", "-q", "main")
+    base = _commit_file(author, "app.py", "VALUE = 3\n", "main change")
+
+    _git(author, "switch", "-q", "pr")
+    merge = subprocess.run(
+        ["git", "-C", str(author), *_IDENTITY, "merge", "-q", "main"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert merge.returncode == 1, "the fixture merge must stop on a conflict: " + merge.stdout + merge.stderr
+    resolved = "VALUE = 4\n"
+    if leak == "merge":
+        resolved += f'AWS_KEY = "{FAKE_AWS_KEY}"\n'
+    pr_head = _commit_file(author, "app.py", resolved, "merge main")
+
+    _git(author, "switch", "-q", "main")
+    _git(author, *_IDENTITY, "merge", "-q", "--no-ff", "-m", "merge pr", "pr")
+    after = _git(author, "rev-parse", "HEAD")
+
+    origin = tmp_path / "origin.git"
+    _git(tmp_path, "init", "-q", "--bare", "-b", "main", str(origin))
+    _git(author, "push", "-q", str(origin), f"{after}:refs/heads/main", f"{pr_head}:refs/pull/{_PR_NUMBER}/head")
+    return _MergeHistory(origin=origin, base=base, pr_head=pr_head, after=after)
+
+
+def _checkout(tmp_path: Path, history: _MergeHistory, main: str) -> Path:
+    """Point origin's main at *main* and check it out as actions/checkout does.
+
+    ``fetch-depth: 0`` fetches every branch but no ``refs/pull`` ref, so the PR
+    head is only reachable through the step's own ``git fetch``.
+    """
+    _git(history.origin, "update-ref", "refs/heads/main", main)
+    workspace = tmp_path / "workspace"
+    _git(tmp_path, "clone", "-q", str(history.origin), str(workspace))
+    _git(workspace, "checkout", "-q", "--detach", main)
+    return workspace
+
+
+def _event_env(event: _Event, history: _MergeHistory) -> tuple[str, dict[str, str]]:
+    """The commit the event checks out, and the step's event variables."""
+    if event == "pull_request_target":
+        return history.base, {
+            "EVENT_NAME": event,
+            "PR_NUMBER": _PR_NUMBER,
+            "BASE_SHA": history.base,
+            "HEAD_SHA": history.pr_head,
+        }
+    if event == "push":
+        return history.after, {"EVENT_NAME": "push", "PUSH_BEFORE": history.base, "PUSH_AFTER": history.after}
+    if event == "push-new-branch":
+        return history.after, {"EVENT_NAME": "push", "PUSH_BEFORE": _ZERO_SHA, "PUSH_AFTER": history.after}
+    return history.after, {"EVENT_NAME": event, "PUSH_AFTER": history.after}
+
+
+def _run_scan_step(tmp_path: Path, workspace: Path, event_env: dict[str, str]) -> subprocess.CompletedProcess[str]:
+    """Run the step body with a runner-like environment: no system or global git config."""
+    script = tmp_path / "scan-step.sh"
+    script.write_text(_scan_step_script(), encoding="utf-8")
+    home = tmp_path / "home"
+    home.mkdir()
+    env = {
+        "PATH": os.environ["PATH"],
+        "HOME": str(home),
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_CONFIG_GLOBAL": os.devnull,
+        "GITHUB_WORKSPACE": str(workspace),
+        **dict.fromkeys(_EVENT_VARIABLES, ""),
+        **event_env,
+    }
+    return subprocess.run(
+        [*_RUNNER_BASH, str(script)],
+        cwd=workspace,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+
+@requires_gitleaks
+@pytest.mark.parametrize("leak", ["merge", "commit", None])
+@pytest.mark.parametrize("event", ["pull_request_target", "push", "push-new-branch", "workflow_dispatch"])
+def test_scan_step_covers_merge_commits(tmp_path: Path, event: _Event, leak: _Leak) -> None:
+    """Content that first appears in a merge commit must fail the scan on every path.
+
+    ``git log -p`` prints no diff for a merge commit unless asked to, so a key
+    typed into a conflict resolution is invisible to a plain range or
+    full-history scan. A merge without a key must still pass, and a key in an
+    ordinary commit must still fail.
+    """
+    history = _merge_history(tmp_path, leak)
+    checked_out, event_env = _event_env(event, history)
+    workspace = _checkout(tmp_path, history, checked_out)
+
+    result = _run_scan_step(tmp_path, workspace, event_env)
+
+    if leak is None:
+        assert result.returncode == 0, result.stdout + result.stderr
+    else:
+        assert result.returncode == 1, result.stdout + result.stderr
+        assert FAKE_AWS_KEY not in result.stdout
+        assert FAKE_AWS_KEY not in result.stderr
