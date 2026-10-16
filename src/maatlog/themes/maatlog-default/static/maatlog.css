@@ -403,6 +403,39 @@ section.maatlog-profile {
   box-sizing: border-box;
 }
 
+/* 本文のフィールドリストを標準テーマと同じ「項目名 | 内容」の 2 列にする（Issue #21）。
+   basic.css は読み込まないので .field-list に必要な配置と余白だけを補う。
+   maatlog-base も同じルールを持つ。 */
+dl.field-list {
+  display: grid;
+  grid-template-columns: fit-content(30%) minmax(0, 1fr);
+  gap: var(--maatlog-space-xs, 0.25rem) var(--maatlog-space-md, 1rem);
+}
+
+dl.field-list > dt {
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+dl.field-list > dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* 内容の前後の段落余白で行が間延びしないようにし、内容の中のブロックの区切りだけを残す。 */
+dl.field-list p,
+dl.field-list > dd > * {
+  margin-block: 0;
+}
+
+dl.field-list > dd > * + * {
+  margin-block-start: var(--maatlog-space-sm, 0.5rem);
+}
+
+dl.field-list > dd > :is(ul, ol) {
+  padding-inline-start: 1.5em;
+}
+
 /* An explicit scale: basic.css leaves h2 and h3 nearly the same size. */
 .maatlog-post-body h2 {
   margin: var(--maatlog-space-xl, 3rem) 0 0.6em;
