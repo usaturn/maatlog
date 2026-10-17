@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.14"
 
 [[package]]
@@ -276,7 +276,7 @@ dev = [
     { name = "pytest-xdist", specifier = ">=3.8.0" },
     { name = "ruff" },
     { name = "sphinx-autobuild" },
-    { name = "wabun-rst-ulint" },
+    { name = "wabun-rst-ulint", specifier = ">=0.0.2" },
 ]
 
 [[package]]
@@ -823,14 +823,14 @@ wheels = [
 
 [[package]]
 name = "wabun-rst-ulint"
-version = "0.0.1"
+version = "0.0.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "docutils" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/45/e6/103f3aaded6ccac9e7e91ea04fafe9f620a92f52bccd9162b6fc8ab65faa/wabun_rst_ulint-0.0.1.tar.gz", hash = "sha256:c4df9fe3679288993f040a5558b99d9bd59a0b1754096293145e2e15ffc74b6d", size = 46868, upload-time = "2026-08-30T07:15:31.409Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/85/0c/9ddd5b08c6c686b91bc85f103f77878a2baa0f0d8a8f507ff2f90b79a4a8/wabun_rst_ulint-0.0.2.tar.gz", hash = "sha256:4bbb6f1e31e23ff7a0bb286e74491a96ce87a8997bd6a121ccf050925af01180", size = 52099, upload-time = "2026-10-17T10:03:05.098Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/08/4e/529e2236a7780204feafe6f33ccec3bc219914ee9ffc6bcc204d27c492fb/wabun_rst_ulint-0.0.1-py3-none-any.whl", hash = "sha256:5a0b45b8ca24d6ac8391fbd18fe6b21dcab7f97d2d0f910c597f4de65d7a9d20", size = 55948, upload-time = "2026-08-30T07:15:30.254Z" },
+    { url = "https://files.pythonhosted.org/packages/12/df/7e4b1ee46715dd59d907f1986c67c0962e7e180a234b3469f7323a1783f4/wabun_rst_ulint-0.0.2-py3-none-any.whl", hash = "sha256:7f772d814023ee20f6b4443e6622c243034a8931b951d6d7530408d71598373e", size = 61231, upload-time = "2026-10-17T10:03:03.735Z" },
 ]
 
 [[package]]
