@@ -25,8 +25,8 @@ from maatlog.version import PACKAGE_VERSION
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ACCEPTANCE_SOURCE = REPO_ROOT / "tests" / "acceptance" / "project"
-WHEEL_NAME = "maatlog-0.6.0-py3-none-any.whl"
-SDIST_NAME = "maatlog-0.6.0.tar.gz"
+WHEEL_NAME = "maatlog-0.6.1-py3-none-any.whl"
+SDIST_NAME = "maatlog-0.6.1.tar.gz"
 EXPECTED_DESCRIPTION = "A Sphinx extension that turns documentation projects into static blogs."
 EXPECTED_CLASSIFIERS = (
     "Development Status :: 3 - Alpha",
@@ -249,7 +249,7 @@ def test_pyproject_declares_pypi_release_metadata() -> None:
     data = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     project = data["project"]
     assert project["name"] == "maatlog"
-    assert project["version"] == "0.6.0"
+    assert project["version"] == "0.6.1"
     assert project["description"] == EXPECTED_DESCRIPTION
     assert project["authors"] == [{"name": "usaturn"}]
     assert project["classifiers"] == list(EXPECTED_CLASSIFIERS)
@@ -263,16 +263,16 @@ def test_pyproject_declares_pypi_release_metadata() -> None:
     assert data["build-system"]["requires"] == ["uv_build>=0.12.0,<0.13.0"]
 
 
-def test_uv_lock_root_package_version_is_0_6_0() -> None:
+def test_uv_lock_root_package_version_is_0_6_1() -> None:
     data = tomllib.loads((REPO_ROOT / "uv.lock").read_text(encoding="utf-8"))
     package = next(item for item in data["package"] if item["name"] == "maatlog")
-    assert package["version"] == "0.6.0"
+    assert package["version"] == "0.6.1"
     assert package["source"] == {"editable": "."}
 
 
 def test_docs_release_matches_distribution_version() -> None:
     text = (REPO_ROOT / "docs" / "conf.py").read_text(encoding="utf-8")
-    assert 'release = "0.6.0"' in text
+    assert 'release = "0.6.1"' in text
     assert 'release = "0.7.0"' not in text
 
 
@@ -305,12 +305,12 @@ def test_twine_check_strict_passes(distribution_artifacts: DistributionArtifacts
     assert completed.returncode == 0, f"{completed.stdout}\n{completed.stderr}"
 
 
-def test_wheel_core_metadata_is_0_6_0(distribution_artifacts: DistributionArtifacts) -> None:
+def test_wheel_core_metadata_is_0_6_1(distribution_artifacts: DistributionArtifacts) -> None:
     with zipfile.ZipFile(distribution_artifacts.wheel) as archive:
         metadata_name = next(name for name in archive.namelist() if name.endswith(".dist-info/METADATA"))
         metadata = archive.read(metadata_name).decode("utf-8")
     assert "Name: maatlog\n" in metadata
-    assert "Version: 0.6.0\n" in metadata
+    assert "Version: 0.6.1\n" in metadata
     assert f"Summary: {EXPECTED_DESCRIPTION}\n" in metadata
     assert "Author: usaturn\n" in metadata
     assert "Project-URL: Homepage, https://github.com/usaturn/maatlog\n" in metadata
@@ -318,13 +318,13 @@ def test_wheel_core_metadata_is_0_6_0(distribution_artifacts: DistributionArtifa
         assert f"Classifier: {classifier}\n" in metadata
 
 
-def test_sdist_core_metadata_is_0_6_0(distribution_artifacts: DistributionArtifacts) -> None:
+def test_sdist_core_metadata_is_0_6_1(distribution_artifacts: DistributionArtifacts) -> None:
     with tarfile.open(distribution_artifacts.sdist, "r:gz") as archive:
-        pkg_info = archive.extractfile("maatlog-0.6.0/PKG-INFO")
+        pkg_info = archive.extractfile("maatlog-0.6.1/PKG-INFO")
         assert pkg_info is not None
         metadata = pkg_info.read().decode("utf-8")
     assert "Name: maatlog\n" in metadata
-    assert "Version: 0.6.0\n" in metadata
+    assert "Version: 0.6.1\n" in metadata
     assert f"Summary: {EXPECTED_DESCRIPTION}\n" in metadata
 
 
@@ -345,16 +345,16 @@ def _isolated_version(tmp_path: Path, package: Path) -> str:
     return completed.stdout.strip()
 
 
-def test_wheel_isolated_install_reports_version_0_6_0(
+def test_wheel_isolated_install_reports_version_0_6_1(
     tmp_path: Path, distribution_artifacts: DistributionArtifacts
 ) -> None:
-    assert _isolated_version(tmp_path, distribution_artifacts.wheel) == "0.6.0"
+    assert _isolated_version(tmp_path, distribution_artifacts.wheel) == "0.6.1"
 
 
-def test_sdist_isolated_install_reports_version_0_6_0(
+def test_sdist_isolated_install_reports_version_0_6_1(
     tmp_path: Path, distribution_artifacts: DistributionArtifacts
 ) -> None:
-    assert _isolated_version(tmp_path, distribution_artifacts.sdist) == "0.6.0"
+    assert _isolated_version(tmp_path, distribution_artifacts.sdist) == "0.6.1"
 
 
 def test_wheel_contains_themes_and_package_data(distribution_artifacts: DistributionArtifacts) -> None:
@@ -459,7 +459,7 @@ def test_parent_only_members_check_flags_wheel_leak() -> None:
 def test_parent_only_members_check_flags_sdist_subdir_leak() -> None:
     with pytest.raises(AssertionError, match="parent-only"):
         _assert_no_parent_only_members(
-            {"maatlog-0.6.0/PKG-INFO", "maatlog-0.6.0/sub/tools/private.py"},
+            {"maatlog-0.6.1/PKG-INFO", "maatlog-0.6.1/sub/tools/private.py"},
             "sdist",
         )
 
@@ -467,7 +467,7 @@ def test_parent_only_members_check_flags_sdist_subdir_leak() -> None:
 def test_parent_only_members_check_allows_ordinary_names() -> None:
     """Bare words inside a file name are not path components and stay allowed."""
     _assert_no_parent_only_members(
-        {"maatlog-0.6.0/README.rst", "maatlog-0.6.0/docs/reviews-notes.rst"},
+        {"maatlog-0.6.1/README.rst", "maatlog-0.6.1/docs/reviews-notes.rst"},
         "sdist",
     )
 
