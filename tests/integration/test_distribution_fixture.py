@@ -24,8 +24,8 @@ from fixtures import distribution
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TESTS_DIR = REPO_ROOT / "tests"
 PLUGIN_PATH = TESTS_DIR / "fixtures" / "distribution.py"
-WHEEL_NAME = "maatlog-0.6.0-py3-none-any.whl"
-SDIST_NAME = "maatlog-0.6.0.tar.gz"
+WHEEL_NAME = "maatlog-0.6.1-py3-none-any.whl"
+SDIST_NAME = "maatlog-0.6.1.tar.gz"
 
 _FAKE_WHEEL = b"stub wheel payload\n"
 _FAKE_SDIST = b"stub sdist payload\n"
@@ -50,8 +50,8 @@ if [[ -z "$out_dir" ]]; then
   exit 2
 fi
 mkdir -p "$out_dir"
-printf 'stub wheel payload\\n' > "$out_dir/maatlog-0.6.0-py3-none-any.whl"
-printf 'stub sdist payload\\n' > "$out_dir/maatlog-0.6.0.tar.gz"
+printf 'stub wheel payload\\n' > "$out_dir/maatlog-0.6.1-py3-none-any.whl"
+printf 'stub sdist payload\\n' > "$out_dir/maatlog-0.6.1.tar.gz"
 """
 
 _UV_FAIL_STUB = """\
